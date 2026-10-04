@@ -9,6 +9,7 @@ from typing import Any
 
 from .cash_check import build_cash_check
 from .tax_result_view import TAX_FORM_KEYS
+from .tax_rules import calculate_difficult_expenses
 
 ACTUAL_STATUSES = ("posted", "included_in_snapshot")
 APPROVED_STATUSES = ("approved",)
@@ -158,7 +159,8 @@ def _load_transactions(
             tt.vat_minor,
             tt.deductible_irpf_minor,
             tt.deductible_vat_minor,
-            tt.aeat_expense_concept
+            tt.aeat_expense_concept,
+            tt.include_modelo130
         FROM transactions t
         LEFT JOIN counterparties c ON c.counterparty_id = t.counterparty_id
         LEFT JOIN tax_treatments tt ON tt.transaction_id = t.transaction_id
@@ -193,6 +195,7 @@ def _load_transactions(
                 "deductible_irpf_minor": None,
                 "deductible_vat_minor": None,
                 "aeat_expense_concept": None,
+                "include_modelo130": False,
                 "treatment_count": 0,
             }
             grouped[transaction_id] = bucket
@@ -201,6 +204,7 @@ def _load_transactions(
         if row["treatment_id"] is None:
             continue
         bucket["treatment_count"] += 1
+        bucket["include_modelo130"] = bucket["include_modelo130"] or bool(row["include_modelo130"])
         for key in TREATMENT_MONEY_KEYS:
             value = row[key]
             if value is None:
@@ -625,6 +629,8 @@ def _ytd_comparison(
     def totals(year: int) -> dict[str, int | None] | None:
         income = 0
         deductible = 0
+        renta_income = 0
+        renta_deductible = 0
         seen = False
         for transaction in transactions:
             transaction_date = date.fromisoformat(transaction["transaction_date"])
@@ -641,25 +647,45 @@ def _ytd_comparison(
                 if value is None:
                     continue
                 income += value
+                if transaction["include_modelo130"]:
+                    renta_income += value
                 seen = True
             else:
                 deductible += int(transaction["deductible_irpf_minor"] or 0)
+                if transaction["include_modelo130"]:
+                    renta_deductible += int(transaction["deductible_irpf_minor"] or 0)
                 seen = True
         if not seen:
             return None
+        # Renta (estimacion directa simplificada) counts the rows that feed
+        # Modelo 130 and also deducts the difficult-to-justify allowance.
+        difficult = _decimal_to_minor(
+            calculate_difficult_expenses(
+                year, Decimal(renta_income) / 100, Decimal(renta_deductible) / 100
+            )
+        )
         return {
             "taxable_income_minor": income,
             "deductible_expense_minor": deductible,
             "net_minor": income - deductible,
+            "renta_income_minor": renta_income,
+            "difficult_expense_minor": difficult,
+            "renta_expense_minor": renta_deductible + difficult,
+            "renta_net_minor": renta_income - renta_deductible - difficult,
         }
 
     empty = {
         "taxable_income_minor": None,
         "deductible_expense_minor": None,
         "net_minor": None,
+        "renta_income_minor": None,
+        "difficult_expense_minor": None,
+        "renta_expense_minor": None,
+        "renta_net_minor": None,
     }
     return {
         "measure": "net_before_difficult_expenses",
+        "renta_measure": "net_after_difficult_expenses",
         "through_month": through_month,
         "current_year": {"year": query.year, **(totals(query.year) or empty)},
         "previous_year": {"year": query.year - 1, **(totals(query.year - 1) or empty)},

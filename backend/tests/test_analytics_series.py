@@ -813,6 +813,131 @@ def test_ytd_comparison_previous_year_null_when_absent(tmp_path: Path) -> None:
     assert comparison["previous_year"]["taxable_income_minor"] == 50000
 
 
+def _add_included_income(
+    db: LedgerDB, key: str, amount_minor: int, day: str = "2026-07-01", period_key: str = "2026-Q3"
+) -> None:
+    income = _add_transaction(
+        db,
+        external_key=key,
+        period_key=period_key,
+        transaction_date=day,
+        booking_date=day,
+        amount_minor=amount_minor,
+        amount_eur_minor=amount_minor,
+    )
+    db.add_detailed_tax_treatment(
+        transaction_id=income["transaction_id"],
+        treatment_type="income",
+        tax_code="domestic_service_income",
+        taxable_base_minor=amount_minor,
+        vat_minor=0,
+        include_modelo130=True,
+        include_modelo303=False,
+    )
+
+
+def test_ytd_comparison_applies_the_renta_difficult_expense_allowance(tmp_path: Path) -> None:
+    db_path = tmp_path / "autonomo.sqlite"
+    with LedgerDB.initialize(db_path) as db:
+        _add_included_income(db, "income-2026", 1_000_000)
+        _add_included_income(db, "income-2025", 6_000_000, day="2025-07-01", period_key="2025-Q3")
+    analytics = _build(db_path, period_key="2025-Q4")
+    comparison = analytics["datasets"]["ytd_comparison"]
+    assert comparison["renta_measure"] == "net_after_difficult_expenses"
+    full_year = comparison["current_year"]
+    assert full_year["difficult_expense_minor"] == 200_000  # 5% of 60 000 EUR capped at 2 000 EUR
+    assert full_year["renta_expense_minor"] == 200_000
+    assert full_year["renta_net_minor"] == 5_800_000
+
+    current = _build(db_path)["datasets"]["ytd_comparison"]["current_year"]
+    assert current["difficult_expense_minor"] == 50_000  # 5% of 10 000 EUR
+    assert current["renta_net_minor"] == 950_000
+
+
+def _add_deductible_expense(
+    db: LedgerDB, key: str, amount_minor: int, day: str = "2026-07-15", *, modelo130: bool = True
+) -> None:
+    expense = _add_transaction(
+        db,
+        external_key=key,
+        transaction_date=day,
+        booking_date=day,
+        entry_type="expense",
+        direction="debit",
+        amount_minor=amount_minor,
+        amount_eur_minor=amount_minor,
+    )
+    db.add_detailed_tax_treatment(
+        transaction_id=expense["transaction_id"],
+        treatment_type="expense",
+        tax_code="G03",
+        taxable_base_minor=amount_minor,
+        vat_minor=0,
+        deductible_irpf_minor=amount_minor,
+        deductible_vat_minor=0,
+        include_modelo130=modelo130,
+        include_modelo303=False,
+    )
+
+
+def test_ytd_renta_figures_match_modelo130_with_difficult_expenses(tmp_path: Path) -> None:
+    db_path = tmp_path / "autonomo.sqlite"
+    with LedgerDB.initialize(db_path) as db:
+        income = _add_transaction(
+            db,
+            external_key="income-renta",
+            period_key="2026-Q1",
+            transaction_date="2026-02-01",
+            booking_date="2026-02-01",
+            amount_minor=123457,
+            amount_eur_minor=123457,
+        )
+        db.add_detailed_tax_treatment(
+            transaction_id=income["transaction_id"],
+            treatment_type="income",
+            tax_code="domestic_service_income",
+            taxable_base_minor=123457,
+            vat_minor=0,
+            include_modelo130=True,
+            include_modelo303=False,
+        )
+        _add_deductible_expense(db, "expense-renta", 33333)
+        rows = load_tax_rows(db, 2026)
+    _, calculation = calculate_modelo130_rows(
+        rows,
+        year=2026,
+        quarter=3,
+        difficult_expenses_rate=Decimal("0.05"),
+        include_difficult_expenses=True,
+    )
+    current = _build(db_path)["datasets"]["ytd_comparison"]["current_year"]
+    assert current["difficult_expense_minor"] == 4506  # 5% of 901.24 rounds to 45.06
+    assert current["renta_expense_minor"] == int(calculation.values["02"] * 100)
+    assert current["renta_net_minor"] == int(calculation.values["03"] * 100)
+
+
+def test_ytd_renta_figures_skip_rows_left_out_of_modelo130(tmp_path: Path) -> None:
+    db_path = tmp_path / "autonomo.sqlite"
+    with LedgerDB.initialize(db_path) as db:
+        _add_included_income(db, "income-included", 100_000)
+        _add_deductible_expense(db, "expense-outside-130", 10_000, modelo130=False)
+    current = _build(db_path)["datasets"]["ytd_comparison"]["current_year"]
+    assert current["deductible_expense_minor"] == 10_000
+    assert current["renta_income_minor"] == 100_000
+    assert current["renta_expense_minor"] == 5_000
+    assert current["renta_net_minor"] == 95_000
+
+
+def test_ytd_renta_allowance_is_zero_for_a_loss(tmp_path: Path) -> None:
+    db_path = tmp_path / "autonomo.sqlite"
+    with LedgerDB.initialize(db_path) as db:
+        _add_deductible_expense(db, "expense-loss", 50000)
+    current = _build(db_path)["datasets"]["ytd_comparison"]["current_year"]
+    assert current["difficult_expense_minor"] == 0
+    assert current["renta_expense_minor"] == 50000
+    assert current["renta_net_minor"] == -50000
+
+
 def test_ytd_comparison_excludes_future_posted_within_the_as_of_month(
     tmp_path: Path,
 ) -> None:

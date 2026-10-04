@@ -114,8 +114,13 @@ interface YearSummary {
   taxable_income_minor: ChartValue;
   deductible_expense_minor: ChartValue;
   net_minor: ChartValue;
+  renta_income_minor?: ChartValue;
+  difficult_expense_minor?: ChartValue;
+  renta_expense_minor?: ChartValue;
+  renta_net_minor?: ChartValue;
 }
 export interface Analytics {
+  scope?: { year: number; as_of: string };
   quality?: { missing_fx_transaction_count: number };
   datasets: {
     business_result: {

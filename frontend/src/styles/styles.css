@@ -416,7 +416,7 @@ button:focus-visible {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -479,6 +479,36 @@ button:focus-visible {
 .metric.accent {
   border-top: 3px solid var(--accent);
   padding-top: 13px;
+}
+
+.metric-rows {
+  display: grid;
+  gap: 3px;
+  margin: 7px 0 2px;
+}
+
+.metric-rows div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  column-gap: 8px;
+  align-items: baseline;
+}
+
+.metric-rows dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.metric-rows dd {
+  margin: 0 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.metric-rows strong {
+  margin: 0;
+  font-size: 1rem;
 }
 
 .metric.warning {

@@ -10,6 +10,7 @@ import type { ChartKind } from '../../charts/builders.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import RecentTransactions from './RecentTransactions.vue';
 import { createFinancePresentation } from './presentation.ts';
+import { yearToDate } from './yearToDate.ts';
 import type { OverviewContext, DashboardData } from './model.ts';
 const props = defineProps<{ context: OverviewContext }>();
 const { locale, t } = useLocale();
@@ -99,6 +100,7 @@ const ready = computed(() =>
       0,
   ),
 );
+const ytd = computed(() => yearToDate(analytics.value));
 const nextDue = computed(() =>
   data.value?.obligations.find(
     (row) => row.determination === 'due' && row.filing_status !== 'filed',
@@ -173,6 +175,30 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
           ><strong>{{ eur(data.totals.actual.income_eur, locale) }}</strong
           ><small>{{
             t('common.counts.operations', { count: data.totals.actual.income_transaction_count })
+          }}</small>
+        </div>
+        <div v-if="ytd" id="dashboard-year-to-date" class="metric accent">
+          <span>{{ t('dashboard.yearToDate', { year: ytd.year }) }}</span>
+          <dl class="metric-rows">
+            <div>
+              <dt>{{ t('dashboard.ytdIncome') }}</dt>
+              <dd>{{ eur(ytd.income, locale) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('dashboard.ytdExpenses') }}</dt>
+              <dd>{{ eur(ytd.expenses, locale) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('dashboard.ytdNet') }}</dt>
+              <dd>
+                <strong>{{ eur(ytd.net, locale) }}</strong>
+              </dd>
+            </div>
+          </dl>
+          <small>{{
+            ytd.fullYear
+              ? t('dashboard.ytdFullYear')
+              : t('dashboard.ytdAsOf', { date: formatDateText(ytd.asOf, locale) })
           }}</small>
         </div>
         <div v-for="kind in ['purchase', 'amortization'] as const" :key="kind" class="metric">

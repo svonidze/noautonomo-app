@@ -21,5 +21,11 @@
   "dashboard.upcomingFiling": "Предстоящая декларация",
   "dashboard.valuesUnavailable": "значения недоступны",
   "dashboard.waitingForPeriodOne": "{count} ожидает закрытия периода",
-  "dashboard.waitingForPeriodOther": "{count} ожидают закрытия периода"
+  "dashboard.waitingForPeriodOther": "{count} ожидают закрытия периода",
+  "dashboard.yearToDate": "С начала года · {year}",
+  "dashboard.ytdAsOf": "по правилам Renta, на {date}",
+  "dashboard.ytdExpenses": "Расходы",
+  "dashboard.ytdFullYear": "по правилам Renta, весь год",
+  "dashboard.ytdIncome": "Брутто",
+  "dashboard.ytdNet": "Нетто"
 }
