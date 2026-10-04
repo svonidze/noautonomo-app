@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from .money import cents, parse_amount
-from .pdf_text import extract_pdf_text
+from .pdf_text import effective_font_size, extract_pdf_text
 from .tax_rules import DIFFICULT_EXPENSE_CAP_EUR
 
 
@@ -184,9 +184,9 @@ def _extract_modelo130_values_from_pdf_coordinates(path: Path, year: int, quarte
             continue
         words: list[tuple[Decimal, Decimal, str]] = []
 
-        def visitor(fragment: str, _cm, tm, _font_dict, font_size: float) -> None:
+        def visitor(fragment: str, cm, tm, _font_dict, font_size: float) -> None:
             value = fragment.strip()
-            if font_size < 5 or not re.fullmatch(r"-?[0-9.]+,[0-9]{2}", value):
+            if effective_font_size(font_size, tm, cm) < 5 or not re.fullmatch(r"-?[0-9.]+,[0-9]{2}", value):
                 return
             x = Decimal(str(tm[4]))
             if x < Decimal("500"):

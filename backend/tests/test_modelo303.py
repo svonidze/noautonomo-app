@@ -4,6 +4,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
+import pytest
+
 from autonomo_taxes.history import RawXoloExpense
 from autonomo_taxes.modelo303 import (
     Modelo303CasillaEvidence,
@@ -362,6 +364,138 @@ def test_reverse_charge_pdf_uses_final_settlement_after_compensation(tmp_path):
     assert parsed.settlement_values["110"] == Decimal("105.00")
     assert parsed.settlement_values["78"] == Decimal("105.00")
     assert parsed.compensation_carryforward == Decimal("0.00")
+
+
+def _receipt_pdf(path, pages):
+    """Write a receipt whose fragments are (text, x, y, font operand, text-matrix scale)."""
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+    writer = PdfWriter()
+    font = DictionaryObject({NameObject("/Type"): NameObject("/Font"),
+                             NameObject("/Subtype"): NameObject("/Type1"),
+                             NameObject("/BaseFont"): NameObject("/Helvetica")})
+    font_ref = writer._add_object(font)
+    for items in pages:
+        page = writer.add_blank_page(width=595, height=842)
+        page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): DictionaryObject({NameObject("/F1"): font_ref})})
+        commands = ["BT"]
+        for text, x, y, size, scale in items:
+            commands.append(f"{scale} 0 0 {scale} {x} {y} Tm /F1 {size} Tf ({text}) Tj")
+        commands.append("ET")
+        stream = DecodedStreamObject()
+        stream.set_data("\n".join(commands).encode())
+        page[NameObject("/Contents")] = writer._add_object(stream)
+    writer.write(path)
+
+
+_FORM_GROUPS = [("150",), ("01",), ("04",), ("07",), ("10", "11"), ("12", "13"), ("27",), ("28", "29"), ("30", "31"),
+                ("32", "33"), ("34", "35"), ("36", "37"), ("38", "39"), ("45",), ("46",)]
+_SETTLEMENT_POSITIONS = {"64": (460, 550), "110": (460, 500), "78": (460, 480), "87": (460, 460),
+                         "69": (460, 435), "71": (460, 385), "72": (88, 740), "73": (161, 527)}
+_RC_BOXES = {"10": "1.000,00", "11": "210,00", "27": "210,00", "28": "400,00", "29": "84,00",
+             "36": "1.000,00", "37": "210,00", "45": "294,00", "46": "-84,00"}
+_RC_SETTLEMENT = {"64": "-84,00", "110": "500,00", "87": "500,00", "69": "-84,00", "71": "-84,00", "72": "84,00"}
+
+
+def _modelo303_receipt(path, boxes, settlement, *, amount_size, amount_scale, small_amounts=(), extra=()):
+    # Casilla labels print at 6.5pt on both provider and Sede receipts.
+    label = (1, 6.5)
+    form = []
+    for index, group in enumerate(_FORM_GROUPS):
+        y = 790 - index * 24
+        for column, key in enumerate(group):
+            x = 60 + column * 240
+            form.append((key, x, y, *label))
+            if key in boxes:
+                size, scale = (4, 1) if key in small_amounts else (amount_size, amount_scale)
+                form.append((boxes[key], x + 45, y, size, scale))
+    closing = []
+    for key, (x, y) in _SETTLEMENT_POSITIONS.items():
+        closing.append((key, x, y, *label))
+        if key in settlement:
+            closing.append((settlement[key], x + 45, y, amount_size, amount_scale))
+    _receipt_pdf(path, [[("Modelo 303", 60, 800, 12, 1)], form + list(extra), closing])
+
+
+@pytest.mark.parametrize(("amount_size", "amount_scale"), [(1, 9), (9, 1)], ids=["sede", "provider"])
+def test_receipt_totals_come_from_casillas_when_every_cuota_is_printed(tmp_path, amount_size, amount_scale):
+    from autonomo_taxes.modelo303 import extract_modelo303_values
+
+    path = tmp_path / "receipt-303.pdf"
+    _modelo303_receipt(path, _RC_BOXES, _RC_SETTLEMENT, amount_size=amount_size, amount_scale=amount_scale)
+    parsed = extract_modelo303_values(path)
+
+    assert len(parsed.monetary_sequence) == 9
+    assert parsed.extraction_status == "positioned_casillas"
+    assert (parsed.output_base, parsed.output_vat) == (Decimal("1000.00"), Decimal("210.00"))
+    assert (parsed.deductible_base, parsed.deductible_vat) == (Decimal("1400.00"), Decimal("294.00"))
+    assert parsed.result == Decimal("-84.00")
+    assert parsed.compensation_carryforward == Decimal("584.00")
+    assert dict(parsed.structural_casillas)["29"] == Decimal("84.00")
+
+
+def test_receipt_flags_a_sequence_layout_that_the_casillas_contradict(tmp_path):
+    from autonomo_taxes.modelo303 import extract_modelo303_values
+
+    path = tmp_path / "receipt-303-conflict.pdf"
+    _modelo303_receipt(path, _RC_BOXES, _RC_SETTLEMENT, amount_size=9, amount_scale=1,
+                       small_amounts=("11", "29", "36", "37"))
+    parsed = extract_modelo303_values(path)
+
+    assert len(parsed.monetary_sequence) == 5
+    assert parsed.extraction_status == "sequence_and_casillas_disagree"
+
+
+# An amount printed between the 28 and 30 rows belongs to no casilla read here.
+_STRAY_AMOUNT = ("777,00", 105, 610, 9, 1)
+
+
+def test_receipt_flags_a_sequence_layout_contradicted_despite_an_unexplained_amount(tmp_path):
+    from autonomo_taxes.modelo303 import extract_modelo303_values
+
+    path = tmp_path / "receipt-303-stray.pdf"
+    _modelo303_receipt(path, _RC_BOXES, _RC_SETTLEMENT, amount_size=9, amount_scale=1,
+                       small_amounts=("11", "28", "29", "36", "37"), extra=[_STRAY_AMOUNT])
+    parsed = extract_modelo303_values(path)
+
+    assert len(parsed.monetary_sequence) == 5
+    assert parsed.extraction_status == "sequence_and_casillas_disagree"
+
+
+def test_casilla_totals_do_not_replace_a_sequence_with_unexplained_amounts(tmp_path):
+    from autonomo_taxes.modelo303 import extract_modelo303_values
+
+    path = tmp_path / "receipt-303-unexplained.pdf"
+    _modelo303_receipt(path, _RC_BOXES, _RC_SETTLEMENT, amount_size=1, amount_scale=9, extra=[_STRAY_AMOUNT])
+    parsed = extract_modelo303_values(path)
+
+    assert parsed.extraction_status == "unexpected_monetary_sequence_len_10"
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        {"27": "220,00", "46": "-74,00"},  # 27 != 11 + 13
+        {"45": "300,00", "46": "-90,00"},  # 45 != 29 + 31 + ... + 39
+        {"46": "-90,00"},                  # 46 != 27 - 45
+    ],
+    ids=["output-vat", "deductible-vat", "result"],
+)
+def test_casilla_totals_require_the_form_to_add_up(tmp_path, broken):
+    from autonomo_taxes.modelo303 import extract_modelo303_values
+
+    path = tmp_path / "receipt-303-inconsistent.pdf"
+    _modelo303_receipt(path, {**_RC_BOXES, **broken}, _RC_SETTLEMENT, amount_size=1, amount_scale=9)
+    parsed = extract_modelo303_values(path)
+
+    assert parsed.extraction_status == "unexpected_monetary_sequence_len_9"
+
+
+def test_crosscheck_sends_contradicted_receipts_to_manual_review():
+    from autonomo_taxes.modelo303 import _crosscheck_status
+
+    assert _crosscheck_status("sequence_and_casillas_disagree", Decimal("0.00"), Decimal("0.00")) == "needs_manual_review"
 
 
 if __name__ == "__main__":
