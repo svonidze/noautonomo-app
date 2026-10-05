@@ -43,7 +43,6 @@
   "taxes.headlineUndetermined": "Amount not determined yet",
   "taxes.irpf": "Income tax",
   "taxes.iva": "Value added tax",
-  "taxes.noCalculation": "not calculated",
   "taxes.noTaxPayment": "No payment is required for this return.",
   "taxes.notStartedDetail": "A tax forecast will be available from the first day of the quarter.",
   "taxes.obligations": "Obligations",

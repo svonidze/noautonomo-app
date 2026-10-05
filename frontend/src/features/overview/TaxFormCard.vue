@@ -40,7 +40,11 @@ const filing = computed(() =>
       ? props.summary.filed_on
         ? t('statuses.filedOn', { date: formatDateText(props.summary.filed_on, locale.value) })
         : t('statuses.labels.filed')
-      : t('statuses.labels.due')
+      : props.summary.statutory_due_on
+        ? t('statuses.filingDueBy', {
+            date: formatDateText(props.summary.statutory_due_on, locale.value),
+          })
+        : t('statuses.labels.due')
     : !props.summary?.determination || props.summary.determination === 'unknown'
       ? t('taxes.filingUndecided')
       : t('statuses.labels.not_due'),

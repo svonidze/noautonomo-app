@@ -38,9 +38,11 @@ const posting = (row: ReviewRow) => {
   return !value
     ? t('statuses.labels.blocked')
     : value.preview_bucket === 'deferred'
-      ? t('statuses.deferredUntil', {
-          date: formatDateText(value.posting_deferred_until, locale.value),
-        })
+      ? value.posting_deferred_until
+        ? t('statuses.deferredUntil', {
+            date: formatDateText(value.posting_deferred_until, locale.value),
+          })
+        : t('statuses.labels.deferred')
       : value.preview_bucket === 'ready'
         ? t('statuses.labels.ready')
         : t(

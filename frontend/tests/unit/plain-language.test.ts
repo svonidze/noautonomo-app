@@ -99,6 +99,10 @@ test('status labels come from the statuses catalog only', () => {
     /^review\.category\./,
     /^review\.(summary|status|posting)(NeedsReview|Ready|Later|Blocked)$/,
     /^(review\.needsReview|help\.words\.(ready|blocked)|dashboard\.(filed|filedOn|notCalculated))$/,
+    /^review\.posting(Approved|BatchReady|Deferred|BatchBlocked)$/,
+    /^taxes\.(filed|notFiled|filingNotRequired|calculationMissing|noCalculation)$/,
+    /^review\.step/,
+    /^(dashboard\.expensesForecast|help\.words\.calculation)$/,
   ];
   expect(messages.map(([key]) => key).filter((key) => synonyms.some((re) => re.test(key)))).toEqual(
     [],

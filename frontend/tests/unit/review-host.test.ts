@@ -304,3 +304,37 @@ test('guided issue cards name known codes in the interface language and fold ser
   root.remove();
   localStorage.clear();
 });
+
+test('an unsupported review or one without a posting projection still reads as in review', async () => {
+  const unsupported = guidedFixture();
+  unsupported.supported = false;
+  unsupported.review_allowed = false;
+  const unprojected = guidedFixture();
+  delete unprojected.posting_context;
+  for (const fixture of [unsupported, unprojected]) {
+    localStorage.clear();
+    const setup = context(async (url: string) =>
+      url.startsWith('/api/transactions/')
+        ? {
+            transaction: {
+              transaction_id: REVIEW_ID,
+              entry_type: 'income',
+              lifecycle_status: 'needs_review',
+            },
+            period: { period_key: '2026-Q3' },
+          }
+        : fixture,
+    );
+    const root = document.createElement('div');
+    document.body.append(root);
+    const host = mountView(root, ReviewDetailView, setup);
+    await flush();
+    const status = root.querySelector('.review-workspace-status')!;
+    expect(status.querySelector('.badge')!.textContent).toBe(t('statuses.labels.needs_review'));
+    expect(status.querySelector('strong')!.textContent).toBe(t('statuses.labels.needs_review'));
+    expect(root.textContent).not.toContain('Проверено');
+    host.dispose();
+    root.remove();
+  }
+  localStorage.clear();
+});

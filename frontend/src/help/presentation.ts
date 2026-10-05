@@ -139,11 +139,13 @@ export function createPresentation(currentLocale: Locale) {
       ctx.domain === 'issue' ? ctx.reasons?.[0] : allReasons(ctx).find((r) => r.blocking !== false);
     if (first) return lang(reasonInfo(first)[0]);
     if (ctx.posting?.preview_bucket === 'deferred')
-      return formatMessage(
-        'statuses.deferredUntil',
-        { date: dateText(ctx.posting.posting_deferred_until) },
-        currentLocale,
-      );
+      return ctx.posting.posting_deferred_until
+        ? formatMessage(
+            'statuses.deferredUntil',
+            { date: dateText(ctx.posting.posting_deferred_until) },
+            currentLocale,
+          )
+        : lang('statuses.labels.deferred');
     if (ctx.posting?.preview_bucket === 'blocked' && ctx.state === 'approved')
       return lang('statuses.labels.blocked');
     if (ctx.domain === 'asset' && !ctx.facts?.advisor_decision) return word('noDecision');

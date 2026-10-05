@@ -158,19 +158,6 @@ const packet = computed(() => item.value!.packet),
   state = computed(() => packet.value.state);
 const evaluation = computed(() => (item.value ? evaluate(item.value) : null));
 const disabled = computed(() => busy.value || !evaluation.value?.canApply);
-const status = computed(() =>
-  evaluation.value?.category === 'later'
-    ? t('statuses.deferredUntil', {
-        date: formatDateText(evaluation.value.availableOn, locale.value),
-      })
-    : t(
-        evaluation.value?.category === 'blocked'
-          ? 'statuses.labels.blocked'
-          : evaluation.value?.category === 'needs_review'
-            ? 'statuses.labels.needs_review'
-            : 'statuses.labels.ready',
-      ),
-);
 // Readiness categories read as the canonical status labels; anything else is the generic label.
 const categoryLabels: Record<string, MessageId> = {
   ready: 'statuses.labels.ready',
@@ -178,6 +165,15 @@ const categoryLabels: Record<string, MessageId> = {
   blocked: 'statuses.labels.blocked',
   needs_review: 'statuses.labels.needs_review',
 };
+const categoryLabel = (category: string) =>
+  t(categoryLabels[category] ?? 'statuses.labels.unknown');
+const status = computed(() =>
+  evaluation.value?.category === 'later' && evaluation.value.availableOn
+    ? t('statuses.deferredUntil', {
+        date: formatDateText(evaluation.value.availableOn, locale.value),
+      })
+    : categoryLabel(evaluation.value?.category || ''),
+);
 const errorText = computed(() =>
   failure.value?.message
     ? messageText(failure.value.message, locale.value)
@@ -555,8 +551,8 @@ const retry = () =>
         <div class="review-workspace-status">
           <span
             class="badge"
-            :class="`status-${evaluation.category === 'ready' ? 'positive' : evaluation.category === 'blocked' ? 'attention' : 'pending'}`"
-            >{{ t(categoryLabels[evaluation.category] ?? 'statuses.labels.unknown') }}</span
+            :class="`status-${evaluation.category === 'ready' ? 'positive' : evaluation.category === 'blocked' ? 'attention' : evaluation.category === 'unknown' ? 'neutral' : 'pending'}`"
+            >{{ categoryLabel(evaluation.category) }}</span
           ><strong>{{ status }}</strong>
         </div>
       </div>
@@ -572,7 +568,9 @@ const retry = () =>
       </div>
       <div v-if="evaluation.category === 'later'" class="review-alert warning" role="alert">
         <strong>{{ t('statuses.labels.deferred') }}</strong>
-        <p>{{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}</p>
+        <p v-if="evaluation.availableOn">
+          {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
+        </p>
         <p>{{ t('review.formDisabledHint') }}</p>
       </div>
       <div

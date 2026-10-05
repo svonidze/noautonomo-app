@@ -60,7 +60,7 @@
 
 ## Content voice
 - Plain RU/EN labels; no new accounting abbreviations beyond the existing IRPF/IVA terms.
-- Use “Дата учёта”, “Дата документа”, “Амортизация за квартал”, “Проверено, не проведено”.
+- Use “Дата учёта”, “Дата документа”, “Амортизация за квартал”, “Проверено, ещё не проведено”.
 - A source-book attachment is a source document, not necessarily the original supplier invoice.
 - Asset matching inferred from party and document date is labelled as inferred.
 
