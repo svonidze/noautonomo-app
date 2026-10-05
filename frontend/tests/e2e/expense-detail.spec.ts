@@ -58,6 +58,10 @@ test('Vue expense uses authoritative period, preserves notes and values, and ret
   ]);
   await expect(page.locator('.expense-detail script')).toHaveCount(0);
   await locale(page);
+  await expect(page.locator('.expense-treatment > small')).toHaveText([
+    'Expense · Spain',
+    'Adjustment · Spain',
+  ]);
   await expect(page.locator('.expense-detail')).toContainText('123.45 USD');
   await expect(page.locator('.expense-detail')).toContainText('€110.00');
   expect(reads).toBe(1);

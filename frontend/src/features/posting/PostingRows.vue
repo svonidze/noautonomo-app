@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useLocale } from '../../vue/locale.ts';
 import { helpAdapter } from '../../vue/help.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { codeLabel, eur, formatDateText } from '../../core/format.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import TermHelp from '../../components/TermHelp.vue';
 import { helpContext } from './normalize.ts';
@@ -39,7 +39,7 @@ const explanation = (row: PostingItem) => {
               <strong>{{
                 row.description || row.reviewId || row.transactionId || t('common.noId')
               }}</strong
-              ><small>{{ row.entryType || '—' }}</small>
+              ><small>{{ codeLabel('transactions.types', row.entryType, locale) || '—' }}</small>
             </td>
             <td :data-label="t('transactions.status')">
               <StatusCell :context="helpContext(row)" />

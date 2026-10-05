@@ -27,6 +27,7 @@
   "review.fxExactRate": "Курс на {date}",
   "review.fxExisting": "Курс уже применён к счёту",
   "review.fxNeeded": "Курс не выбран",
+  "review.fxNoteUnknown": "Примечание сервера: {note}",
   "review.fxPriorRate": "Курс предыдущего рабочего дня, {date}",
   "review.fxSettlementDate": "Дата банковской операции",
   "review.fxSettlementRate": "Фактический курс по банковскому документу (EUR за {currency})",

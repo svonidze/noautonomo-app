@@ -3,7 +3,6 @@
   "issues.messages.amount_mismatch": "The amount does not match its source. Reconcile the document, currency, and tax base.",
   "issues.messages.counterparty_tax_profile_review": "Review the counterparty''s country and tax identity before posting.",
   "issues.messages.deductibility_pending_confirmation": "Confirm the amount eligible for deduction.",
-  "issues.messages.default": "Manual review is required.",
   "issues.messages.document_classification_review": "The document could not be classified reliably.",
   "issues.messages.foreign_counterparty_identity_missing": "Verified tax identity is missing for the foreign counterparty.",
   "issues.messages.income_before_activity_start": "The income is dated before the recorded business activity start. Explain the contract or invoice before posting.",
@@ -17,5 +16,6 @@
   "issues.messages.nonresident_professional_irnr_review": "A separate IRNR review is required after payment to the foreign professional.",
   "issues.messages.transaction_tax_review": "Review the business purpose and the IRPF and VAT treatment.",
   "issues.none": "No open issues",
+  "issues.serverMessage": "Server message",
   "issues.sourceDetails": "Source details"
 }

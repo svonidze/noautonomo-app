@@ -1,4 +1,5 @@
 import { formatMessage, type Locale } from '../../core/i18n.ts';
+import { formatDateText } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import type {
   ReviewDecision,
@@ -186,4 +187,16 @@ export function confirmFx(choice: FxChoice | null, suggestion?: FxSuggestion) {
     raw_observation_hash: null,
     supersedes_rate_id: null,
   };
+}
+/** Server FX note codes in the interface language; an unknown note stays visible as server text. */
+export function fxNoteText(suggestion: { note?: string; rate_date?: string }, locale: Locale) {
+  if (suggestion.note === 'prior_business_day')
+    return formatMessage(
+      'review.fxPriorRate',
+      { date: formatDateText(suggestion.rate_date, locale) },
+      locale,
+    );
+  if (suggestion.note === 'manual_settlement_required')
+    return formatMessage('review.fxUnavailableHint', {}, locale);
+  return formatMessage('review.fxNoteUnknown', { note: suggestion.note || '' }, locale);
 }

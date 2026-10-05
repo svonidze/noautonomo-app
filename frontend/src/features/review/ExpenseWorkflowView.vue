@@ -11,7 +11,8 @@ import {
   type UiMessage,
 } from '../../core/i18n.ts';
 import { operationRequest } from '../../core/operation-request.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { aeatCodeLabel, eur, formatDateText, taxCodeLabel } from '../../core/format.ts';
+import { fxNoteText } from './guided-helpers.ts';
 import type { Counterparty } from '../contacts/model.ts';
 import WorkflowField from './WorkflowField.vue';
 import {
@@ -140,10 +141,6 @@ const allowedTaxes = computed(() =>
       ].includes(code),
   ),
 );
-const taxLabel = (code: string) =>
-  messageIds.includes(`taxCodeLabels.${code}`)
-    ? formatMessage(`taxCodeLabels.${code}`, {}, locale.value)
-    : code;
 function invalidate() {
   proposed.value = undefined;
   request = null;
@@ -590,7 +587,7 @@ const supplierHidden = (party: Counterparty) =>
               >
                 <option value=""></option>
                 <option v-for="code in allowedTaxes" :key="code" :value="code">
-                  {{ taxLabel(code) }}
+                  {{ taxCodeLabel(code, locale) }}
                 </option>
               </select></label
             >
@@ -856,9 +853,10 @@ const supplierHidden = (party: Counterparty) =>
               <h3>{{ t('workflow.eurConversion') }}</h3>
               <p>
                 {{
-                  draft.fx_suggestion?.note ||
-                  draft.fx_suggestion?.eur_per_unit ||
-                  t('workflow.saveTheDraftToRefreshTheRateSuggestion')
+                  draft.fx_suggestion?.note
+                    ? fxNoteText(draft.fx_suggestion, locale)
+                    : draft.fx_suggestion?.eur_per_unit ||
+                      t('workflow.saveTheDraftToRefreshTheRateSuggestion')
                 }}
               </p>
               <button
@@ -901,7 +899,7 @@ const supplierHidden = (party: Counterparty) =>
                       :key="value"
                       :value="value"
                     >
-                      {{ value }}
+                      {{ aeatCodeLabel('invoiceType', value, locale) }}
                     </option>
                   </select></label
                 ><WorkflowField

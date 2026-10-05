@@ -27,6 +27,7 @@
   "review.fxExactRate": "Rate for {date}",
   "review.fxExisting": "A rate is already applied to this invoice",
   "review.fxNeeded": "No FX rate selected",
+  "review.fxNoteUnknown": "Server note: {note}",
   "review.fxPriorRate": "Previous business day rate, {date}",
   "review.fxSettlementDate": "Bank transaction date",
   "review.fxSettlementRate": "Actual rate from the bank document (EUR per {currency})",

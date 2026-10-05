@@ -3,9 +3,12 @@ import {
   answers,
   autoResolve,
   confirmFx,
+  fxNoteText,
   legacyErrorTarget,
   merge,
 } from '../../src/features/review/guided-helpers.ts';
+import { formatDateText } from '../../src/core/format.ts';
+import { t } from '../../src/core/i18n.ts';
 import type { FxChoice, ReviewPacket } from '../../src/features/review/guided-model.ts';
 import reference from '../fixtures/review-expected.json' with { type: 'json' };
 test('guided answers, issue decisions, FX and diagnostic routing retain reviewed behavior', () => {
@@ -19,4 +22,16 @@ test('guided answers, issue decisions, FX and diagnostic routing retain reviewed
   expect(packet.decision).toEqual(reference.resolved);
   for (const row of reference.errors) expect(legacyErrorTarget(row.error)).toBe(row.expected);
   expect(merge(reference.merge.base, reference.merge.override)).toEqual(reference.merge.expected);
+});
+
+test('server FX notes read by code and keep unknown server text visible', () => {
+  expect(fxNoteText({ note: 'prior_business_day', rate_date: '2026-07-01' }, 'ru')).toBe(
+    t('review.fxPriorRate', { date: formatDateText('2026-07-01', 'ru') }, 'ru'),
+  );
+  expect(fxNoteText({ note: 'manual_settlement_required' }, 'en')).toBe(
+    t('review.fxUnavailableHint', {}, 'en'),
+  );
+  expect(fxNoteText({ note: 'Synthetic ECB outage' }, 'ru')).toBe(
+    'Примечание сервера: Synthetic ECB outage',
+  );
 });

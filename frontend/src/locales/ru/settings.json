@@ -61,5 +61,10 @@
   "settings.form.uploadDisabled": "Внешнее хранилище не настроено для этого запуска",
   "settings.form.uploadFailed": "Отправка во внешнее хранилище завершилась ошибкой",
   "settings.form.uploadPending": "Отправка во внешнее хранилище ещё не завершена",
-  "settings.form.yearStart": "Месяц начала налогового года"
+  "settings.form.yearStart": "Месяц начала налогового года",
+  "settings.regimes.irpf.estimacion_directa": "Прямая оценка",
+  "settings.regimes.irpf.estimacion_directa_normal": "Прямая оценка, обычная",
+  "settings.regimes.irpf.estimacion_directa_simplificada": "Прямая оценка, упрощённая",
+  "settings.regimes.iva.general": "Общий режим IVA",
+  "settings.regimes.unknown": "Режим {code}"
 }

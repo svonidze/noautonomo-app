@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { aeatCodeLabel, codeLabel, eur, formatDateText, taxCodeLabel } from '../../core/format.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import {
@@ -183,14 +183,16 @@ function update(path: string, value: unknown) {
   failure.value = undefined;
   persist(packet.value);
 }
-const taxLabel = (value: string) =>
-  messageIds.includes(`taxCodeLabels.${value}`)
-    ? formatMessage(`taxCodeLabels.${value}`, {}, locale.value)
-    : value;
-const options = (values: string[], blank = true) => [
+const options = (values: string[], label: (value: string) => string, blank = true) => [
   ...(blank ? [{ value: '', label: '' }] : []),
-  ...values.map((value) => ({ value, label: value })),
+  ...values.map((value) => ({ value, label: label(value) })),
 ];
+const aeatOptions = (group: 'invoiceType' | 'qualification' | 'exemption', field: string) =>
+  options(packet.value.allowed_values?.[field] || [], (value) =>
+    aeatCodeLabel(group, value, locale.value),
+  );
+const partyOptions = (group: 'roiStatus' | 'legalForms', values: string[]) =>
+  options(values, (value) => formatMessage(`parties.${group}.${value}`, {}, locale.value), false);
 const boolOptions = computed(() => [
   { value: '', label: '' },
   { value: 'true', label: t('common.yes') },
@@ -247,11 +249,11 @@ const guidedFields = computed<DecisionFieldSpec[]>(() => [
           'export',
           'outside_scope',
           'reverse_charge',
-          'withholding_service',
-          'withholding_rent',
+          'professional_withholding',
+          'rent_withholding',
           'unknown',
         ]
-      ).map((value) => ({ value, label: taxLabel(value) })),
+      ).map((value) => ({ value, label: taxCodeLabel(value, locale.value) })),
     ],
   },
   ...(['', 'ZZ'].includes(String(state.value.counterparty?.country_code || ''))
@@ -266,7 +268,7 @@ const technicalFields = computed<DecisionFieldSpec[]>(() => [
     path: 'tax_treatment.aeat_invoice_type',
     label: 'fields.invoiceType',
     type: 'select',
-    options: options(packet.value.allowed_values?.aeat_invoice_type || []),
+    options: aeatOptions('invoiceType', 'aeat_invoice_type'),
   },
   { path: 'tax_treatment.aeat_operation_key', label: 'fields.operationKey' },
   {
@@ -274,14 +276,14 @@ const technicalFields = computed<DecisionFieldSpec[]>(() => [
     label: 'fields.operationQualification',
     type: 'select',
     valueType: 'nullable-string',
-    options: options(packet.value.allowed_values?.aeat_operation_qualification || []),
+    options: aeatOptions('qualification', 'aeat_operation_qualification'),
   },
   {
     path: 'tax_treatment.aeat_exemption_code',
     label: 'fields.exemptionCode',
     type: 'select',
     valueType: 'nullable-string',
-    options: options(packet.value.allowed_values?.aeat_exemption_code || []),
+    options: aeatOptions('exemption', 'aeat_exemption_code'),
   },
   {
     path: 'tax_treatment.aeat_reverse_charge',
@@ -350,14 +352,14 @@ const technicalFields = computed<DecisionFieldSpec[]>(() => [
     label: 'fields.roiStatus',
     type: 'select',
     valueType: 'nullable-string',
-    options: options(['unknown', 'registered', 'not_registered'], false),
+    options: partyOptions('roiStatus', ['unknown', 'registered', 'not_registered']),
   },
   {
     path: 'counterparty_changes.legal_form',
     label: 'fields.legalForm',
     type: 'select',
     valueType: 'nullable-string',
-    options: options(['unknown', 'individual', 'legal_entity', 'public_body'], false),
+    options: partyOptions('legalForms', ['unknown', 'individual', 'legal_entity', 'public_body']),
   },
 ]);
 function value(path: string) {
@@ -418,11 +420,7 @@ const issueRows = computed(() =>
       resolution,
       auto: coverage.length > 0 && coverage.every((key) => answered[key]),
       count: coverage.length,
-      label: formatMessage(
-        messageIds.includes(key) ? key : 'issues.messages.default',
-        {},
-        locale.value,
-      ),
+      label: formatMessage(messageIds.includes(key) ? key : 'issues.default', {}, locale.value),
     };
   }),
 );
@@ -656,7 +654,9 @@ const retry = () =>
         <section class="panel review-panel">
           <header class="panel-header">
             <h2>{{ t('review.questionsTitle') }}</h2>
-            <small>{{ state.transaction.entry_type || 'invoice' }}</small>
+            <small>{{
+              codeLabel('transactions.types', state.transaction.entry_type, locale)
+            }}</small>
           </header>
           <div class="review-guided-grid">
             <template v-for="field in guidedFields" :key="field.path"
@@ -712,7 +712,10 @@ const retry = () =>
                   )
                 }}</span>
               </header>
-              <p>{{ row.issue.message || '' }}</p>
+              <details v-if="row.issue.message">
+                <summary>{{ t('issues.serverMessage') }}</summary>
+                <p>{{ row.issue.message }}</p>
+              </details>
               <p v-if="row.auto" class="review-auto-close-hint">
                 {{ t('review.issueAutoResolveHint', { labels: row.count }) }}
               </p>

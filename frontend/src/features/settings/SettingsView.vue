@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { message, messageText, localeRegistry, type UiMessage } from '../../core/i18n.ts';
+import {
+  formatMessage,
+  message,
+  messageIds,
+  messageText,
+  localeRegistry,
+  type UiMessage,
+} from '../../core/i18n.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import BackupStatus from './BackupStatus.vue';
@@ -35,6 +42,10 @@ let active = true,
 onBeforeUnmount(() => {
   active = false;
 });
+const regime = (tax: 'irpf' | 'iva', code: string) =>
+  messageIds.includes(`settings.regimes.${tax}.${code}`)
+    ? formatMessage(`settings.regimes.${tax}.${code}`, {}, locale.value)
+    : t('settings.regimes.unknown', { code });
 const fingerprint = () => JSON.stringify(draft),
   backupFingerprint = () => JSON.stringify([daily.value, monthly.value]);
 const isDirty = () =>
@@ -316,7 +327,7 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
                 {{ row.iae_group_epigraph }}
               </dd>
               <dt>{{ t('settings.form.regimes') }}</dt>
-              <dd>{{ row.irpf_method }} / {{ row.iva_regime }}</dd>
+              <dd>{{ regime('irpf', row.irpf_method) }} / {{ regime('iva', row.iva_regime) }}</dd>
               <dt>{{ t('settings.form.dates') }}</dt>
               <dd>{{ row.starts_on }} — {{ row.ends_on || t('settings.form.current') }}</dd>
             </dl>

@@ -4,8 +4,14 @@
   "transactions.date": "Date",
   "transactions.emptyIncome": "No income in this period yet. Click “Add” to accept an invoice.",
   "transactions.irpfDeduction": "IRPF deduction",
+  "transactions.jurisdictions.ES": "Spain",
   "transactions.noCounterparty": "No counterparty",
   "transactions.noMatches": "Nothing matches your search.",
   "transactions.search": "Search by counterparty or number",
-  "transactions.status": "Status"
+  "transactions.status": "Status",
+  "transactions.types.adjustment": "Adjustment",
+  "transactions.types.expense": "Expense",
+  "transactions.types.income": "Income",
+  "transactions.types.invoice_review": "Invoice review",
+  "transactions.types.non_invoice_review": "Non-invoice expense review"
 }

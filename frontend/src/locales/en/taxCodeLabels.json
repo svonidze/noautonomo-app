@@ -1,13 +1,21 @@
 {
+  "taxCodeLabels.domestic_expense": "Expense in Spain (no VAT)",
   "taxCodeLabels.domestic_input": "Expense in Spain",
   "taxCodeLabels.domestic_output": "Income in Spain (taxable)",
   "taxCodeLabels.domestic_output_zero": "Income in Spain (zero rate)",
+  "taxCodeLabels.domestic_reverse_charge_expense": "VAT reverse charge in Spain",
+  "taxCodeLabels.eu_goods_expense": "Goods from the EU",
   "taxCodeLabels.eu_goods_income": "Income: EU goods",
+  "taxCodeLabels.eu_service_expense": "Services from the EU",
   "taxCodeLabels.eu_service_income": "Income: EU services",
   "taxCodeLabels.export": "Export",
+  "taxCodeLabels.import_goods_expense": "Import of goods",
+  "taxCodeLabels.import_service_expense": "Import of services",
+  "taxCodeLabels.non_eu_service_expense": "Services from outside the EU",
+  "taxCodeLabels.nonresident_income": "Non-resident income (IRNR)",
   "taxCodeLabels.outside_scope": "Outside scope",
+  "taxCodeLabels.professional_withholding": "IRPF withholding: professional",
+  "taxCodeLabels.rent_withholding": "IRPF withholding: rent",
   "taxCodeLabels.reverse_charge": "VAT reverse charge",
-  "taxCodeLabels.unknown": "Code not set",
-  "taxCodeLabels.withholding_rent": "IRPF withholding: rent",
-  "taxCodeLabels.withholding_service": "IRPF withholding: services"
+  "taxCodeLabels.unknown": "Code not set"
 }

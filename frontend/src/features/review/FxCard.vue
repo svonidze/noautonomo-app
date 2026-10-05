@@ -3,6 +3,7 @@ import { computed, reactive, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { formatDateText } from '../../core/format.ts';
 import type { FxChoice, FxSuggestion } from './guided-model.ts';
+import { fxNoteText } from './guided-helpers.ts';
 const props = defineProps<{
   suggestion: FxSuggestion;
   choice: FxChoice | null;
@@ -124,11 +125,7 @@ const date = (value?: string) => formatDateText(value, locale.value);
       <template v-else
         ><p class="fx-card-status warning">{{ t('review.fxUnavailable') }}</p>
         <p class="muted-copy">
-          {{
-            suggestion.note && suggestion.note !== 'manual_settlement_required'
-              ? suggestion.note
-              : t('review.fxUnavailableHint')
-          }}
+          {{ suggestion.note ? fxNoteText(suggestion, locale) : t('review.fxUnavailableHint') }}
         </p></template
       >
       <div v-if="manual || !suggested" class="form-grid compact-grid fx-settlement-grid">

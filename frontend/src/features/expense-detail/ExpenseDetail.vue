@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { followSpaLink } from '../../vue/services.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { codeLabel, eur, formatDateText, taxCodeLabel } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { formatMessage, localeTag, messageIds } from '../../core/i18n.ts';
@@ -137,7 +137,8 @@ const facts = computed(() => {
     ],
   ];
 });
-const treatmentLabel = (row: TaxTreatment) => `${row.treatment_type} · ${row.jurisdiction}`;
+const treatmentLabel = (row: TaxTreatment) =>
+  `${codeLabel('transactions.types', row.treatment_type, locale.value)} · ${codeLabel('transactions.jurisdictions', row.jurisdiction, locale.value)}`;
 const errorText = (value: unknown) => errorMessage(value, locale.value);
 const notFound = computed(() => error.value instanceof ApiError && error.value.status === 404);
 const forbidden = computed(
@@ -255,7 +256,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
               <dl class="review-facts-list">
                 <div>
                   <dt>{{ t('fields.taxCode') }}</dt>
-                  <dd>{{ translatedCode('taxCodeLabels', row.tax_code || '') }}</dd>
+                  <dd>{{ taxCodeLabel(row.tax_code, locale) }}</dd>
                 </div>
                 <div>
                   <dt>{{ t('transactions.irpfDeduction') }}</dt>

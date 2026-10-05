@@ -1,13 +1,21 @@
 {
+  "taxCodeLabels.domestic_expense": "Расход в Испании (без IVA)",
   "taxCodeLabels.domestic_input": "Расход в Испании",
   "taxCodeLabels.domestic_output": "Доход в Испании (облагаемый)",
   "taxCodeLabels.domestic_output_zero": "Доход в Испании (нулевая ставка)",
+  "taxCodeLabels.domestic_reverse_charge_expense": "Обратное начисление IVA в Испании",
+  "taxCodeLabels.eu_goods_expense": "Товары из ЕС",
   "taxCodeLabels.eu_goods_income": "Доход: товары в ЕС",
+  "taxCodeLabels.eu_service_expense": "Услуги из ЕС",
   "taxCodeLabels.eu_service_income": "Доход: услуги в ЕС",
   "taxCodeLabels.export": "Экспорт",
+  "taxCodeLabels.import_goods_expense": "Импорт товаров",
+  "taxCodeLabels.import_service_expense": "Импорт услуг",
+  "taxCodeLabels.non_eu_service_expense": "Услуги вне ЕС",
+  "taxCodeLabels.nonresident_income": "Доход нерезидента (IRNR)",
   "taxCodeLabels.outside_scope": "Вне обложения",
+  "taxCodeLabels.professional_withholding": "Удержание IRPF: специалист",
+  "taxCodeLabels.rent_withholding": "Удержание IRPF: аренда",
   "taxCodeLabels.reverse_charge": "Обратное начисление IVA",
-  "taxCodeLabels.unknown": "Код не определён",
-  "taxCodeLabels.withholding_rent": "Удержание IRPF: аренда",
-  "taxCodeLabels.withholding_service": "Удержание IRPF: услуги"
+  "taxCodeLabels.unknown": "Код не определён"
 }

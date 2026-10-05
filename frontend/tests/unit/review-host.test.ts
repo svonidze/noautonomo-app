@@ -5,6 +5,7 @@ import ReviewDetailView from '../../src/features/review/ReviewDetailView.vue';
 import type { ReviewDetailContext } from '../../src/features/review/guided-model.ts';
 import type { JsonOptions } from '../../src/core/http.ts';
 import { guidedFixture, nativeFixture, REVIEW_ID } from '../fixtures/review.ts';
+import { t } from '../../src/core/i18n.ts';
 async function flush() {
   for (let count = 0; count < 8; count++) {
     await Promise.resolve();
@@ -250,5 +251,56 @@ test('guided issue edits follow backend IDs when the decision array is reordered
   host.dispose();
   root.remove();
   vi.unstubAllGlobals();
+  localStorage.clear();
+});
+
+test('guided issue cards name known codes in the interface language and fold server text', async () => {
+  localStorage.clear();
+  const fixture = guidedFixture();
+  fixture.packet.state.issues = [
+    {
+      validation_issue_id: 'synthetic-known',
+      issue_code: 'amount_mismatch',
+      message: 'Synthetic known diagnostic',
+    },
+    {
+      validation_issue_id: 'synthetic-new',
+      issue_code: 'synthetic_future_code',
+      message: 'Synthetic unknown diagnostic',
+    },
+  ];
+  const setup = context(async (url: string) =>
+    url.startsWith('/api/transactions/')
+      ? {
+          transaction: {
+            transaction_id: REVIEW_ID,
+            entry_type: 'income',
+            lifecycle_status: 'needs_review',
+          },
+          period: { period_key: '2026-Q3' },
+        }
+      : fixture,
+  );
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, ReviewDetailView, setup);
+  await flush();
+  const [known, unknown] = [...root.querySelectorAll('.review-issue-card')];
+  expect(known.querySelector('header strong')!.textContent).toBe(
+    t('issues.messages.amount_mismatch'),
+  );
+  expect(unknown.querySelector('header strong')!.textContent).toBe(t('issues.default'));
+  for (const [card, text] of [
+    [known, 'Synthetic known diagnostic'],
+    [unknown, 'Synthetic unknown diagnostic'],
+  ] as const) {
+    const original = card.querySelector('details')!;
+    expect(original.open).toBe(false);
+    expect(original.querySelector('summary')!.textContent).toBe(t('issues.serverMessage'));
+    expect(original.textContent).toContain(text);
+    expect(card.textContent!.replace(original.textContent!, '')).not.toContain(text);
+  }
+  host.dispose();
+  root.remove();
   localStorage.clear();
 });

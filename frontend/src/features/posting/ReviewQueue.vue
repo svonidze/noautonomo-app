@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
-import { formatMessage, messageIds } from '../../core/i18n.ts';
+import { eur, formatDateText, taxCodeLabel } from '../../core/format.ts';
 import { followSpaLink } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import ChartHost from '../../charts/ChartHost.vue';
@@ -50,12 +49,6 @@ const posting = (row: ReviewRow) => {
               : 'statuses.labels.blocked',
           );
 };
-const tax = (row: ReviewRow) =>
-  row.tax_code
-    ? messageIds.includes(`taxCodeLabels.${row.tax_code}`)
-      ? formatMessage(`taxCodeLabels.${row.tax_code}`, {}, locale.value)
-      : row.tax_code
-    : t('taxCodeLabels.unknown');
 </script>
 <template>
   <section class="panel review-summary-panel">
@@ -108,7 +101,7 @@ const tax = (row: ReviewRow) =>
             <td :data-label="t('review.taxDecision')"><StatusCell :context="row.ui_context" /></td>
             <td class="cell-primary" :data-label="t('review.result')">
               <strong>{{ posting(row) }}</strong
-              ><small>{{ tax(row) }}</small>
+              ><small>{{ taxCodeLabel(row.tax_code, locale) }}</small>
             </td>
             <td class="amount" :data-label="t('transactions.amount')">
               {{

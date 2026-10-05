@@ -7,7 +7,13 @@ import {
   setLocale,
   subscribeLocale,
 } from '../../src/core/i18n.ts';
-import { eur, formatDateText, escapeHtml } from '../../src/core/format.ts';
+import {
+  aeatCodeLabel,
+  eur,
+  formatDateText,
+  escapeHtml,
+  taxCodeLabel,
+} from '../../src/core/format.ts';
 import { fetchJSON, ApiError, type HttpResponse } from '../../src/core/http.ts';
 
 describe('locale messages and private values', () => {
@@ -220,4 +226,18 @@ test('a parameterized fallback code degrades to the HTTP status instead of escap
   expect(failure.status).toBe(500);
   expect(failure.message).toBe('HTTP 500');
   expect(failure.messageCode).toBeUndefined();
+});
+
+test('codes read as labels with the code secondary, and unlabeled codes say so', () => {
+  expect(taxCodeLabel('eu_service_expense', 'ru')).toBe('Услуги из ЕС (eu_service_expense)');
+  expect(taxCodeLabel('professional_withholding', 'en')).toBe(
+    'IRPF withholding: professional (professional_withholding)',
+  );
+  expect(taxCodeLabel('synthetic_future_code', 'ru')).toBe('Код AEAT synthetic_future_code');
+  for (const missing of ['', null, 'unknown'])
+    expect(taxCodeLabel(missing, 'ru')).toBe(t('taxCodeLabels.unknown', {}, 'ru'));
+  expect(aeatCodeLabel('invoiceType', 'F1', 'ru')).toBe('F1 · Полный счёт');
+  expect(aeatCodeLabel('qualification', 'S2', 'en')).toBe('S2 · Taxable, VAT reverse charge');
+  expect(aeatCodeLabel('exemption', 'E6', 'ru')).toBe('E6 · Другое освобождение');
+  expect(aeatCodeLabel('invoiceType', 'SF', 'ru')).toBe('Тип AEAT SF');
 });
