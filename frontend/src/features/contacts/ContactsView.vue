@@ -291,8 +291,8 @@ const facts = computed(() => {
     code = `parties.legalForms.${value.legal_form || 'unknown'}`;
   return [
     [t('contacts.country'), value.country_code === 'ZZ' ? null : value.country_code],
-    ['NIF', value.tax_id],
-    ['VAT ID', value.vat_id],
+    [t('fields.taxId'), value.tax_id],
+    [t('fields.vatId'), value.vat_id],
     [
       t('fields.legalForm'),
       messageIds.includes(code) ? formatMessage(code, {}, locale.value) : value.legal_form,
@@ -368,7 +368,7 @@ defineExpose({
                       ?
                     </button></template
                   ><span v-else-if="index === 6" class="sr-only">{{ t('contacts.actions') }}</span
-                  ><template v-else>{{ key ? t(key) : 'NIF / VAT ID' }}</template>
+                  ><template v-else>{{ t(key || 'contacts.taxIds') }}</template>
                 </th>
               </tr>
             </thead>
@@ -389,7 +389,7 @@ defineExpose({
                   >
                 </td>
                 <td :data-label="t('contacts.country')">{{ row.country_code || '—' }}</td>
-                <td data-label="NIF / VAT ID">{{ row.vat_id || row.tax_id || '—' }}</td>
+                <td :data-label="t('contacts.taxIds')">{{ row.vat_id || row.tax_id || '—' }}</td>
                 <td data-label="ROI"><StatusCell :context="row.ui_context" /></td>
                 <td :data-label="t('contacts.transactions')">{{ row.transaction_count }}</td>
                 <td :data-label="t('contacts.last')">

@@ -120,14 +120,14 @@ const last = computed(() =>
 const stats = computed(() => {
   const p = data.value!.preview;
   return [
-    { label: t('review.postingApproved'), count: p.summary.approvedCount },
+    { label: t('statuses.labels.approved'), count: p.summary.approvedCount },
     {
-      label: t('review.postingBatchReady'),
+      label: t('statuses.labels.ready'),
       count: p.summary.readyCount,
       detail: eur(p.summary.readyTotalEur, locale.value),
     },
-    { label: t('review.postingDeferred'), count: p.summary.deferredCount },
-    { label: t('review.postingBatchBlocked'), count: p.summary.blockedCount },
+    { label: t('statuses.labels.deferred'), count: p.summary.deferredCount },
+    { label: t('statuses.labels.blocked'), count: p.summary.blockedCount },
     { label: t('review.postingCleanup'), count: p.summary.cleanupCount },
     { label: t('review.postingCleanupBlocked'), count: p.summary.cleanupBlockedCount },
   ];
@@ -362,9 +362,9 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
             </div>
             <p class="posting-action-hint">{{ hint }}</p>
             <PostingRows
-              :title="t('review.postingDeferred')"
+              :title="t('statuses.labels.deferred')"
               :rows="data.preview.deferred"
-            /><PostingRows :title="t('review.postingBatchBlocked')" :rows="data.preview.blocked" />
+            /><PostingRows :title="t('statuses.labels.blocked')" :rows="data.preview.blocked" />
             <div v-if="last" class="posting-results">
               <div class="posting-results-header">
                 <h3>{{ t('review.postingResults') }}</h3>

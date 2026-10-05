@@ -59,7 +59,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.navigate);
               :href="`/api/document/${encodeURIComponent(row.document_id!)}/content`"
               target="_blank"
               rel="noreferrer"
-              >{{ row.document_number || t('common.file') }}</a
+              >{{ row.document_number || t('common.openDocument') }}</a
             ><template v-else>{{ row.document_number || '—' }}</template>
           </td>
           <td :data-label="t(keys[4])">

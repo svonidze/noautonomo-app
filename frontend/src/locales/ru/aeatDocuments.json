@@ -25,6 +25,8 @@
   "aeatDocuments.procedure.periodic": "Периодическая декларация",
   "aeatDocuments.procedure.rectification": "Исправление декларации",
   "aeatDocuments.procedureCode": "Код процедуры",
+  "aeatDocuments.receiptNumber": "Номер квитанции (justificante)",
+  "aeatDocuments.reference": "Ссылка AEAT (referencia)",
   "aeatDocuments.requestedEffective": "Запрошенная дата действия",
   "aeatDocuments.save": "Сохранить проверенный PDF",
   "aeatDocuments.saved": "Документ AEAT сохранён",
@@ -39,5 +41,6 @@
   "aeatDocuments.status.submitted": "Подано, ожидается решение",
   "aeatDocuments.statusSaved": "Статус дела сохранён",
   "aeatDocuments.title": "Документы AEAT",
+  "aeatDocuments.verificationCode": "Код проверки (CSV)",
   "aeatDocuments.year": "Год"
 }

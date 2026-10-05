@@ -44,6 +44,7 @@
   "contacts.sheetActor": "Правка из таблицы",
   "contacts.shown": "Показано {count} из {total}",
   "contacts.sourceDocument": "Документ-источник",
+  "contacts.taxIds": "NIF / номер VAT",
   "contacts.title": "Контрагенты",
   "contacts.transactions": "Операций"
 }

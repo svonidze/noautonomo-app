@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { formatMessage, type MessageId } from '../../core/i18n.ts';
+import { formatMessage, localeTag, type MessageId } from '../../core/i18n.ts';
 import { eur } from '../../core/format.ts';
 export interface DecisionFieldSpec {
   path: string;
@@ -13,6 +13,7 @@ export interface DecisionFieldSpec {
   max?: string;
   step?: string;
   minor?: boolean;
+  basisPoints?: boolean;
   full?: boolean;
   descriptionId?: string;
 }
@@ -43,9 +44,14 @@ watch(
 );
 const preview = computed(() => {
   const value = Number.parseInt(raw.value, 10);
-  return String(raw.value).trim() && Number.isFinite(value)
-    ? t('review.irpfPreview', { amount: eur(value / 100, locale.value) })
-    : '';
+  if (!String(raw.value).trim() || !Number.isFinite(value)) return '';
+  const amount = props.field.basisPoints
+    ? new Intl.NumberFormat(localeTag(locale.value), {
+        style: 'percent',
+        maximumFractionDigits: 2,
+      }).format(value / 10000)
+    : eur(value / 100, locale.value);
+  return t('review.irpfPreview', { amount });
 });
 </script>
 <template>
@@ -67,9 +73,12 @@ const preview = computed(() => {
     />
     <span
       >{{ formatMessage(field.label, {}, locale) }}
-      <output v-if="field.minor" class="review-irpf-preview" data-eur-preview>{{
-        preview
-      }}</output></span
+      <output
+        v-if="field.minor || field.basisPoints"
+        class="review-irpf-preview"
+        data-eur-preview
+        >{{ preview }}</output
+      ></span
     >
     <textarea
       v-if="field.type === 'textarea'"

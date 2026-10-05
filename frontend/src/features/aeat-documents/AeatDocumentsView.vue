@@ -285,9 +285,9 @@ async function saveStatus() {
               <th>{{ t('aeatDocuments.procedure') }}</th>
               <th>{{ t('aeatDocuments.kind') }}</th>
               <th>{{ t('aeatDocuments.status') }}</th>
-              <th>Referencia</th>
-              <th>Justificante</th>
-              <th>CSV</th>
+              <th>{{ t('aeatDocuments.reference') }}</th>
+              <th>{{ t('aeatDocuments.receiptNumber') }}</th>
+              <th>{{ t('aeatDocuments.verificationCode') }}</th>
               <th></th>
             </tr>
           </thead>
@@ -322,9 +322,13 @@ async function saveStatus() {
               <td :data-label="t('aeatDocuments.status')">
                 {{ label(`aeatDocuments.status.${row.status}`) }}
               </td>
-              <td data-label="Referencia">{{ row.submission_reference || '—' }}</td>
-              <td data-label="Justificante">{{ row.justificante_number || '—' }}</td>
-              <td data-label="CSV">
+              <td :data-label="t('aeatDocuments.reference')">
+                {{ row.submission_reference || '—' }}
+              </td>
+              <td :data-label="t('aeatDocuments.receiptNumber')">
+                {{ row.justificante_number || '—' }}
+              </td>
+              <td :data-label="t('aeatDocuments.verificationCode')">
                 <code>{{ row.verification_code || '—' }}</code>
               </td>
               <td class="aeat-actions">
@@ -334,7 +338,7 @@ async function saveStatus() {
                   :href="row.content_url"
                   target="_blank"
                   rel="noreferrer"
-                  >{{ t('common.file') }}</a
+                  >{{ t('common.openDocument') }}</a
                 >
                 <span v-else>{{ t('aeatDocuments.sourceUnavailable') }}</span>
                 <button
@@ -449,9 +453,18 @@ async function saveStatus() {
           ><span>{{ t('aeatDocuments.requestedEffective') }}</span
           ><input v-model="upload.requested_effective_on" type="date"
         /></label>
-        <label><span>Referencia</span><input v-model="upload.submission_reference" /></label>
-        <label><span>Justificante</span><input v-model="upload.justificante" /></label>
-        <label><span>CSV</span><input v-model="upload.verification_code" /></label>
+        <label
+          ><span>{{ t('aeatDocuments.reference') }}</span
+          ><input v-model="upload.submission_reference"
+        /></label>
+        <label
+          ><span>{{ t('aeatDocuments.receiptNumber') }}</span
+          ><input v-model="upload.justificante"
+        /></label>
+        <label
+          ><span>{{ t('aeatDocuments.verificationCode') }}</span
+          ><input v-model="upload.verification_code"
+        /></label>
         <label class="full-width"
           ><span>{{ t('aeatDocuments.notes') }}</span
           ><textarea v-model="upload.notes"></textarea>

@@ -10,6 +10,7 @@ import {
   messageText,
   messageIds,
   localeTag,
+  type MessageId,
   type UiMessage,
 } from '../../core/i18n.ts';
 import { readReviewDraft, writeReviewDraft, removeReviewDraft } from '../../core/drafts.ts';
@@ -152,15 +153,24 @@ const evaluation = computed(() => (item.value ? evaluate(item.value) : null));
 const disabled = computed(() => busy.value || !evaluation.value?.canApply);
 const status = computed(() =>
   evaluation.value?.category === 'later'
-    ? t('review.postingLater', { date: formatDateText(evaluation.value.availableOn, locale.value) })
+    ? t('statuses.deferredUntil', {
+        date: formatDateText(evaluation.value.availableOn, locale.value),
+      })
     : t(
         evaluation.value?.category === 'blocked'
-          ? 'review.postingBlocked'
+          ? 'statuses.labels.blocked'
           : evaluation.value?.category === 'needs_review'
-            ? 'review.needsReview'
-            : 'review.postingReady',
+            ? 'statuses.labels.needs_review'
+            : 'statuses.labels.ready',
       ),
 );
+// Readiness categories read as the canonical status labels; anything else is the generic label.
+const categoryLabels: Record<string, MessageId> = {
+  ready: 'statuses.labels.ready',
+  later: 'statuses.labels.deferred',
+  blocked: 'statuses.labels.blocked',
+  needs_review: 'statuses.labels.needs_review',
+};
 const errorText = computed(() =>
   failure.value?.message
     ? messageText(failure.value.message, locale.value)
@@ -319,6 +329,7 @@ const technicalFields = computed<DecisionFieldSpec[]>(() => [
     type: 'number',
     min: '0',
     valueType: 'integer',
+    basisPoints: true,
   },
   ...([130, 303, 347] as const).map(
     (code, index) =>
@@ -540,7 +551,7 @@ const retry = () =>
           <span
             class="badge"
             :class="`status-${evaluation.category === 'ready' ? 'positive' : evaluation.category === 'blocked' ? 'attention' : 'pending'}`"
-            >{{ formatMessage(`review.category.${evaluation.category}`, {}, locale) }}</span
+            >{{ t(categoryLabels[evaluation.category] ?? 'statuses.labels.unknown') }}</span
           ><strong>{{ status }}</strong>
         </div>
       </div>
@@ -555,7 +566,7 @@ const retry = () =>
         </p>
       </div>
       <div v-if="evaluation.category === 'later'" class="review-alert warning" role="alert">
-        <strong>{{ t('review.summaryLater') }}</strong>
+        <strong>{{ t('statuses.labels.deferred') }}</strong>
         <p>{{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}</p>
         <p>{{ t('review.formDisabledHint') }}</p>
       </div>
@@ -564,7 +575,7 @@ const retry = () =>
         class="review-alert warning"
         role="alert"
       >
-        <strong>{{ t('review.category.blocked') }}</strong>
+        <strong>{{ t('statuses.labels.blocked') }}</strong>
         <p>{{ t('review.formDisabledHint') }}</p>
       </div>
       <div
@@ -638,7 +649,7 @@ const retry = () =>
               :href="`/api/document/${encodeURIComponent(state.document.document_id)}/content`"
               target="_blank"
               rel="noreferrer"
-              >{{ t('review.documentLink') }}</a
+              >{{ t('common.openDocument') }}</a
             >
           </div>
         </section>

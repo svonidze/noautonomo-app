@@ -135,7 +135,7 @@ const sourceUrl = () => `/dashboard?period=${encodeURIComponent(props.period)}`;
                 :href="`/api/document/${encodeURIComponent(row.document_id)}/content`"
                 target="_blank"
                 rel="noreferrer"
-                >{{ t('common.file') }}</a
+                >{{ t('common.openDocument') }}</a
               ><button
                 v-if="copyable(row, target)"
                 type="button"

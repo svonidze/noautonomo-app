@@ -316,14 +316,14 @@ test('RETA check is its own read-only section after the tax forms, separate from
     });
   });
   await page.reload();
-  await expect(card.locator('.badge')).toHaveText('Below the tramo');
+  await expect(card.locator('.badge')).toHaveText('Below the bracket');
   await expect(card.locator('[data-reta="additional"]')).toHaveText('€920.30');
   await expect(card.locator('[data-reta="refund"]')).toHaveText('€0.00');
   await expect(card.locator('[data-reta="locked"]')).toHaveText('€460.15');
   await expect(card.locator('tbody td').nth(4)).toHaveText('Synthetic TGSS resolution');
   await expect(page.locator('.tax-hero')).not.toContainText('920');
   await page.locator('[data-locale="ru"]').click();
-  await expect(card.locator('.badge')).toHaveText('Ниже tramo');
+  await expect(card.locator('.badge')).toHaveText('Ниже ступени');
   await expect(card.locator('[data-reta="additional"]')).toContainText('920,30');
   expect(reads).toBe(1);
 });

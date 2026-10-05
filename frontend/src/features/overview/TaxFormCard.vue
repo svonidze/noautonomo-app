@@ -37,11 +37,13 @@ const boxLabel = (key: string) =>
 const filing = computed(() =>
   props.summary?.determination === 'due'
     ? props.summary.filing_status === 'filed'
-      ? `${t('taxes.filed')}${props.summary.filed_on ? ` · ${formatDateText(props.summary.filed_on, locale.value)}` : ''}`
-      : t('taxes.notFiled')
+      ? props.summary.filed_on
+        ? t('statuses.filedOn', { date: formatDateText(props.summary.filed_on, locale.value) })
+        : t('statuses.labels.filed')
+      : t('statuses.labels.due')
     : !props.summary?.determination || props.summary.determination === 'unknown'
       ? t('taxes.filingUndecided')
-      : t('taxes.filingNotRequired'),
+      : t('statuses.labels.not_due'),
 );
 </script>
 <template>

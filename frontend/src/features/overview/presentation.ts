@@ -47,25 +47,25 @@ export function createFinancePresentation(locale: Locale) {
     const date = form.filed_on ? formatDate(form.filed_on) : null;
     const previewDate = form.preview_as_of ? formatDate(form.preview_as_of) : null;
     let stateText = '';
+    const filedLabel = date ? t('statuses.filedOn', { date }) : t('statuses.labels.filed');
     if (form.display_state === 'filed') {
-      stateText = date ? t('dashboard.filedOn', { date }) : t('dashboard.filed');
+      stateText = filedLabel;
     } else if (form.display_state === 'filed_without_values') {
-      const filedLabel = date ? t('dashboard.filedOn', { date }) : t('dashboard.filed');
       stateText = `${filedLabel} · ${t('dashboard.valuesUnavailable')}`;
     } else if (form.display_state === 'snapshot_only') {
       stateText = t('dashboard.snapshotAvailable');
     } else if (form.display_state === 'preview') {
       stateText = previewDate
         ? t('dashboard.calculatedAsOf', { date: previewDate })
-        : t('dashboard.notCalculated');
+        : t('statuses.labels.calculation_preview');
     } else {
-      stateText = t('dashboard.notCalculated');
+      stateText = t('statuses.labels.calculation_unavailable');
     }
     if (
       obligation?.filing_status === 'filed' &&
       ['preview', 'unavailable'].includes(form.display_state)
     ) {
-      stateText = `${t('dashboard.filed')} · ${stateText}`;
+      stateText = `${t('statuses.labels.filed')} · ${stateText}`;
     }
     if (
       form.headline_detail !== null &&
@@ -84,7 +84,7 @@ export function createFinancePresentation(locale: Locale) {
       if (form.extraction_status === 'pdf_unreadable') return t('taxes.filedValuesUnavailablePdf');
       return t('taxes.filedValuesUnavailable');
     }
-    return t('taxes.calculationMissing');
+    return t('statuses.labels.calculation_unavailable');
   }
 
   function taxSettlementLabel(status: string) {

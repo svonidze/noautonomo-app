@@ -240,7 +240,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
             :href="`/api/document/${encodeURIComponent(data.document.document_id)}/content`"
             target="_blank"
             rel="noreferrer"
-            >{{ t('common.file') }}</a
+            >{{ t('common.openDocument') }}</a
           >
         </div>
       </section>

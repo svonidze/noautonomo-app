@@ -25,6 +25,8 @@
   "aeatDocuments.procedure.periodic": "Periodic filing",
   "aeatDocuments.procedure.rectification": "Return correction",
   "aeatDocuments.procedureCode": "Procedure code",
+  "aeatDocuments.receiptNumber": "Receipt number (justificante)",
+  "aeatDocuments.reference": "AEAT reference (referencia)",
   "aeatDocuments.requestedEffective": "Requested effective date",
   "aeatDocuments.save": "Save checked PDF",
   "aeatDocuments.saved": "AEAT document saved",
@@ -39,5 +41,6 @@
   "aeatDocuments.status.submitted": "Submitted, awaiting decision",
   "aeatDocuments.statusSaved": "Case status saved",
   "aeatDocuments.title": "AEAT documents",
+  "aeatDocuments.verificationCode": "Verification code (CSV)",
   "aeatDocuments.year": "Year"
 }

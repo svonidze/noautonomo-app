@@ -28,26 +28,26 @@ const summary = computed(() =>
   ),
 );
 const labels = [
-  ['needsReview', 'review.summaryNeedsReview', 'needs-review'],
-  ['ready', 'review.summaryReady', 'ready'],
-  ['later', 'review.summaryLater', 'later'],
-  ['blocked', 'review.summaryBlocked', 'blocked'],
+  ['needsReview', 'statuses.labels.needs_review', 'needs-review'],
+  ['ready', 'statuses.labels.ready', 'ready'],
+  ['later', 'statuses.labels.deferred', 'later'],
+  ['blocked', 'statuses.labels.blocked', 'blocked'],
 ] as const;
 const posting = (row: ReviewRow) => {
   const value = row.ui_context.posting as
     { preview_bucket?: string; posting_deferred_until?: string } | undefined;
   return !value
-    ? t('review.postingBlocked')
+    ? t('statuses.labels.blocked')
     : value.preview_bucket === 'deferred'
-      ? t('review.postingLater', {
+      ? t('statuses.deferredUntil', {
           date: formatDateText(value.posting_deferred_until, locale.value),
         })
       : value.preview_bucket === 'ready'
-        ? t('review.postingReady')
+        ? t('statuses.labels.ready')
         : t(
             row.ui_context.state === 'needs_review'
-              ? 'review.needsReview'
-              : 'review.postingBlocked',
+              ? 'statuses.labels.needs_review'
+              : 'statuses.labels.blocked',
           );
 };
 const tax = (row: ReviewRow) =>
@@ -124,7 +124,7 @@ const tax = (row: ReviewRow) =>
                 :href="`/api/document/${encodeURIComponent(row.document_id)}/content`"
                 target="_blank"
                 rel="noreferrer"
-                >{{ t('review.documentLink') }}</a
+                >{{ t('common.openDocument') }}</a
               ><a
                 v-if="row.lifecycle_status === 'needs_review'"
                 class="secondary-button compact-button"

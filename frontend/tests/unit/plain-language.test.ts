@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { parse, TYPE, type MessageFormatElement } from '@formatjs/icu-messageformat-parser';
 import { expect, test } from 'vitest';
 import { readMessages } from '../../scripts/build_locales.mts';
+import references from '../../src/help/references.json' with { type: 'json' };
 
 // Latin words the Russian UI may keep: Spanish tax and legal terms, formats, product names.
 // prettier-ignore
@@ -13,51 +14,15 @@ export const ALLOWED_TERMS = [
   'Social', 'Hacienda', 'autónomo', 'autónomos', 'estimación', 'directa', 'simplificada',
   'vivienda', 'habitual', 'casilla', 'SQLite', 'Google', 'Drive', 'Picker', 'OAuth', 'PDF', 'CSV',
   'TXT', 'XLSX', 'JSON', 'OCR', 'Tesseract', 'URL', 'ID', 'Xolo', 'Windows', 'macOS', 'Linux',
+  'ISO', 'autonomo-web', 'autonomo-tax',
+  // Official Spanish terms printed on AEAT/TGSS documents: single official terms may be allowed; English and internal tokens never.
+  'tramo', 'referencia', 'justificante', 'DUA', 'alta', 'tarifa', 'plana', 'societario',
+  'societarios', 'familiar', 'familiares', 'colaborador', 'colaboradores',
 ];
 const allowed = new Set(ALLOWED_TERMS.map((term) => term.toLowerCase()));
 
-// Burn-down list for stage 1 of docs/plans/ui-clarity-redesign.md: remove a key once its text is plain Russian.
-export const BASELINE = [
-  'app.inline.enGb',
-  'app.inline.postedCalculationRefreshOrInboxCleanupIsPending',
-  'dashboard.approvedNotPosted',
-  'dashboard.snapshotAvailable',
-  'errors.apiReturnedHtml',
-  'fields.taxId',
-  'help.reasons.inbox_roots_not_configured.action',
-  'intake.googleDrivePlaceholder',
-  'intake.googlePickerHint',
-  'reta.baseRange',
-  'reta.boundarySensitive',
-  'reta.reasons.base_missing',
-  'reta.reasons.period_missing',
-  'reta.reasons.tarifa_plana_extension_unverified',
-  'reta.reasons.window_empty',
-  'reta.reasons.worker_kind_floor_unverified',
-  'reta.regime',
-  'reta.status.above_bracket',
-  'reta.status.below_bracket',
-  'reta.status.ok',
-  'reta.statusDetail.above_bracket',
-  'reta.statusDetail.below_bracket',
-  'reta.statusDetail.ok',
-  'reta.title',
-  'reta.tramo',
-  'reta.tramoValue',
-  'reta.workerKind',
-  'review.fxSettlementDate',
-  'review.fxSettlementRate',
-  'review.fxSettlementReference',
-  'review.fxUnavailableHint',
-  'review.fxUseManual',
-  'review.postConfirmCleanupWarning',
-  'review.postingCleanup',
-  'settings.form.country',
-  'taxes.filedValuesUnavailable',
-  'taxes.filedValuesUnavailableExtract',
-  'taxes.filedValuesUnavailablePdf',
-  'workflow.refreshOrInboxCleanupNeedsRetryDoNotRepost',
-];
+// Burn-down list of stage 1 of docs/plans/ui-clarity-redesign.md, emptied by that stage: keep it empty.
+export const BASELINE: string[] = [];
 
 /** Latin words in plain text that are not allowed; `settlement-` counts as the stem `settlement`. */
 export function disallowedLatinWords(text: string): string[] {
@@ -125,4 +90,20 @@ test('the scanner flags only disallowed Latin-script words', () => {
   ];
   for (const [text, expected] of table) expect(disallowedLatinWords(text), text).toEqual(expected);
   expect(disallowedLatinWords('Auto\u0301nomo'), 'decomposed autónomo').toEqual([]);
+});
+
+// One status vocabulary (plan section 6): labels live in statuses.*, and the synonym keys stay deleted.
+test('status labels come from the statuses catalog only', () => {
+  const synonyms = [
+    /^help\.statuses\./,
+    /^review\.category\./,
+    /^review\.(summary|status|posting)(NeedsReview|Ready|Later|Blocked)$/,
+    /^(review\.needsReview|help\.words\.(ready|blocked)|dashboard\.(filed|filedOn|notCalculated))$/,
+  ];
+  expect(messages.map(([key]) => key).filter((key) => synonyms.some((re) => re.test(key)))).toEqual(
+    [],
+  );
+  expect(
+    Object.values(references.Statuses).filter((key) => !key.startsWith('statuses.labels.')),
+  ).toEqual([]);
 });

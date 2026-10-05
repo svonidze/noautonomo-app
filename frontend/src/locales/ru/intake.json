@@ -1,5 +1,5 @@
 {
-  "intake.accept": "Принять в систему",
+  "intake.accept": "Добавить документ",
   "intake.accepted": "Принято: {id}",
   "intake.acceptedToast": "Документ принят в {period}",
   "intake.chooseGoogleFolder": "Выбрать папку Google Drive",
@@ -15,10 +15,10 @@
   "intake.fileFormats": "PDF, изображение, CSV или TXT до 30 MB",
   "intake.googleDriveHint": "Файл останется в вашем архиве; будет сохранена ссылка на оригинал.",
   "intake.googleDriveInvalid": "Введите ссылку на файл Google Drive.",
-  "intake.googleDrivePlaceholder": "drive.google.com/file/d/...",
+  "intake.googleDrivePlaceholder": "Ссылка из меню «Поделиться» в Google Drive",
   "intake.googleDriveUrl": "Ссылка на файл Google Drive",
   "intake.googleFolderSelected": "Папка: {name}",
-  "intake.googlePickerHint": "Google Picker будет доступен после настройки узкого доступа drive.file.",
+  "intake.googlePickerHint": "Выбор файла в Google Drive станет доступен после настройки доступа Google Picker.",
   "intake.googlePickerUnavailable": "Выбор папки Google Drive пока не настроен.",
   "intake.incomeFile": "Выберите выставленный счет или перетащите файл",
   "intake.invalidResponse": "Не удалось подтвердить результат. Обновите список перед повторной загрузкой.",
@@ -28,5 +28,5 @@
   "intake.sourceAria": "Источник документа",
   "intake.sourceGoogleDrive": "Google Drive URL",
   "intake.sourceUpload": "Загрузить файл",
-  "intake.title": "Новая запись"
+  "intake.title": "Новый документ"
 }

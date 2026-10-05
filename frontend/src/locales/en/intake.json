@@ -1,5 +1,5 @@
 {
-  "intake.accept": "Add to system",
+  "intake.accept": "Add document",
   "intake.accepted": "Accepted: {id}",
   "intake.acceptedToast": "Document accepted into {period}",
   "intake.chooseGoogleFolder": "Choose Google Drive folder",
@@ -15,10 +15,10 @@
   "intake.fileFormats": "PDF, image, CSV, or TXT up to 30 MB",
   "intake.googleDriveHint": "The file stays in your archive; the original link is recorded.",
   "intake.googleDriveInvalid": "Enter a Google Drive file link.",
-  "intake.googleDrivePlaceholder": "drive.google.com/file/d/...",
+  "intake.googleDrivePlaceholder": "Link from the Share menu in Google Drive",
   "intake.googleDriveUrl": "Google Drive file link",
   "intake.googleFolderSelected": "Folder: {name}",
-  "intake.googlePickerHint": "Google Picker will be available after narrow drive.file access is configured.",
+  "intake.googlePickerHint": "Choosing a file in Google Drive becomes available once Google Picker access is configured.",
   "intake.googlePickerUnavailable": "Google Drive folder selection is not configured yet.",
   "intake.incomeFile": "Choose an issued invoice or drop a file",
   "intake.invalidResponse": "Could not confirm the result. Refresh the list before uploading again.",
@@ -28,5 +28,5 @@
   "intake.sourceAria": "Document source",
   "intake.sourceGoogleDrive": "Google Drive URL",
   "intake.sourceUpload": "Upload file",
-  "intake.title": "New entry"
+  "intake.title": "New document"
 }

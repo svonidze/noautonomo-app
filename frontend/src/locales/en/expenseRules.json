@@ -53,7 +53,7 @@
   "expenseRules.fact.eur_amount": "Confirmed amounts in EUR (exchange rate)",
   "expenseRules.fact.taxable_base_minor": "Taxable base, EUR",
   "expenseRules.fact.vat_minor": "Invoice IVA, EUR",
-  "expenseRules.fact.transaction_date": "Accounting date",
+  "expenseRules.fact.transaction_date": "Transaction date",
   "expenseRules.code.rule_unknown": "This rule is not in the installed catalog.",
   "expenseRules.code.rule_not_valid_on_date": "The rule applies from {valid_from}{valid_to, select, none {} other { to {valid_to}}}; the expense is dated {transaction_date}.",
   "expenseRules.code.equipment_not_covered": "The rule does not cover equipment; choose no rule for the equipment branch.",

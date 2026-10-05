@@ -53,7 +53,7 @@
   "expenseRules.fact.eur_amount": "Подтверждённые суммы в EUR (курс)",
   "expenseRules.fact.taxable_base_minor": "Налоговая база, EUR",
   "expenseRules.fact.vat_minor": "IVA по счёту, EUR",
-  "expenseRules.fact.transaction_date": "Дата учёта",
+  "expenseRules.fact.transaction_date": "Дата операции",
   "expenseRules.code.rule_unknown": "Этого правила нет в установленном каталоге.",
   "expenseRules.code.rule_not_valid_on_date": "Правило действует с {valid_from}{valid_to, select, none {} other { по {valid_to}}}; дата расхода — {transaction_date}.",
   "expenseRules.code.equipment_not_covered": "Правило не охватывает оборудование; для оборудования выберите «Без правила».",

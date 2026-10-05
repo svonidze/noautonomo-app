@@ -141,7 +141,7 @@ const matched = (row: TransactionRow) => row.asset_match_count === 1 && row.asse
                   :href="`/api/document/${encodeURIComponent(row.document_id)}/content`"
                   target="_blank"
                   rel="noreferrer"
-                  >{{ t('expense.source') }}</a
+                  >{{ t('common.openDocument') }}</a
                 ><a
                   v-if="matched(row)"
                   class="text-button"

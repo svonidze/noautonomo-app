@@ -473,7 +473,7 @@ const supplierHidden = (party: Counterparty) =>
     <template v-else-if="draft && payload">
       <div class="wf-layout">
         <aside class="panel wf-source">
-          <a :href="sourceUrl" target="_blank" rel="noreferrer">{{ t('workflow.openOriginal') }}</a
+          <a :href="sourceUrl" target="_blank" rel="noreferrer">{{ t('common.openDocument') }}</a
           ><iframe
             :title="t('workflow.sourceDocument')"
             :src="sourceUrl.replace(/content$/, 'preview')"

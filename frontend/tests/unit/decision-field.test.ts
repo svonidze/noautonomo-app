@@ -31,3 +31,33 @@ test('minor-unit field preview preserves zero and clears blank or nonnumeric inp
   root.remove();
   setLocale('ru');
 });
+
+test('basis-point rate field previews the percentage it stores', async () => {
+  setLocale('en');
+  const root = document.createElement('div');
+  document.body.append(root);
+  const app = createApp(DecisionField, {
+    field: {
+      path: 'rate',
+      label: 'fields.rateBasisPoints',
+      basisPoints: true,
+      type: 'number',
+      valueType: 'integer',
+    },
+    value: '',
+  });
+  app.mount(root);
+  const input = root.querySelector('input')!,
+    output = root.querySelector('output')!;
+  input.value = '2100';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await nextTick();
+  expect(output.textContent).toBe('≈ 21%');
+  input.value = '';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await nextTick();
+  expect(output.textContent).toBe('');
+  app.unmount();
+  root.remove();
+  setLocale('ru');
+});
