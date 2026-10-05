@@ -1,7 +1,7 @@
 # Design
 
 ## Source of truth
-- Status: Active; refreshed 2026-09-04.
+- Status: Active; refreshed 2026-10-05 (clarity redesign round 2 proposed, see docs/plans/ui-clarity-redesign.md).
 - Surfaces: Expenses, dashboard expense metrics, recent operations, and the analytics charts documented below.
 - Evidence: `local_web.py`, the Vue frontend under `frontend/src` (`features/`,
   `shell/`, `charts/`, `help/`), `web_ui/styles.css`, the accepted
@@ -209,6 +209,69 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 `frontend/tests/e2e/review-detail.spec.ts` (review tabs), and
 `frontend/tests/e2e/baseline.spec.ts` (navigation).
 
+## Clarity redesign (round 2)
+
+- Status: Draft, proposed 2026-10-05 in docs/plans/ui-clarity-redesign.md.
+- Screen purpose: an owner without accounting training must see what to do
+  now, what each figure means and where to act; an operator keeps dense
+  tables, codes and facts on the same screens.
+- Hard constraints: routes and URL parameters unchanged; tax semantics,
+  amounts and posting rules unchanged; null is never shown as zero; RU/EN
+  parity per key; statuses come from the server; strict CSP, no new
+  dependencies, no external fonts or icons.
+- Selected direction: one page grammar on every screen (title, one-line
+  purpose, one primary action, technical detail collapsed) plus a task list
+  on the dashboard. Rejected: a one-question-per-page wizard (breaks the
+  URL/test contract and removes the facts-beside-source layout operators
+  need); keeping the analytics-first dashboard (does not answer "what now").
+- References: WCAG 2.2 SC 1.4.3, 1.4.11, 2.5.8; GOV.UK Design System task
+  list component (whole-row links, one-sentence hints, status tags, grouped
+  lists) and question pages pattern (grouped questions are acceptable for
+  internal services; headings name the current step). Transferable: hierarchy
+  and status feedback. Not transferable: GOV.UK typography, colours and the
+  one-question flow.
+- Acceptance: every route renders exactly one primary action outside open
+  dialogs; RU catalogs contain no Latin service words outside the allowed
+  term list; every blocking status shows an action or its owner; every empty
+  state names the next step; charts render only with at least two non-zero
+  points; dashboard first screen at 375 px shows tasks, not charts.
+
+### Page grammar
+- Header: h1 title, one-line purpose, one primary action. Sections start at
+  h2, nested at h3; no heading repeats the title; no section without a heading.
+- One primary button per screen; secondary and text buttons for the rest.
+  Disabled controls explain why in visible text, never only in `title`.
+- Technical values (AEAT codes, minor units, basis points, identifiers) live
+  behind `<details>`; a shown code always follows its human label.
+
+### Status vocabulary
+- One catalog (`statuses.*`) supplies every lifecycle, readiness, filing and
+  calculation label; see the canonical table in the plan. Synonym keys are
+  removed. A status cell is a badge plus at most one line of reason; the
+  details link appears only when a reason or an action exists.
+- Unknown, zero and not applicable are worded, not dashed, whenever the
+  missing piece has a known cause: "Not calculated yet. Calculate",
+  "242.00 € plus 1 operation without a EUR amount".
+
+### Empty states and first run
+- Each empty state says what is empty, why, and offers the next step with a
+  control. An empty ledger shows a four-step start list on the dashboard
+  until the first posting; an empty review queue distinguishes "no documents
+  in this quarter" from "everything reviewed".
+
+### Charts
+- A chart renders only when its dataset has at least two non-zero buckets;
+  otherwise the slot shows one line of text. Dashboard charts sit below the
+  task list and quarter figures; on narrow screens the data table is primary
+  and the chart is collapsed. The queue aging chart renders from ten queued
+  items.
+
+### Accessibility tokens
+- Control borders at least 3:1 against the surface; focus ring
+  `--accent-dark` 2 px; warning text token at least 4.5:1; disabled primary
+  buttons use `cursor: not-allowed`; pointer targets at least 24×24 CSS px
+  or spaced per SC 2.5.8.
+
 ## Analytics and charts
 
 This file is the source of truth for measure definitions, status policy, chart
@@ -361,6 +424,8 @@ Additional rules:
 | Review | queue aging by age bucket and status |
 | Contacts | top customers with an "Other" fold |
 | Assets | amortization per quarter (`include_in_books = 1` only) |
+
+Rendering is gated by the threshold policy in [Clarity redesign (round 2)](#clarity-redesign-round-2): a chart draws only when its dataset has at least two non-zero buckets; the queue aging chart draws from ten queued items; below the threshold the slot shows one line of text. Dashboard charts sit below the task list and quarter figures.
 
 ### Chart sizing and expansion
 
