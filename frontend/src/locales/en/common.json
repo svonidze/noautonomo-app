@@ -1,10 +1,10 @@
 {
   "common.add": "Add",
-  "common.aeatCode": "AEAT code {code}",
   "common.all": "All",
   "common.back": "Back",
   "common.cancel": "Cancel",
   "common.close": "Close",
+  "common.code": "Code {code}",
   "common.copyToPeriod": "Copy into {period}",
   "common.counts.operations": "{count, plural, one {# transaction} other {# transactions}}",
   "common.counts.steps": "{count, plural, one {# step} other {# steps}}",
@@ -29,5 +29,6 @@
   "common.save": "Save",
   "common.sessionExpired": "The session expired. Reload the page to restore access.",
   "common.step": "Step",
+  "common.value": "Value {code}",
   "common.yes": "Yes"
 }

@@ -244,11 +244,16 @@ test('codes read as labels with the code secondary, and unlabeled codes say so',
   expect(taxCodeLabel('professional_withholding', 'en')).toBe(
     'IRPF withholding: professional (professional_withholding)',
   );
-  expect(taxCodeLabel('synthetic_future_code', 'ru')).toBe('Код AEAT synthetic_future_code');
+  expect(taxCodeLabel('synthetic_future_code', 'ru')).toBe('Код synthetic_future_code');
+  expect(taxCodeLabel('synthetic_future_code', 'en')).toBe('Code synthetic_future_code');
   for (const missing of ['', null, 'unknown'])
     expect(taxCodeLabel(missing, 'ru')).toBe(t('taxCodeLabels.unknown', {}, 'ru'));
   expect(aeatCodeLabel('invoiceType', 'F1', 'ru')).toBe('F1 · Полный счёт');
   expect(aeatCodeLabel('qualification', 'S2', 'en')).toBe('S2 · Taxable, VAT reverse charge');
   expect(aeatCodeLabel('exemption', 'E6', 'ru')).toBe('E6 · Другое освобождение');
-  expect(aeatCodeLabel('invoiceType', 'SF', 'ru')).toBe('Тип AEAT SF');
+  for (const code of ['SF', 'DV', 'AJ'])
+    expect(aeatCodeLabel('invoiceType', code, 'ru')).toBe(`Тип AEAT ${code}`);
+  expect(aeatCodeLabel('invoiceType', 'Z9', 'en')).toBe('Value Z9');
+  expect(aeatCodeLabel('qualification', 'S9', 'ru')).toBe('Значение S9');
+  expect(aeatCodeLabel('exemption', 'E9', 'en')).toBe('Value E9');
 });

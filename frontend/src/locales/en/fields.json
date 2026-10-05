@@ -43,6 +43,7 @@
   "fields.taxableBaseMinor": "Taxable base, EUR",
   "fields.total": "Total",
   "fields.transactionDate": "Transaction date",
+  "fields.unreadableAmount": "Could not read the amount",
   "fields.vatBase": "VAT base",
   "fields.vatId": "VAT number",
   "fields.vatMinor": "VAT, EUR",

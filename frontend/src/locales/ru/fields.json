@@ -43,6 +43,7 @@
   "fields.taxableBaseMinor": "База, EUR",
   "fields.total": "Итого",
   "fields.transactionDate": "Дата операции",
+  "fields.unreadableAmount": "Не удалось прочитать сумму",
   "fields.vatBase": "База IVA",
   "fields.vatId": "Номер VAT",
   "fields.vatMinor": "IVA, EUR",

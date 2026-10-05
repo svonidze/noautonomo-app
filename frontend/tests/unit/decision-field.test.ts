@@ -1,7 +1,7 @@
 import { createApp, h, nextTick, ref } from 'vue';
-import { expect, test } from 'vitest';
+import { afterEach, expect, test } from 'vitest';
 import DecisionField, { type DecisionFieldSpec } from '../../src/features/review/DecisionField.vue';
-import { setLocale } from '../../src/core/i18n.ts';
+import { setLocale, t } from '../../src/core/i18n.ts';
 
 const money: DecisionFieldSpec = {
   path: 'tax_treatment.deductible_irpf_minor',
@@ -17,6 +17,11 @@ const rate: DecisionFieldSpec = {
   valueType: 'integer',
   basisPoints: true,
 };
+const mounted: (() => void)[] = [];
+afterEach(() => {
+  mounted.splice(0).forEach((unmount) => unmount());
+  setLocale('ru');
+});
 function mount(field: DecisionFieldSpec, initial: unknown) {
   setLocale('en');
   const root = document.createElement('div');
@@ -32,33 +37,35 @@ function mount(field: DecisionFieldSpec, initial: unknown) {
       }),
   });
   app.mount(root);
+  mounted.push(() => {
+    app.unmount();
+    root.remove();
+  });
   const input = root.querySelector('input')!;
   return {
     input,
     value,
     emitted,
     preview: () => root.querySelector('output')!.textContent,
+    error: () => root.querySelector('[role="alert"]')?.textContent ?? '',
     async type(text: string) {
       input.value = text;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       await nextTick();
     },
-    unmount() {
-      app.unmount();
-      root.remove();
-      setLocale('ru');
-    },
   };
 }
 
-test('amounts are typed in euros and stored in minor units with their sign', async () => {
+test('amounts are typed in euros with either separator and stored in minor units', async () => {
   const field = mount(money, 12345);
   expect(field.input.value).toBe('123.45');
-  expect(field.input.getAttribute('step')).toBe('0.01');
+  expect(field.input.type).toBe('text');
   expect(field.input.getAttribute('inputmode')).toBe('decimal');
   await field.type('1.5');
   expect(field.emitted.at(-1)).toBe(150);
   expect(field.preview()).toContain('€1.50');
+  await field.type('100,50');
+  expect(field.emitted.at(-1)).toBe(10050);
   await field.type('');
   expect(field.emitted.at(-1)).toBeNull();
   expect(field.preview()).toBe('');
@@ -67,36 +74,36 @@ test('amounts are typed in euros and stored in minor units with their sign', asy
   expect(field.preview()).toContain('€0.00');
   await field.type('-2.5');
   expect(field.emitted.at(-1)).toBe(-250);
-  field.unmount();
 });
 
 test('a known zero shows 0, a missing amount stays empty, and saved values redisplay', async () => {
-  const zero = mount(money, 0);
-  expect(zero.input.value).toBe('0');
-  zero.unmount();
+  expect(mount(money, 0).input.value).toBe('0');
   const missing = mount(money, null);
   expect(missing.input.value).toBe('');
   missing.value.value = 250;
   await nextTick();
   expect(missing.input.value).toBe('2.5');
-  missing.unmount();
 });
 
 test('rates are typed in percent and stored in basis points', async () => {
   const field = mount(rate, 2100);
   expect(field.input.value).toBe('21');
-  expect(field.input.getAttribute('step')).toBe('0.01');
-  await field.type('10.5');
+  await field.type('10,5');
   expect(field.emitted.at(-1)).toBe(1050);
   expect(field.preview()).toBe('≈ 10.5%');
-  field.unmount();
+  await field.type('');
+  expect(field.emitted.at(-1)).toBeNull();
+  await field.type('0');
+  expect(field.emitted.at(-1)).toBe(0);
 });
 
-test('an amount the browser cannot read leaves the stored value untouched', async () => {
+test('an unreadable amount keeps the stored value and says so', async () => {
   const field = mount(money, 12345);
-  // A number input reports unreadable text as an empty value with validity.badInput.
-  Object.defineProperty(field.input, 'validity', { value: { badInput: true } });
-  await field.type('');
+  await field.type('7-');
   expect(field.emitted).toEqual([]);
-  field.unmount();
+  expect(field.error()).toBe(t('fields.unreadableAmount', {}, 'en'));
+  expect(field.preview()).toBe('');
+  await field.type('7');
+  expect(field.emitted).toEqual([700]);
+  expect(field.error()).toBe('');
 });

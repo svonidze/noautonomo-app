@@ -36,7 +36,7 @@ function read() {
   if (scaled.value) {
     const text = String(raw.value).trim();
     if (!text) return null;
-    const number = Number(text);
+    const number = Number(text.replace(',', '.'));
     return Number.isFinite(number) ? Math.round(number * 100) : undefined;
   }
   if (raw.value === '') return type.startsWith('nullable-') ? null : '';
@@ -51,14 +51,11 @@ watch(
     if (read() !== value) raw.value = display(value);
   },
 );
-// A number input reports unreadable text as an empty value with badInput: keep the stored value.
-function changed(event: Event) {
+// Unreadable text keeps the stored value and says so beside the field.
+const unreadable = computed(() => scaled.value && read() === undefined);
+function changed() {
   const value = read();
-  if (
-    value !== undefined &&
-    !(scaled.value && (event.target as HTMLInputElement).validity?.badInput)
-  )
-    emit('change', value);
+  if (value !== undefined) emit('change', value);
 }
 // The preview shows what the typed text stores, rounded to cents or basis points.
 const preview = computed(() => {
@@ -121,13 +118,13 @@ const preview = computed(() => {
     <input
       v-else-if="field.type !== 'checkbox'"
       v-model="raw"
-      :type="field.type || 'text'"
+      :type="scaled ? 'text' : field.type || 'text'"
       :disabled="disabled"
       :data-decision-path="field.path"
       :data-value-type="field.valueType"
       :min="field.min"
       :max="field.max"
-      :step="scaled ? '0.01' : field.step"
+      :step="scaled ? undefined : field.step"
       :inputmode="
         scaled
           ? 'decimal'
@@ -140,6 +137,8 @@ const preview = computed(() => {
       @input="changed"
     />
     <slot />
-    <p v-if="error" class="review-inline-error" role="alert">{{ error }}</p>
+    <p v-if="unreadable || error" class="review-inline-error" role="alert">
+      {{ unreadable ? t('fields.unreadableAmount') : error }}
+    </p>
   </label>
 </template>

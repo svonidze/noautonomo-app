@@ -63,23 +63,25 @@ export function codeLabel(prefix: string, code: unknown, locale: unknown): strin
   const key = `${prefix}.${value}`;
   return value && messageIds.includes(key) ? formatMessage(key, {}, locale) : value;
 }
-/** «Label (code)» for a review tax code, «AEAT code …» without a label, the unknown label without a code. */
+/** «Label (code)» for a review tax code, «Code …» without a label, the unknown label without a code. */
 export function taxCodeLabel(code: unknown, locale: unknown): string {
   const value = String(code ?? '');
   if (!value || value === 'unknown') return formatMessage('taxCodeLabels.unknown', {}, locale);
   const key = `taxCodeLabels.${value}`;
   return messageIds.includes(key)
     ? `${formatMessage(key, {}, locale)} (${value})`
-    : formatMessage('common.aeatCode', { code: value }, locale);
+    : formatMessage('common.code', { code: value }, locale);
 }
-/** «F1 · Полный счёт» for an AEAT invoice type, qualification or exemption; «Тип AEAT …» otherwise. */
+/** «F1 · Полный счёт» for an AEAT invoice type, qualification or exemption. AEAT invoice types the
+ * repository has no description for read «Тип AEAT …»; any other unknown value reads «Значение …». */
 export function aeatCodeLabel(
   group: 'invoiceType' | 'qualification' | 'exemption',
   code: string,
   locale: unknown,
 ): string {
   const key = `aeat.${group}.${code}`;
-  return messageIds.includes(key)
-    ? `${code} · ${formatMessage(key, {}, locale)}`
-    : formatMessage('aeat.unknownType', { code }, locale);
+  if (messageIds.includes(key)) return `${code} · ${formatMessage(key, {}, locale)}`;
+  return group === 'invoiceType' && ['SF', 'DV', 'AJ'].includes(code)
+    ? formatMessage('aeat.unknownType', { code }, locale)
+    : formatMessage('common.value', { code }, locale);
 }

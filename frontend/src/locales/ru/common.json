@@ -1,10 +1,10 @@
 {
   "common.add": "Добавить",
-  "common.aeatCode": "Код AEAT {code}",
   "common.all": "Все",
   "common.back": "Назад",
   "common.cancel": "Отмена",
   "common.close": "Закрыть",
+  "common.code": "Код {code}",
   "common.copyToPeriod": "Копировать в {period}",
   "common.counts.operations": "{count, plural, one {# операция} few {# операции} many {# операций} other {# операции}}",
   "common.counts.steps": "{count, plural, one {# шаг} few {# шага} many {# шагов} other {# шага}}",
@@ -29,5 +29,6 @@
   "common.save": "Сохранить",
   "common.sessionExpired": "Сессия истекла. Перезагрузите страницу, чтобы восстановить доступ.",
   "common.step": "Шаг",
+  "common.value": "Значение {code}",
   "common.yes": "Да"
 }

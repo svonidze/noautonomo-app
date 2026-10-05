@@ -1,9 +1,9 @@
 {
-  "parties.legalForms.individual": "физлицо",
-  "parties.legalForms.legal_entity": "юрлицо",
-  "parties.legalForms.public_body": "госорган",
-  "parties.legalForms.unknown": "неизвестно",
-  "parties.roiStatus.not_registered": "не зарегистрирован",
-  "parties.roiStatus.registered": "зарегистрирован",
-  "parties.roiStatus.unknown": "не проверено"
+  "parties.legalForms.individual": "Физлицо",
+  "parties.legalForms.legal_entity": "Юрлицо",
+  "parties.legalForms.public_body": "Госорган",
+  "parties.legalForms.unknown": "Неизвестно",
+  "parties.roiStatus.not_registered": "Не зарегистрирован",
+  "parties.roiStatus.registered": "Зарегистрирован",
+  "parties.roiStatus.unknown": "Не проверено"
 }
