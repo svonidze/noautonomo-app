@@ -193,9 +193,11 @@ navigation added by the clarity redesign.
 - When a work item cannot be posted (later or blocked), every decision field
   is disabled and a banner explains why; the reject panel stays usable.
   Confirm and reject show a busy "Submitting" state while a request is in
-  flight. Minor-unit integer inputs carry a live euro preview
-  (`minorUnitEurPreview`): a known zero previews as 0.00 €, missing or
-  non-numeric input previews nothing.
+  flight. Minor-unit amounts are typed in euros and basis-point rates in
+  percent; the decision keeps minor units and basis points, and a live preview
+  (`minorUnitEurPreview`) shows the stored value: a known zero previews as
+  0.00 €, an empty field stores null and previews nothing, and unreadable
+  input previews nothing and keeps the stored value.
 - The intake dialog keeps a versioned draft in
   `localStorage["autonomo.intake-draft"]` (`{schema: 1, values}`): restored
   on reopen unless a copy-flow prefill wins, cleared by a successful submit,

@@ -26,10 +26,19 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ change: [value: unknown] }>();
 const { locale, t } = useLocale();
-const display = (value: unknown) => (value == null ? '' : String(value));
+// Amounts are typed in euros and rates in percent; the decision keeps minor units and basis points.
+const scaled = computed(() => !!(props.field.minor || props.field.basisPoints));
+const display = (value: unknown) =>
+  value == null || value === '' ? '' : scaled.value ? String(Number(value) / 100) : String(value);
 const raw = ref(display(props.value));
 function read() {
   const type = props.field.valueType || 'string';
+  if (scaled.value) {
+    const text = String(raw.value).trim();
+    if (!text) return null;
+    const number = Number(text);
+    return Number.isFinite(number) ? Math.round(number * 100) : undefined;
+  }
   if (raw.value === '') return type.startsWith('nullable-') ? null : '';
   if (type === 'integer') return Number.parseInt(raw.value, 10);
   if (type === 'number') return Number(raw.value);
@@ -42,9 +51,19 @@ watch(
     if (read() !== value) raw.value = display(value);
   },
 );
+// A number input reports unreadable text as an empty value with badInput: keep the stored value.
+function changed(event: Event) {
+  const value = read();
+  if (
+    value !== undefined &&
+    !(scaled.value && (event.target as HTMLInputElement).validity?.badInput)
+  )
+    emit('change', value);
+}
+// The preview shows what the typed text stores, rounded to cents or basis points.
 const preview = computed(() => {
-  const value = Number.parseInt(raw.value, 10);
-  if (!String(raw.value).trim() || !Number.isFinite(value)) return '';
+  const value = read();
+  if (typeof value !== 'number') return '';
   const amount = props.field.basisPoints
     ? new Intl.NumberFormat(localeTag(locale.value), {
         style: 'percent',
@@ -73,12 +92,9 @@ const preview = computed(() => {
     />
     <span
       >{{ formatMessage(field.label, {}, locale) }}
-      <output
-        v-if="field.minor || field.basisPoints"
-        class="review-irpf-preview"
-        data-eur-preview
-        >{{ preview }}</output
-      ></span
+      <output v-if="scaled" class="review-irpf-preview" data-eur-preview>{{
+        preview
+      }}</output></span
     >
     <textarea
       v-if="field.type === 'textarea'"
@@ -111,11 +127,17 @@ const preview = computed(() => {
       :data-value-type="field.valueType"
       :min="field.min"
       :max="field.max"
-      :step="field.step"
+      :step="scaled ? '0.01' : field.step"
       :inputmode="
-        field.valueType === 'integer' ? 'numeric' : field.type === 'number' ? 'decimal' : undefined
+        scaled
+          ? 'decimal'
+          : field.valueType === 'integer'
+            ? 'numeric'
+            : field.type === 'number'
+              ? 'decimal'
+              : undefined
       "
-      @input="emit('change', read())"
+      @input="changed"
     />
     <slot />
     <p v-if="error" class="review-inline-error" role="alert">{{ error }}</p>

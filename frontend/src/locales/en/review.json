@@ -100,7 +100,7 @@
   "review.summary": "Posting queue",
   "review.supportReason": "Blocking reason",
   "review.taxDecision": "Tax decision",
-  "review.technicalDetails": "Technical AEAT and cents fields",
+  "review.technicalDetails": "Technical AEAT fields",
   "review.transactions": "Transactions to review",
   "review.unknownSupport": "The tax classification is not supported for posting.",
   "review.unsupported": "This invoice cannot be completed from this screen.",
