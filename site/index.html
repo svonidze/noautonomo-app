@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self'">
+<title>NoAutonomo.ai: учет autónomo, который можно перепроверить</title>
+<meta name="description" content="Бесплатная система для самостоятельного учета autónomo в Испании. Каждая сумма ведет к документу, записи и основанию решения. Код доступен на GitHub, участие в чате без установки.">
+<link rel="canonical" href="https://noautonomo.ai/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://noautonomo.ai/">
+<meta property="og:title" content="NoAutonomo.ai: учет autónomo, который можно перепроверить">
+<meta property="og:description" content="Бесплатная система для самостоятельного учета autónomo в Испании. Каждая сумма ведет к документу, записи и основанию решения.">
+<link rel="stylesheet" href="landing.css">
+</head>
+<body>
+<a class="skip" href="#main">К содержанию</a>
+<header class="site">
+  <div class="wrap">
+    <a class="wordmark" href="/">NoAutonomo<span>.ai</span></a>
+    <nav class="site" aria-label="Разделы">
+      <a href="#how">Как работает</a>
+      <a href="#status">Статус</a>
+      <a href="/blog/">Блог</a>
+      <a class="button primary" href="https://t.me/noautonomoai">Чат</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <h1>Учет autónomo, который можно перепроверить</h1>
+        <p class="lead">Бесплатная система для самостоятельного учета в Испании. Каждая сумма ведет к документу, записи и основанию решения. Ответы ИИ тоже проверяются.</p>
+        <div class="actions">
+          <a class="button primary" href="https://t.me/noautonomoai">Присоединиться к чату</a>
+          <a class="button secondary" href="#story">Зачем я это делаю</a>
+        </div>
+        <p class="muted">Для участия устанавливать систему не нужно. Код доступен на GitHub.</p>
+      </div>
+      <div>
+        <ol class="trail" aria-label="Путь суммы от счета до декларации">
+          <li>
+            <small>Документ</small>
+            <div class="row"><strong>Счет DEMO-001</strong><span class="amount">1 000,00 €</span></div>
+            <span class="badge neutral">Январь–март</span>
+          </li>
+          <li>
+            <small>Запись в книге доходов</small>
+            <div class="row"><strong>Доход, учитываемый для IRPF</strong><span class="amount">1 000,00 €</span></div>
+            <span class="badge ok">Проверено и проведено</span>
+          </li>
+          <li>
+            <small>Modelo 130, первый квартал</small>
+            <div class="row"><strong>Поле 01: доходы с начала года</strong><span class="amount">1 000,00 €</span></div>
+            <span class="badge neutral">Подача в AEAT отдельный шаг</span>
+          </li>
+        </ol>
+        <p class="caption">Вымышленный пример из первой статьи. Поле 01 сверено с инструкцией AEAT.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="who">
+    <div class="wrap">
+      <h2>Для кого</h2>
+      <div class="cols">
+        <div class="panel"><h3>Autónomo в Испании</h3><p class="muted">Сначала русскоязычные IT-специалисты. Платите хестору или сервису, но хотите понимать, за что.</p></div>
+        <div class="panel"><h3>Кто ведет учет сам</h3><p class="muted">Нужно видеть, какой документ стоит за суммой и почему принято решение.</p></div>
+        <div class="panel"><h3>Кто готов разбираться</h3><p class="muted">Вопрос, найденная ошибка или правка инструкции уже вклад в проект.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>Как это работает</h2>
+      <ol class="steps">
+        <li><h3>Документ</h3><p class="muted">Загружаете оригинал счета. Распознанные поля это кандидаты, а не подтвержденные факты.</p></li>
+        <li><h3>Проверка</h3><p class="muted">Сверяете номер, даты, сумму и контрагента с документом. Подтверждаете учетное решение.</p></li>
+        <li><h3>Проведение</h3><p class="muted">Проведенная запись участвует в расчетах. Проведение не оплачивает счет и не отправляет декларацию в AEAT.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap">
+      <h2>Что уже работает и что пока нет</h2>
+      <div class="cols two">
+        <div class="panel">
+          <h3>Уже работает</h3>
+          <ul>
+            <li>Доходы и расходы со ссылкой на исходный документ</li>
+            <li>Проверка и проведение записи как отдельные шаги</li>
+            <li>Предварительный расчет Modelo 130 и 303 по проведенным записям</li>
+            <li>Справочные курсы ECB для счетов в валюте</li>
+            <li>Проверка VAT-номера клиента в VIES</li>
+            <li>Проверка tramo RETA по чистому доходу</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Пока не так</h3>
+          <ul>
+            <li>Декларации не отправляются: подача остается вашим шагом</li>
+            <li>Установленная версия может отличаться от репозитория</li>
+            <li>Внешний ИИ может требовать своего ключа или подписки; расходы пока не измерены</li>
+            <li>Условия использования кода оформляются; код доступен для чтения</li>
+            <li>Это не налоговая консультация</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="ai">
+    <div class="wrap">
+      <h2>Зачем здесь ИИ</h2>
+      <p>ИИ разбирает документ и объясняет правило. Суммы считает программа по учетным данным. Извлеченные поля сверяются с оригиналом, объяснение проверяется по первоисточнику. Если основания недостаточно, вопрос остается открытым. Одинаковые ответы нескольких моделей сами по себе ничего не доказывают.</p>
+    </div>
+  </section>
+
+  <section id="story">
+    <div class="wrap">
+      <h2>Зачем я это делаю</h2>
+      <blockquote>
+        <p>Я платил за Xolo около 72 € в месяц. Для моего учета это дорого. Я решил разобраться, какую часть работы могу делать сам, и начал делать NoAutonomo.ai.</p>
+      </blockquote>
+      <p class="after-quote"><a href="/blog/zachem-noautonomo/">Прочитать первую статью целиком</a></p>
+    </div>
+  </section>
+
+  <section class="invite">
+    <div class="wrap">
+      <div>
+        <h2>Разбираться в учете вместе</h2>
+        <p>В чате можно задавать вопросы, проверять примеры на вымышленных данных и предлагать улучшения. Реальные счета, налоговые номера и ключи в чат не выкладываются.</p>
+      </div>
+      <div class="actions">
+        <a class="button primary" href="https://t.me/noautonomoai">Присоединиться к чату</a>
+        <a class="button secondary" href="https://github.com/svonidze/spain-autonomo-taxes">Код на GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <ul>
+      <li><a href="https://t.me/noautonomoai">Чат в Telegram</a></li>
+      <li><a href="https://t.me/noautonomo">Канал с инструкциями</a></li>
+      <li><a href="https://github.com/svonidze/spain-autonomo-taxes">Код на GitHub</a></li>
+      <li><a href="/blog/">Блог</a></li>
+    </ul>
+    <p>NoAutonomo.ai не дает юридических и налоговых консультаций. Проверяйте данные по официальным источникам и с квалифицированным специалистом. Условия использования кода оформляются.</p>
+  </div>
+</footer>
+</body>
+</html>

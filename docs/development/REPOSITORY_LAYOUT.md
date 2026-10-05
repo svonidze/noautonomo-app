@@ -9,6 +9,7 @@ The repository has two application roots:
 | `tests/` | Cross-stack support, fixtures, contracts, operations tests, and packaging tests. |
 | `ops/` | Installed operational helpers, systemd templates, and operator runbooks in `ops/docs/`. |
 | `examples/` | Safe configuration and import examples. |
+| `site/` | Static public landing for `noautonomo.ai` with its own design contract in `site/DESIGN.md`; served by a separate static host, never by the application. |
 | `reference/tax-calendars/` | Versioned calendar inputs that callers pass explicitly. |
 | `reference/reta/` | Versioned RETA contribution tables (tramos, bases, rates, generic deduction) with their BOE sources. |
 
