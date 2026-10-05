@@ -18,10 +18,11 @@
   новый `README.md` на `origin/master` (коммит c154ca0 «Help new users understand
   the app before installation details»).
 - Живой интерфейс: сборка текущего `master` (0c2e0b8) и демо-сервер на
-  синтетических данных (`.claude/serve_demo.py`, конфигурация `autonomo-demo` в
-  `.claude/launch.json`, порт 8765). Сняты 15 полностраничных снимков на ширине
-  1440 px и 5 на ширине 375 px, локаль RU. Снимки лежат вне репозитория
-  (privacy guard запрещает бинарники).
+  синтетических данных: `tests/support/serve_demo.py` (конфигурация
+  `autonomo-demo` в локальном `.claude/launch.json` вне репозитория),
+  порт 8765. Сняты 15 полностраничных снимков на ширине 1440 px и 5 на
+  ширине 375 px, локаль RU. Снимки лежат вне репозитория (privacy guard
+  запрещает бинарники).
 - Контраст палитры посчитан по формуле WCAG 2.2. Не проверялись: EN-локаль
   визуально, зум 200 %, режим forced-colors, реальные пользователи.
 - Предыдущий раунд понятности (PR #24, 2026-08-31, влит) дал вкладки проверки,
@@ -516,6 +517,11 @@ task-list, старый адрес отдает 410. `ui-ux-pro-max` не исп
   term list; every blocking status shows an action or its owner; every empty
   state names the next step; charts render only with at least two non-zero
   points; dashboard first screen at 375 px shows tasks, not charts.
+- Precedence: where this section disagrees with an earlier section, this
+  section states the target state; the earlier text stays in force until the
+  stage that ships the rule rewrites it. Known conflicts: the all-zero chart
+  rule and the reserved height of empty chart slots (rewritten by stages 3–4),
+  and «Документ от» under Content voice (rewritten by stage 1).
 
 ### Page grammar
 - Header: h1 title, one-line purpose, one primary action. Sections start at
@@ -607,8 +613,9 @@ uv venv .venv --python 3.11
 uv pip install --python .venv/bin/python -e ./backend pytest
 npm --prefix frontend ci --include=dev --no-audit --no-fund
 npm --prefix frontend run build
-.venv/bin/python .claude/serve_demo.py      # http://127.0.0.1:8765, данные синтетические
+.venv/bin/python tests/support/serve_demo.py  # http://127.0.0.1:8765, данные синтетические
 ```
 
-Или конфигурация `autonomo-demo` из `.claude/launch.json` в панели браузера
-Claude Code. База создается во временном каталоге и удаляется при остановке.
+Локальная конфигурация `autonomo-demo` в `.claude/launch.json` (вне репозитория)
+запускает тот же скрипт в панели браузера Claude Code. База создается во
+временном каталоге и удаляется при остановке.

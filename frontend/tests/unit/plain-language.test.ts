@@ -61,8 +61,10 @@ export const BASELINE = [
 
 /** Latin words in plain text that are not allowed; `settlement-` counts as the stem `settlement`. */
 export function disallowedLatinWords(text: string): string[] {
-  // Script=Latin, not [A-Za-z]: accented terms such as `autónomo` must stay whole words.
+  // Script=Latin, not [A-Za-z], and NFC first: accented terms such as `autónomo` must stay whole
+  // words, also when the catalog stores the accent decomposed.
   const words = text
+    .normalize('NFC')
     .replace(/https?:\/\/\S+/g, '')
     .match(/\p{Script=Latin}[\p{Script=Latin}'’-]{2,}/gu);
   return (words ?? []).filter((word) => !allowed.has(word.replace(/-+$/, '').toLowerCase()));
@@ -95,7 +97,7 @@ const flagged = new Map(
     .filter(([, words]) => words.length > 0),
 );
 
-test('Russian messages avoid Latin words outside the allowed terms', () => {
+test('Russian messages avoid disallowed Latin-script words beyond BASELINE', () => {
   const unlisted = [...flagged].filter(([key]) => !BASELINE.includes(key));
   expect(
     unlisted.map(([key, words]) => `${key}: ${words.join(', ')}`),
@@ -103,9 +105,24 @@ test('Russian messages avoid Latin words outside the allowed terms', () => {
   ).toEqual([]);
 });
 
-test('every burn-down key still has Latin words', () => {
+test('BASELINE is sorted and names only keys that still have disallowed Latin-script words', () => {
+  expect(BASELINE, 'keep BASELINE sorted and free of duplicates').toEqual(
+    [...new Set(BASELINE)].sort(),
+  );
   expect(
     BASELINE.filter((key) => !flagged.has(key)),
-    'these keys are clean now: remove them from BASELINE',
+    'these keys are clean or no longer present: remove them from BASELINE',
   ).toEqual([]);
+});
+
+test('the scanner flags only disallowed Latin-script words', () => {
+  const table: [string, string[]][] = [
+    ['Дата settlement-курса', ['settlement-']],
+    ['IVA-декларация', []],
+    ['ставка iva', []],
+    ['Autónomo', []],
+    ['см. https://example.org/path', []],
+  ];
+  for (const [text, expected] of table) expect(disallowedLatinWords(text), text).toEqual(expected);
+  expect(disallowedLatinWords('Auto\u0301nomo'), 'decomposed autónomo').toEqual([]);
 });
