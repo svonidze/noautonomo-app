@@ -235,6 +235,11 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   term list; every blocking status shows an action or its owner; every empty
   state names the next step; charts render only with at least two non-zero
   points; dashboard first screen at 375 px shows tasks, not charts.
+- Precedence: where this section disagrees with an earlier section, this
+  section states the target state; the earlier text stays in force until the
+  stage that ships the rule rewrites it. Known conflicts: the all-zero chart
+  rule and the reserved height of empty chart slots (rewritten by stages 3–4),
+  and «Документ от» under Content voice (rewritten by stage 1).
 
 ### Page grammar
 - Header: h1 title, one-line purpose, one primary action. Sections start at
@@ -425,7 +430,7 @@ Additional rules:
 | Contacts | top customers with an "Other" fold |
 | Assets | amortization per quarter (`include_in_books = 1` only) |
 
-Rendering is gated by the threshold policy in [Clarity redesign (round 2)](#clarity-redesign-round-2): a chart draws only when its dataset has at least two non-zero buckets; the queue aging chart draws from ten queued items; below the threshold the slot shows one line of text. Dashboard charts sit below the task list and quarter figures.
+From stage 3 of the clarity redesign, rendering is gated by the threshold policy in [Clarity redesign (round 2)](#clarity-redesign-round-2): a chart draws only when its dataset has at least two non-zero buckets; the queue aging chart draws from ten queued items; below the threshold the slot shows one line of text. Dashboard charts sit below the task list and quarter figures.
 
 ### Chart sizing and expansion
 
