@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, shallowRef } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { formatDateText } from '../../core/format.ts';
+import { formatDateTime, formatPeriod } from '../../core/format.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { formatMessage } from '../../core/i18n.ts';
 import type { AeatDocumentRow, AeatDocumentsContext, AeatDocumentsData } from './model.ts';
@@ -294,12 +294,12 @@ async function saveStatus() {
           <tbody>
             <tr v-for="row in rows" :key="`${row.record_source}:${row.record_id}`">
               <td :data-label="t('aeatDocuments.date')">
-                {{ formatDateText(row.occurred_at, locale) }}
+                {{ formatDateTime(row.occurred_at, locale) }}
               </td>
               <td data-label="Modelo">{{ row.form_code || '—' }}</td>
               <td :data-label="t('aeatDocuments.procedure')">
                 <strong>{{ row.title }}</strong
-                ><small>{{ row.procedure_code || row.period_key || '' }}</small>
+                ><small>{{ row.procedure_code || formatPeriod(row.period_key, locale) }}</small>
                 <details v-if="row.status_history?.length" class="aeat-history">
                   <summary>{{ t('aeatDocuments.history') }}</summary>
                   <ol>
@@ -308,7 +308,7 @@ async function saveStatus() {
                       :key="`${event.status}:${event.occurred_at}`"
                     >
                       <time :datetime="event.occurred_at">{{
-                        formatDateText(event.occurred_at, locale)
+                        formatDateTime(event.occurred_at, locale)
                       }}</time>
                       {{ label(`aeatDocuments.status.${event.status}`) }}
                       <small>{{ event.evidence_reference || event.notes || '' }}</small>

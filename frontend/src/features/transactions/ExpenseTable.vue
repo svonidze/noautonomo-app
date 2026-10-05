@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
-import { localeTag, quarterNumber } from '../../core/i18n.ts';
+import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
+import { localeTag } from '../../core/i18n.ts';
 import { followSpaLink } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import DocumentLabel from './DocumentLabel.vue';
@@ -44,15 +44,6 @@ const originalAmount = (row: TransactionRow) =>
     : '—';
 const purchaseAmount = (row: TransactionRow) =>
   hasAmount(row.amount_eur) ? money(row.amount_eur) : originalAmount(row);
-const quarter = (period: string) => {
-  const match = /^(\d{4})-Q([1-4])$/.exec(period);
-  return match
-    ? t('expense.quarter', {
-        year: match[1],
-        quarter: quarterNumber(Number(match[2]), locale.value),
-      })
-    : period || '—';
-};
 const matched = (row: TransactionRow) => row.asset_match_count === 1 && row.asset_id;
 </script>
 <template>
@@ -154,7 +145,7 @@ const matched = (row: TransactionRow) => row.asset_match_count === 1 && row.asse
           </td>
           <td v-if="amortization" role="cell" :data-label="headers[1]">
             <div>
-              <strong>{{ quarter(row.period_key) }}</strong
+              <strong>{{ formatPeriod(row.period_key, locale) || '—' }}</strong
               ><small class="expense-note"
                 >{{ t('expense.recognitionDate') }}: {{ date(row.transaction_date) }}</small
               >

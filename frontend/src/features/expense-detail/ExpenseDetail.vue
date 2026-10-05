@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { followSpaLink } from '../../vue/services.ts';
-import { codeLabel, eur, formatDateText, taxCodeLabel } from '../../core/format.ts';
+import { codeLabel, eur, formatDateText, formatPeriod, taxCodeLabel } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { formatMessage, localeTag, messageIds } from '../../core/i18n.ts';
@@ -113,7 +113,7 @@ function backLabel(url: string) {
   if (/^\/contacts\/[0-9a-fA-F-]{32,36}$/.test(parsed.pathname)) return t('contacts.backToParty');
   return t('expense.back', {
     title: translatedCode('titles', parsed.pathname.slice(1) || 'expenses'),
-    period: parsed.searchParams.get('period') || '—',
+    period: formatPeriod(parsed.searchParams.get('period'), locale.value) || '—',
   });
 }
 const facts = computed(() => {
@@ -123,7 +123,7 @@ const facts = computed(() => {
     [t('fields.transactionDate'), formatDateText(value.transaction_date, locale.value)],
     [t('fields.bookingDate'), formatDateText(value.booking_date, locale.value)],
     [t('fields.issuedOn'), formatDateText(data.value?.document?.issued_on, locale.value)],
-    [t('toolbar.period'), data.value!.period.period_key],
+    [t('toolbar.period'), formatPeriod(data.value!.period.period_key, locale.value)],
     [t('expense.description'), value.description || '—'],
     [
       t('fields.amount'),
@@ -226,7 +226,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
       <section class="panel">
         <header class="panel-header">
           <h2>{{ t('review.factsTitle') }}</h2>
-          <small>{{ data.period.period_key }}</small>
+          <small>{{ formatPeriod(data.period.period_key, locale) }}</small>
         </header>
         <div class="expense-panel-body">
           <dl class="review-facts-list">

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import StatusCell from '../../components/StatusCell.vue';
@@ -71,7 +71,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
       <div class="table-toolbar">
         <div>
           <h2>{{ t('assets.title') }}</h2>
-          <p>{{ t('help.words.allAssets') }}: {{ context.period }}</p>
+          <p>{{ t('help.words.allAssets') }}: {{ formatPeriod(context.period, locale) }}</p>
         </div>
       </div>
       <section class="panel">
@@ -90,7 +90,8 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
                   <TermHelp term="rate" />
                 </th>
                 <th>
-                  {{ t('help.words.scope') }} {{ context.period }} <TermHelp term="forecast" />
+                  {{ t('help.words.scope') }} {{ formatPeriod(context.period, locale) }}
+                  <TermHelp term="forecast" />
                 </th>
                 <th>{{ t('assets.decision') }}</th>
               </tr>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateTime } from '../../core/format.ts';
+import { eur, formatDateTime, formatPeriod } from '../../core/format.ts';
 import { errorDescriptor, errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import { message, messageText } from '../../core/i18n.ts';
@@ -308,7 +308,7 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
         <section v-else class="panel">
           <header class="panel-header">
             <h2>{{ t('review.postingTitle') }}</h2>
-            <small>{{ context.period }}</small>
+            <small>{{ formatPeriod(context.period, locale) }}</small>
           </header>
           <div class="posting-panel">
             <div v-if="stale" class="period-note posting-warning">
@@ -397,7 +397,7 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
           <header class="dialog-header">
             <div>
               <h2 id="vue-posting-title">{{ t('review.postConfirmTitle') }}</h2>
-              <p>{{ frozen?.period }}</p>
+              <p>{{ formatPeriod(frozen?.period, locale) }}</p>
             </div>
             <button
               type="button"

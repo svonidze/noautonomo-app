@@ -4,6 +4,7 @@ import { useLocale } from '../../vue/locale.ts';
 import { localeTag, message, messageText, type UiMessage } from '../../core/i18n.ts';
 import { operationRequest } from '../../core/operation-request.ts';
 import { errorDescriptor, errorMessage } from '../../core/error-message.ts';
+import { formatDateText, formatPeriod } from '../../core/format.ts';
 import type { ViewServices } from '../../vue/services.ts';
 import type { AssetScheduleData, ScheduleRow } from './model.ts';
 const props = defineProps<{
@@ -117,7 +118,7 @@ const money = (value: number) =>
         </thead>
         <tbody>
           <tr v-for="row in data.rows" :key="row.amortization_entry_id">
-            <td>{{ row.period_key }}</td>
+            <td>{{ formatPeriod(row.period_key, locale) }}</td>
             <td>{{ money(row.amount_minor) }}</td>
             <td>
               {{
@@ -138,8 +139,10 @@ const money = (value: number) =>
                 :disabled="busy || postedButStale"
                 @click="post(row)"
               >
-                {{ t('workflow.post') }} {{ row.period_key }}</button
-              ><template v-else>{{ row.recognition_on || '' }}</template>
+                {{ t('workflow.post', { period: formatPeriod(row.period_key, locale) }) }}</button
+              ><template v-else-if="row.recognition_on">{{
+                formatDateText(row.recognition_on, locale)
+              }}</template>
             </td>
           </tr>
         </tbody>

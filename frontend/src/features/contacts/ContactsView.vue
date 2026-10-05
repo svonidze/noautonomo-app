@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { followSpaLink } from '../../vue/services.ts';
-import { formatDateText } from '../../core/format.ts';
+import { formatDateText, formatPeriod } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { formatMessage, message, messageIds } from '../../core/i18n.ts';
@@ -476,7 +476,9 @@ defineExpose({
               "
             >
               <option value="">{{ t('contacts.allPeriods') }}</option>
-              <option v-for="period in periods" :key="period" :value="period">{{ period }}</option>
+              <option v-for="period in periods" :key="period" :value="period">
+                {{ formatPeriod(period, locale) }}
+              </option>
             </select></label
           >
         </header>

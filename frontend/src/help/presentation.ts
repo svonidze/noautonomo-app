@@ -1,4 +1,5 @@
 import { formatMessage, localeTag, type Locale } from '../core/i18n.ts';
+import { formatPeriod } from '../core/format.ts';
 import refs from './references.json' with { type: 'json' };
 import type { HelpContext } from '../vue/help.ts';
 export interface Reason {
@@ -189,7 +190,7 @@ export function createPresentation(currentLocale: Locale) {
     }
       <section><h3>${esc(word('next'))}</h3>${actions.length ? actions.map((a) => `<a class="primary-button" data-help-review href="/review/${encodeURIComponent(a.transaction_id)}${a.period ? '?period=' + encodeURIComponent(a.period) : ''}">${esc(word('review'))}</a>`).join(' ') : `<p>${esc(word(['not_due', 'filed', 'registered'].includes(ctx.state) ? 'noActionNeeded' : 'noAction'))}</p>`}</section>
       <section><h3>${esc(word('known'))}</h3><dl class="status-facts">${facts.map(([key, v]) => `<div><dt>${esc(lang(fields[key]))}</dt><dd>${esc(formatted(key, v, ctx))}</dd></div>`).join('')}</dl></section>
-      ${am ? `<section><h3>${esc(word('scope') + ' ' + (am.period || ''))}</h3>${schedule({ ui_context: ctx })}<p>${esc(word('sourceNote'))}</p><ul>${am.rows.map((r) => `<li>${esc(r.period_key)} · ${esc(money(r.amount_minor))} · ${esc(r.entry_kind === 'adjustment' ? word('adjustment') : r.include_in_books ? word('book') : word('excluded'))}</li>`).join('')}</ul>${am.annual_evidence.length ? `<details><summary>${esc(word('annual'))}</summary><ul>${am.annual_evidence.map((r) => `<li>${esc(r.tax_year)} · ${esc(money(r.amount_minor))}</li>`).join('')}</ul></details>` : ''}</section>` : ''}
+      ${am ? `<section><h3>${esc(word('scope') + ' ' + formatPeriod(am.period, currentLocale))}</h3>${schedule({ ui_context: ctx })}<p>${esc(word('sourceNote'))}</p><ul>${am.rows.map((r) => `<li>${esc(formatPeriod(r.period_key, currentLocale))} · ${esc(money(r.amount_minor))} · ${esc(r.entry_kind === 'adjustment' ? word('adjustment') : r.include_in_books ? word('book') : word('excluded'))}</li>`).join('')}</ul>${am.annual_evidence.length ? `<details><summary>${esc(word('annual'))}</summary><ul>${am.annual_evidence.map((r) => `<li>${esc(r.tax_year)} · ${esc(money(r.amount_minor))}</li>`).join('')}</ul></details>` : ''}</section>` : ''}
       ${docs.length ? `<section><h3>${esc(word('sources'))}</h3><ul class="status-sources">${docs.map((d) => `<li><strong>${esc(d.document_number || d.document_type)}</strong><span>${esc(dateText(d.issued_on))}${d.total_minor != null ? ' · ' + esc(money(d.total_minor, d.currency)) : ''}</span>${d.available ? `<a href="/api/document/${encodeURIComponent(d.document_id)}/content" target="_blank" rel="noreferrer">${esc(lang('common.openDocument'))}</a>` : `<span>${esc(word('missingFile'))}</span>`}</li>`).join('')}</ul></section>` : ''}
       ${ctx.source_message ? `<details><summary>${esc(word('original'))}</summary><p>${esc(ctx.source_message)}</p></details>` : ''}<p class="status-safety-note">${esc(word('safe'))}</p>`;
   }

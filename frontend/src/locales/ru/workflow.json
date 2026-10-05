@@ -64,7 +64,7 @@
   "workflow.otherEquipment": "Другое оборудование",
   "workflow.period": "Период",
   "workflow.planned": "План",
-  "workflow.post": "Провести",
+  "workflow.post": "Провести {period}",
   "workflow.posted": "Проведено",
   "workflow.postedCalculationRefreshNeedsRetry": "Проведено; требуется обновление расчётов.",
   "workflow.postedInLedger": "Проведено в учёте",

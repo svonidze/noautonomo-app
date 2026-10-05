@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import TermHelp from '../../components/TermHelp.vue';
 import { copyable, type TransactionRow } from './model.ts';
@@ -67,8 +67,8 @@ const minor = (value: number | null | undefined) =>
                 type="button"
                 class="copy-action-button"
                 :data-copy-transaction-id="row.transaction_id"
-                :title="t('common.copyToPeriod', { period: target! })"
-                :aria-label="t('common.copyToPeriod', { period: target! })"
+                :title="t('common.copyToPeriod', { period: formatPeriod(target, locale) })"
+                :aria-label="t('common.copyToPeriod', { period: formatPeriod(target, locale) })"
                 @click="props.copy(row)"
               >
                 <svg

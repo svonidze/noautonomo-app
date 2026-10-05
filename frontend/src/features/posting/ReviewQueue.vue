@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText, taxCodeLabel } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod, taxCodeLabel } from '../../core/format.ts';
 import { followSpaLink } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import ChartHost from '../../charts/ChartHost.vue';
@@ -54,7 +54,7 @@ const posting = (row: ReviewRow) => {
   <section class="panel review-summary-panel">
     <header class="panel-header">
       <h2>{{ t('review.summary') }}</h2>
-      <small>{{ context.period }}</small>
+      <small>{{ formatPeriod(context.period, locale) }}</small>
     </header>
     <div class="review-summary-grid">
       <article

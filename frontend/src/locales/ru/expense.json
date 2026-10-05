@@ -27,7 +27,6 @@
   "expense.periodDate": "Период и дата учёта",
   "expense.posted": "Проведено",
   "expense.purchase": "Покупки, услуги и прочие расходы",
-  "expense.quarter": "{quarter} квартал {year}",
   "expense.quarterAmount": "Амортизация за квартал",
   "expense.quarterTotal": "Проведено и проверено за весь квартал: {amount}",
   "expense.readOnly": "Только просмотр сохранённых данных",

@@ -64,7 +64,7 @@
   "workflow.otherEquipment": "Other equipment",
   "workflow.period": "Period",
   "workflow.planned": "Planned",
-  "workflow.post": "Post",
+  "workflow.post": "Post {period}",
   "workflow.posted": "Posted",
   "workflow.postedCalculationRefreshNeedsRetry": "Posted; calculation refresh needs retry.",
   "workflow.postedInLedger": "Posted in ledger",

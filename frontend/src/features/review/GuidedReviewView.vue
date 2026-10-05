@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { aeatCodeLabel, codeLabel, eur, formatDateText, taxCodeLabel } from '../../core/format.ts';
+import {
+  aeatCodeLabel,
+  codeLabel,
+  eur,
+  formatDateText,
+  formatPeriod,
+  taxCodeLabel,
+} from '../../core/format.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import {
@@ -590,7 +597,7 @@ const retry = () =>
         <section class="panel review-panel">
           <header class="panel-header">
             <h2>{{ t('review.factsTitle') }}</h2>
-            <small>{{ state.period.period_key }}</small>
+            <small>{{ formatPeriod(state.period.period_key, locale) }}</small>
           </header>
           <div class="review-facts-summary">
             <dl class="review-facts-list">

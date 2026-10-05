@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur } from '../../core/format.ts';
+import { eur, formatPeriod } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import ChartHost from '../../charts/ChartHost.vue';
@@ -136,7 +136,10 @@ function copy(row: TransactionRow) {
 <template>
   <div>
     <div class="table-toolbar" :class="{ 'expense-toolbar': expense }">
-      <h2>{{ t(expense ? 'titles.expenses' : 'titles.income') }} · {{ context.period }}</h2>
+      <h2>
+        {{ t(expense ? 'titles.expenses' : 'titles.income') }} ·
+        {{ formatPeriod(context.period, locale) }}
+      </h2>
       <div class="toolbar-filters">
         <label v-if="expense"
           ><span>{{ t('expense.search') }}</span

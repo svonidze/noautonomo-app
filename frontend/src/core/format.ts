@@ -1,4 +1,4 @@
-import { formatMessage, localeTag, messageIds } from './i18n.ts';
+import { formatMessage, localeTag, messageIds, quarterNumber } from './i18n.ts';
 
 export function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -44,6 +44,18 @@ export function formatDateTime(value: unknown, locale: unknown): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date);
+}
+/** «IV квартал 2026» / "Q4 2026" for a period key; any other shape is returned as is. */
+export function formatPeriod(periodKey: unknown, locale: unknown): string {
+  const key = String(periodKey ?? '');
+  const match = /^(\d{4})-Q([1-4])$/.exec(key);
+  return match
+    ? formatMessage(
+        'common.quarter',
+        { year: match[1], quarter: quarterNumber(Number(match[2]), locale) },
+        locale,
+      )
+    : key;
 }
 /** Catalog label for a server code under `prefix`; the code itself when the catalog has none. */
 export function codeLabel(prefix: string, code: unknown, locale: unknown): string {

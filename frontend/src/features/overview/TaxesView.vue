@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
 import { errorDescriptor, errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import { formatMessage, message, messageIds } from '../../core/i18n.ts';
@@ -57,7 +57,9 @@ async function refresh() {
   try {
     await context.refreshCalculation();
     if (active && revision === generation) {
-      context.notify(message('refresh.done', { period: context.period }));
+      context.notify(
+        message('refresh.done', { period: formatPeriod(context.period, locale.value) }),
+      );
       await load();
     }
   } catch (failure) {
@@ -111,7 +113,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
   <div v-else-if="data" class="tax-page">
     <section class="tax-hero" :class="`tax-hero-${headline.tone}`">
       <div class="tax-hero-copy">
-        <span>{{ data.period }}</span>
+        <span>{{ formatPeriod(data.period, locale) }}</span>
         <h2>{{ headline.label }}</h2>
         <strong v-if="headline.amount != null">{{ money(headline.amount) }}</strong>
         <p>{{ headline.detail }}</p>

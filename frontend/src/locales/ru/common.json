@@ -22,6 +22,7 @@
   "common.nouns.steps.one": "шаг",
   "common.nouns.steps.other": "шага",
   "common.openDocument": "Открыть документ",
+  "common.quarter": "{quarter} квартал {year}",
   "common.refresh": "Обновить",
   "common.reload": "Перезагрузить страницу",
   "common.retry": "Повторить",

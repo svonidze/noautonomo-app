@@ -11,6 +11,7 @@ import {
   aeatCodeLabel,
   eur,
   formatDateText,
+  formatPeriod,
   escapeHtml,
   taxCodeLabel,
 } from '../../src/core/format.ts';
@@ -57,6 +58,16 @@ describe('locale messages and private values', () => {
     expect(eur('1234.56', 'ru')).not.toBe(eur('1234.56', 'en'));
     expect(formatDateText('not-a-date', 'ru')).toBe('not-a-date');
     expect(escapeHtml('<script>')).toBe('&lt;script&gt;');
+  });
+  test.each([
+    ['2026-Q4', 'ru', 'IV квартал 2026'],
+    ['2026-Q1', 'ru', 'I квартал 2026'],
+    ['2026-Q4', 'en', 'Q4 2026'],
+    ['2026', 'ru', '2026'],
+    ['2026-Q5', 'en', '2026-Q5'],
+    ['', 'en', ''],
+  ])('period %s reads in %s as %s', (key, locale, expected) => {
+    expect(formatPeriod(key, locale)).toBe(expected);
   });
 });
 

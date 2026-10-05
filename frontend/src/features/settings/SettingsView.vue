@@ -11,6 +11,7 @@ import {
 } from '../../core/i18n.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
+import { formatDateText } from '../../core/format.ts';
 import BackupStatus from './BackupStatus.vue';
 import {
   emptyProfile,
@@ -329,7 +330,10 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
               <dt>{{ t('settings.form.regimes') }}</dt>
               <dd>{{ regime('irpf', row.irpf_method) }} / {{ regime('iva', row.iva_regime) }}</dd>
               <dt>{{ t('settings.form.dates') }}</dt>
-              <dd>{{ row.starts_on }} — {{ row.ends_on || t('settings.form.current') }}</dd>
+              <dd>
+                {{ formatDateText(row.starts_on, locale) }} —
+                {{ row.ends_on ? formatDateText(row.ends_on, locale) : t('settings.form.current') }}
+              </dd>
             </dl>
           </article>
           <p v-if="!activity.length" class="settings-hint">{{ t('settings.form.noActivities') }}</p>

@@ -32,6 +32,7 @@ import {
   type UiMessage,
 } from '../core/i18n.ts';
 import { errorDescriptor } from '../core/error-message.ts';
+import { formatPeriod } from '../core/format.ts';
 import { disposeHelp } from '../vue/help.ts';
 import { useLocale } from '../vue/locale.ts';
 import type IntakeDialog from '../features/intake/IntakeDialog.vue';
@@ -436,7 +437,8 @@ export function useShell() {
         const token = refreshToken(captured);
         await refreshCalculation(captured);
         clearRefresh(captured, token);
-        if (version === generation) notify(message('refresh.done', { period: captured }));
+        if (version === generation)
+          notify(message('refresh.done', { period: formatPeriod(captured, locale.value) }));
       }
       if (version === generation) await showRoute();
     } catch (error) {

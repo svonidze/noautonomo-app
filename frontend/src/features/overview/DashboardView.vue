@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import ChartHost from '../../charts/ChartHost.vue';
@@ -249,7 +249,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
         <section class="panel">
           <header class="panel-header">
             <h2>{{ t('dashboard.recentTransactions') }}</h2>
-            <small>{{ context.period }}</small>
+            <small>{{ formatPeriod(context.period, locale) }}</small>
           </header>
           <RecentTransactions
             :rows="data.recent_transactions"

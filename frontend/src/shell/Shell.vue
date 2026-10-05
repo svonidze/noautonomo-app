@@ -5,6 +5,7 @@ import { routeUrl, views } from './routes.ts';
 import { useLocale } from '../vue/locale.ts';
 import { formatMessage, localeRegistry, messageText } from '../core/i18n.ts';
 import { errorMessage } from '../core/error-message.ts';
+import { formatPeriod } from '../core/format.ts';
 import { followSpaLink } from '../vue/services.ts';
 import IntakeDialog from '../features/intake/IntakeDialog.vue';
 const {
@@ -128,7 +129,7 @@ const refreshLabel = computed(() =>
               :key="item.period_key"
               :value="item.period_key"
             >
-              {{ item.period_key }}
+              {{ formatPeriod(item.period_key, locale) }}
             </option>
           </select></label
         >

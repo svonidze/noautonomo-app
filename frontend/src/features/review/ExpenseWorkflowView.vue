@@ -11,7 +11,13 @@ import {
   type UiMessage,
 } from '../../core/i18n.ts';
 import { operationRequest } from '../../core/operation-request.ts';
-import { aeatCodeLabel, eur, formatDateText, taxCodeLabel } from '../../core/format.ts';
+import {
+  aeatCodeLabel,
+  eur,
+  formatDateText,
+  formatPeriod,
+  taxCodeLabel,
+} from '../../core/format.ts';
 import { fxNoteText } from './guided-helpers.ts';
 import type { Counterparty } from '../contacts/model.ts';
 import WorkflowField from './WorkflowField.vue';
@@ -433,7 +439,7 @@ const supplierHidden = (party: Counterparty) =>
   <section ref="root" class="section-stack expense-workflow">
     <header class="panel-header">
       <h2>{{ t('workflow.reviewAndPostExpense') }}</h2>
-      <span>{{ draft?.source.period.period_key }}</span>
+      <span>{{ formatPeriod(draft?.source.period.period_key, locale) }}</span>
     </header>
     <div class="wf-message" role="status">{{ messageText(notice, locale) }}</div>
     <div v-if="error" class="review-alert error" role="alert" tabindex="-1">
@@ -950,7 +956,7 @@ const supplierHidden = (party: Counterparty) =>
         :aria-label="t('workflow.postingPreview')"
       >
         <h3>{{ t('workflow.beforePosting') }}</h3>
-        <p>{{ proposed.supplier }} · {{ proposed.period }}</p>
+        <p>{{ proposed.supplier }} · {{ formatPeriod(proposed.period, locale) }}</p>
         <dl class="review-facts-list">
           <div>
             <dt>{{ t('workflow.purchase') }}</dt>
@@ -984,8 +990,8 @@ const supplierHidden = (party: Counterparty) =>
             </thead>
             <tbody>
               <tr v-for="(row, index) in proposed.schedule" :key="index">
-                <td>{{ row.period_key }}</td>
-                <td>{{ row.recognition_on || '—' }}</td>
+                <td>{{ formatPeriod(row.period_key, locale) }}</td>
+                <td>{{ formatDateText(row.recognition_on, locale) }}</td>
                 <td>{{ money(row.amount_minor) }}</td>
               </tr>
             </tbody>

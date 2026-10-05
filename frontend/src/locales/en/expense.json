@@ -27,7 +27,6 @@
   "expense.periodDate": "Period and recognition date",
   "expense.posted": "Posted",
   "expense.purchase": "Purchases, services and other expenses",
-  "expense.quarter": "Q{quarter} {year}",
   "expense.quarterAmount": "Quarterly depreciation",
   "expense.quarterTotal": "Posted and reviewed for the whole quarter: {amount}",
   "expense.readOnly": "Read-only saved data",

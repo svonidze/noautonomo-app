@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
-import { quarterNumber } from '../../core/i18n.ts';
+import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import TermHelp from '../../components/TermHelp.vue';
 import DocumentLabel from '../transactions/DocumentLabel.vue';
@@ -17,15 +16,6 @@ const { locale, t } = useLocale();
 const date = (value?: string) => formatDateText(value, locale.value);
 const minor = (value?: number | null) =>
   value == null ? t('help.words.missing') : eur(value / 100, locale.value);
-const quarter = (period: string) => {
-  const match = /^(\d{4})-Q([1-4])$/.exec(period);
-  return match
-    ? t('expense.quarter', {
-        year: match[1],
-        quarter: quarterNumber(Number(match[2]), locale.value),
-      })
-    : period || '—';
-};
 const matched = (row: TransactionRow) => row.asset_match_count === 1 && row.asset_id;
 const sourceUrl = () => `/dashboard?period=${encodeURIComponent(props.period)}`;
 </script>
@@ -49,7 +39,7 @@ const sourceUrl = () => `/dashboard?period=${encodeURIComponent(props.period)}`;
         <tr v-for="row in rows" :key="row.transaction_id" :data-transaction-id="row.transaction_id">
           <td :data-label="t('transactions.date')">
             <template v-if="row.expense_kind === 'amortization'"
-              ><strong>{{ quarter(row.period_key) }}</strong
+              ><strong>{{ formatPeriod(row.period_key, locale) || '—' }}</strong
               ><small class="expense-note"
                 >{{ t('expense.recognitionDate') }}: {{ date(row.transaction_date) }}</small
               ></template
@@ -141,8 +131,8 @@ const sourceUrl = () => `/dashboard?period=${encodeURIComponent(props.period)}`;
                 type="button"
                 class="copy-action-button"
                 :data-copy-transaction-id="row.transaction_id"
-                :title="t('common.copyToPeriod', { period: target! })"
-                :aria-label="t('common.copyToPeriod', { period: target! })"
+                :title="t('common.copyToPeriod', { period: formatPeriod(target, locale) })"
+                :aria-label="t('common.copyToPeriod', { period: formatPeriod(target, locale) })"
                 @click="copy(row)"
               >
                 <svg
