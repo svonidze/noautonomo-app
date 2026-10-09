@@ -312,7 +312,6 @@
         "shareUnavailableLabel": "доля не рассчитывается",
         "showSegmentShares": true,
         "tableInitiallyOpen": true,
-        "tablePrimaryOnNarrow": true,
         "rowLabelWidth": 280,
         "rowHeight": 42,
         "rows": [
@@ -826,7 +825,6 @@
         "shareUnavailableLabel": "share not available",
         "showSegmentShares": true,
         "tableInitiallyOpen": true,
-        "tablePrimaryOnNarrow": true,
         "rowLabelWidth": 280,
         "rowHeight": 42,
         "rows": [

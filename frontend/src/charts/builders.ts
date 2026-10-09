@@ -447,7 +447,6 @@ export function createChartBuilders(locale: Locale, { compactQuarters = false } 
     spec.formatPercent = formatChartPercent;
     spec.showSegmentShares = true;
     spec.tableInitiallyOpen = true;
-    spec.tablePrimaryOnNarrow = true;
     spec.rowLabelWidth = 280;
     spec.rowHeight = 42;
     spec.rows = buckets.map((bucket) => {
