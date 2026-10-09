@@ -98,7 +98,7 @@ test('same-ID context replacement ignores its old request and uses new links/ser
   await Promise.resolve();
   await nextTick();
   expect(oldResolved).not.toHaveBeenCalled();
-  expect(root.querySelector('.review-workspace-header a')?.getAttribute('href')).toBe(
+  expect(root.querySelector('.expense-detail > .back-link')?.getAttribute('href')).toBe(
     '/expenses?period=2026-Q2&q=new',
   );
   host.dispose();

@@ -161,16 +161,14 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
           :request="context.services.request"
         />
       </section>
-      <section class="panel wf-fields">
-        <label
-          ><span>{{ t('app.inline.equipmentSchedule') }}</span
-          ><select id="asset-plan-select" v-model="selected">
-            <option value=""></option>
-            <option v-for="row in rows" :key="row.asset_id" :value="row.asset_id">
-              {{ row.description || row.asset_code }}
-            </option>
-          </select></label
-        >
+      <section class="panel wf-fields" aria-labelledby="asset-plan-title">
+        <h2 id="asset-plan-title">{{ t('app.inline.equipmentSchedule') }}</h2>
+        <select id="asset-plan-select" v-model="selected" aria-labelledby="asset-plan-title">
+          <option value=""></option>
+          <option v-for="row in rows" :key="row.asset_id" :value="row.asset_id">
+            {{ row.description || row.asset_code }}
+          </option>
+        </select>
         <div id="asset-plan-detail">
           <AssetSchedule
             v-if="selected"

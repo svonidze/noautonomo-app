@@ -178,7 +178,7 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
   <div v-if="loading" class="empty-state" role="status">{{ t('common.loading') }}</div>
   <div v-else-if="failure" class="empty-state" role="alert">
     <p>{{ errorMessage(failure, locale) }}</p>
-    <button @click="load">{{ t('common.retry') }}</button>
+    <button class="secondary-button" @click="load">{{ t('common.retry') }}</button>
   </div>
   <div v-else class="settings-page">
     <div class="settings-grid">
@@ -319,7 +319,7 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
             {{ t('settings.form.yearStart') }}: {{ profile.tax_year_start_month || 1 }}
           </p>
           <article v-for="(row, index) in activity" :key="index" class="settings-activity">
-            <h4>{{ row.description }}</h4>
+            <h3>{{ row.description }}</h3>
             <dl>
               <dt>{{ t('settings.form.codes') }}</dt>
               <dd>

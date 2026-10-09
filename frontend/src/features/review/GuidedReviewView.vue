@@ -510,6 +510,12 @@ const retry = () =>
 </script>
 <template>
   <div ref="root" class="review-workspace">
+    <a
+      class="text-button back-link"
+      :href="backUrl"
+      @click="followSpaLink($event, context.services.navigate)"
+      ><span aria-hidden="true">←</span> {{ t('review.workspaceBack') }}</a
+    >
     <p v-if="loading" role="status">{{ t('common.loading') }}</p>
     <div v-else-if="loadError" class="empty-state state-error" role="alert">
       <p>{{ errorMessage(loadError, locale) }}</p>
@@ -526,12 +532,6 @@ const retry = () =>
     <template v-else-if="item && ui && evaluation">
       <StatusCell :context="item.ui_context" />
       <div class="review-workspace-header">
-        <a
-          class="secondary-button review-back-link"
-          :href="backUrl"
-          @click="followSpaLink($event, context.services.navigate)"
-          >{{ t('review.workspaceBack') }}</a
-        >
         <div class="review-workspace-title">
           <h2>
             {{
@@ -594,7 +594,7 @@ const retry = () =>
       <form id="review-form" class="review-form" @submit.prevent="submit('approve')">
         <section class="panel review-panel">
           <header class="panel-header">
-            <h2>{{ t('review.factsTitle') }}</h2>
+            <h3>{{ t('review.factsTitle') }}</h3>
             <small>{{ formatPeriod(state.period.period_key, locale) }}</small>
           </header>
           <div class="review-facts-summary">
@@ -658,7 +658,7 @@ const retry = () =>
         </section>
         <section class="panel review-panel">
           <header class="panel-header">
-            <h2>{{ t('review.questionsTitle') }}</h2>
+            <h3>{{ t('review.questionsTitle') }}</h3>
             <small>{{
               codeLabel('transactions.types', state.transaction.entry_type, locale)
             }}</small>
@@ -771,7 +771,7 @@ const retry = () =>
         </section>
         <section class="panel review-panel">
           <header class="panel-header">
-            <h2>{{ t('review.result') }}</h2>
+            <h3>{{ t('review.result') }}</h3>
             <small>{{ t('review.confirmHint') }}</small>
           </header>
           <details

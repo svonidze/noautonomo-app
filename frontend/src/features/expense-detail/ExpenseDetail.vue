@@ -149,12 +149,8 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
 </script>
 <template>
   <div :aria-busy="loading || busy" class="section-stack expense-detail">
-    <a
-      v-if="loading || error || data?.transaction.entry_type !== 'expense'"
-      class="secondary-button"
-      :href="back"
-      @click="navigate"
-      >{{ backLabel(back) }}</a
+    <a class="text-button back-link" :href="back" @click="navigate"
+      ><span aria-hidden="true">←</span> {{ backLabel(back) }}</a
     >
     <div v-if="loading" class="empty-state" role="status">{{ t('common.loading') }}</div>
     <div v-else-if="error" class="empty-state" role="alert">
@@ -191,13 +187,18 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
     <template v-else-if="data">
       <section v-if="data.workflow_follow_up?.follow_up_pending" class="panel expense-panel-body">
         <p>{{ t('app.inline.postedCalculationRefreshOrInboxCleanupIsPending') }}</p>
-        <button id="expense-follow-up" type="button" :disabled="busy" @click="followUp">
+        <button
+          id="expense-follow-up"
+          type="button"
+          class="secondary-button"
+          :disabled="busy"
+          @click="followUp"
+        >
           {{ t('app.inline.retryFollowUp') }}
         </button>
         <p id="expense-follow-up-error" role="alert">{{ errorText(followError) }}</p>
       </section>
       <header class="review-workspace-header">
-        <a class="secondary-button" :href="back" @click="navigate">{{ backLabel(back) }}</a>
         <div>
           <h2>{{ data.document?.document_number || t('expense.noNumber') }}</h2>
           <p>{{ data.counterparty?.display_name || '—' }}</p>
@@ -211,7 +212,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
       </header>
       <section class="panel expense-notes" aria-labelledby="expense-notes-title">
         <header class="panel-header">
-          <h2 id="expense-notes-title">{{ t('expense.notes') }}</h2>
+          <h3 id="expense-notes-title">{{ t('expense.notes') }}</h3>
         </header>
         <div class="expense-panel-body">
           <template v-if="notes.length"
@@ -225,7 +226,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
       </section>
       <section class="panel">
         <header class="panel-header">
-          <h2>{{ t('review.factsTitle') }}</h2>
+          <h3>{{ t('review.factsTitle') }}</h3>
           <small>{{ formatPeriod(data.period.period_key, locale) }}</small>
         </header>
         <div class="expense-panel-body">
@@ -247,7 +248,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
       </section>
       <section class="panel">
         <header class="panel-header">
-          <h2>{{ t('review.taxDecision') }}</h2>
+          <h3>{{ t('review.taxDecision') }}</h3>
         </header>
         <div class="expense-panel-body">
           <template v-if="treatments.length"

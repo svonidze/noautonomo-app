@@ -188,7 +188,10 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
           {{ t('dashboard.postingBannerCta') }}
         </button>
       </div>
-      <div class="metric-grid">
+      <section class="metric-grid" aria-labelledby="dashboard-figures-title">
+        <h2 id="dashboard-figures-title" class="visually-hidden">
+          {{ t('dashboard.figuresTitle') }}
+        </h2>
         <div class="metric accent">
           <span>{{ t('dashboard.incomePosted') }}</span
           ><strong>{{ eur(data.totals.actual.income_eur, locale) }}</strong
@@ -246,7 +249,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
             {{ t(calculating ? 'common.calculating' : 'common.calculate') }}
           </button>
         </div>
-      </div>
+      </section>
       <button
         v-if="ready > 0"
         class="review-banner"
@@ -264,7 +267,12 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
           formatDateText(nextDue.statutory_due_on, locale)
         }}</time>
       </div>
-      <section class="charts-panel" id="dashboard-charts">
+      <section
+        class="charts-panel"
+        id="dashboard-charts"
+        aria-labelledby="dashboard-analytics-title"
+      >
+        <h2 id="dashboard-analytics-title">{{ t('dashboard.analyticsTitle') }}</h2>
         <ChartHost
           v-for="chart in charts"
           :key="chart.kind"

@@ -314,11 +314,7 @@ defineExpose({
 </script>
 <template>
   <div :aria-busy="loading" :class="context.contactId ? 'section-stack contact-detail' : ''">
-    <a
-      v-if="context.contactId"
-      class="text-button contact-back-link"
-      href="/contacts"
-      @click="navigate"
+    <a v-if="context.contactId" class="text-button back-link" href="/contacts" @click="navigate"
       ><span aria-hidden="true">←</span> {{ t('contacts.back') }}</a
     >
     <div v-if="loading" class="empty-state" role="status">{{ t('common.loading') }}</div>

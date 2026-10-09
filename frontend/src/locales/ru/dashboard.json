@@ -1,8 +1,10 @@
 {
+  "dashboard.analyticsTitle": "Аналитика",
   "dashboard.approvedNotPosted": "В периоде есть подтверждённые операции, но они ещё не проведены. Карточки «проведено» считают только то, что проведено или в поданной декларации.",
   "dashboard.calculatedAsOf": "Предварительный расчёт на {date}",
   "dashboard.carryForward": "к переносу {amount}",
   "dashboard.expensesPosted": "Расходы, проведено",
+  "dashboard.figuresTitle": "Цифры квартала",
   "dashboard.incomePosted": "Доходы, проведено",
   "dashboard.modelo130Box": "Modelo 130 · поле 19",
   "dashboard.modelo303Result": "Modelo 303 · результат",

@@ -136,6 +136,7 @@ const money = (value: number) =>
                 v-if="row.can_post"
                 :data-recognize="row.amortization_entry_id"
                 type="button"
+                class="secondary-button"
                 :disabled="busy || postedButStale"
                 @click="post(row)"
               >

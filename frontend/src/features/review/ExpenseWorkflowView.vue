@@ -18,6 +18,7 @@ import {
   formatPeriod,
   taxCodeLabel,
 } from '../../core/format.ts';
+import { followSpaLink } from '../../vue/services.ts';
 import { fxNoteText } from './guided-helpers.ts';
 import type { Counterparty } from '../contacts/model.ts';
 import WorkflowField from './WorkflowField.vue';
@@ -50,7 +51,8 @@ const suppliers = shallowRef<Counterparty[]>([]),
   posted = shallowRef<PostedExpense>();
 const error = shallowRef<unknown>(),
   notice = shallowRef<UiMessage | string>(''),
-  busy = ref(false);
+  busy = ref(false),
+  confirming = ref(false);
 const supplierSearch = ref(''),
   settlementRate = ref(''),
   settlementReference = ref(''),
@@ -61,6 +63,7 @@ let active = true,
   request: ReturnType<typeof operationRequest> | null = null;
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 const base = () => `/api/expense-workflows/${encodeURIComponent(props.context.transactionId)}`;
+const queueUrl = computed(() => `/review?${new URLSearchParams({ period: props.context.period })}`);
 const current = (revision: number) => active && generation === revision;
 onBeforeUnmount(() => {
   active = false;
@@ -265,21 +268,28 @@ const preview = () =>
       draft.value!.draft_version,
     );
   });
-const confirm = () =>
-  task(async (revision) => {
-    if (!request || !proposed.value) return;
-    const result = (await props.context.services.request(base() + '/confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    })) as PostedExpense;
-    if (current(revision)) {
-      if (result.transaction_id !== props.context.transactionId)
-        throw new Error('review.invalidWorkItem');
-      posted.value = result;
-      notice.value = '';
-    }
-  });
+async function confirm() {
+  if (busy.value) return;
+  confirming.value = true;
+  try {
+    await task(async (revision) => {
+      if (!request || !proposed.value) return;
+      const result = (await props.context.services.request(base() + '/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      })) as PostedExpense;
+      if (current(revision)) {
+        if (result.transaction_id !== props.context.transactionId)
+          throw new Error('review.invalidWorkItem');
+        posted.value = result;
+        notice.value = '';
+      }
+    });
+  } finally {
+    confirming.value = false;
+  }
+}
 const followUp = () =>
   task(async (revision) => {
     const result = (await props.context.services.request(base() + '/follow-up', {
@@ -437,6 +447,12 @@ const supplierHidden = (party: Counterparty) =>
 </script>
 <template>
   <section ref="root" class="section-stack expense-workflow">
+    <a
+      class="text-button back-link"
+      :href="queueUrl"
+      @click="followSpaLink($event, context.services.navigate)"
+      ><span aria-hidden="true">←</span> {{ t('workflow.backToQueue') }}</a
+    >
     <header class="panel-header">
       <h2>{{ t('workflow.reviewAndPostExpense') }}</h2>
       <span>{{ formatPeriod(draft?.source.period.period_key, locale) }}</span>
@@ -457,25 +473,44 @@ const supplierHidden = (party: Counterparty) =>
     <p v-if="!draft && !error" role="status">{{ t('common.loading') }}</p>
     <div v-if="draft?.conflict" class="review-alert warning">
       {{ t('workflow.sourceChangedTheSavedDraftIsRetainedCompareIt')
-      }}<button type="button" id="wf-reset" :disabled="busy" @click="reset">
+      }}<button
+        type="button"
+        id="wf-reset"
+        class="secondary-button"
+        :disabled="busy"
+        @click="reset"
+      >
         {{ t('workflow.useCurrentFacts') }}
       </button>
     </div>
     <section v-if="posted" class="panel wf-fields">
-      <strong>{{ t('workflow.postedInLedger') }}</strong>
+      <h2>{{ t('workflow.postedTitle') }}</h2>
       <p>{{ t('workflow.thisIsNotAPaymentOrTaxFiling') }}</p>
       <template v-if="posted.follow_up_pending"
         ><p>{{ t('workflow.refreshOrInboxCleanupNeedsRetryDoNotRepost') }}</p>
-        <button id="wf-follow-up" type="button" :disabled="busy" @click="followUp">
+        <button
+          id="wf-follow-up"
+          type="button"
+          class="secondary-button"
+          :disabled="busy"
+          @click="followUp"
+        >
           {{ t('workflow.retryFollowUp') }}
         </button></template
-      ><button id="wf-open-posted" type="button" :disabled="busy" @click="context.onPosted(posted)">
+      ><button
+        id="wf-open-posted"
+        type="button"
+        class="secondary-button"
+        :disabled="busy"
+        @click="context.onPosted(posted)"
+      >
         {{ t('workflow.openExpense') }}
       </button>
     </section>
     <template v-else-if="draft && payload">
       <div class="wf-layout">
         <aside class="panel wf-source">
+          <h3>{{ t('workflow.sourceTitle') }}</h3>
           <a :href="sourceUrl" target="_blank" rel="noreferrer">{{ t('common.openDocument') }}</a
           ><iframe
             :title="t('workflow.sourceDocument')"
@@ -770,17 +805,16 @@ const supplierHidden = (party: Counterparty) =>
                 </template>
               </div>
             </section>
-            <label
-              ><span>{{ t('workflow.ivaPurchaseClassification') }}</span
-              ><select
-                data-p="decision.tax_treatment.vat_investment_good"
-                :value="tax.vat_investment_good == null ? '' : String(tax.vat_investment_good)"
-                @input="select('decision.tax_treatment.vat_investment_good', $event, true)"
-              >
-                <option value=""></option>
-                <option value="false">{{ t('workflow.currentPurchaseForIva') }}</option>
-                <option value="true">{{ t('workflow.ivaInvestmentGood') }}</option>
-              </select></label
+            <h3 id="wf-vat-title">{{ t('review.vatInvestment') }}</h3>
+            <select
+              data-p="decision.tax_treatment.vat_investment_good"
+              aria-labelledby="wf-vat-title"
+              :value="tax.vat_investment_good == null ? '' : String(tax.vat_investment_good)"
+              @input="select('decision.tax_treatment.vat_investment_good', $event, true)"
+            >
+              <option value=""></option>
+              <option value="false">{{ t('workflow.currentPurchaseForIva') }}</option>
+              <option value="true">{{ t('workflow.ivaInvestmentGood') }}</option></select
             ><small>{{
               t('workflow.irpfDepreciationDoesNotDetermineTheIvaInvestmentClassification')
             }}</small>
@@ -868,6 +902,7 @@ const supplierHidden = (party: Counterparty) =>
               <button
                 id="wf-use-fx"
                 type="button"
+                class="secondary-button"
                 :disabled="!['exact', 'prior'].includes(draft.fx_suggestion?.status || '')"
                 @click="useFx()"
               >
@@ -882,7 +917,12 @@ const supplierHidden = (party: Counterparty) =>
               ><label
                 ><span>{{ t('workflow.settlementEvidenceReference') }}</span
                 ><input id="wf-settlement-ref" v-model="settlementReference" /></label
-              ><button id="wf-settlement" type="button" @click="useFx(true)">
+              ><button
+                id="wf-settlement"
+                type="button"
+                class="secondary-button"
+                @click="useFx(true)"
+              >
                 {{ t('workflow.useSettlementRate') }}</button
               ><small>{{ payload.fx ? t('workflow.rateSelectedCheckTaxAmountsInEur') : '' }}</small>
             </section>
@@ -1009,7 +1049,7 @@ const supplierHidden = (party: Counterparty) =>
           :disabled="busy"
           @click="confirm"
         >
-          {{ t('workflow.confirmAndPost') }}
+          {{ t(confirming ? 'review.submitting' : 'workflow.confirmAndPost') }}
         </button>
       </section>
     </template>

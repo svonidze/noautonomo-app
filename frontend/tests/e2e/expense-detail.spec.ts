@@ -69,7 +69,7 @@ test('Vue expense uses authoritative period, preserves notes and values, and ret
     'rel',
     'noreferrer',
   );
-  await page.locator('.review-workspace-header > a').click();
+  await page.locator('.expense-detail > .back-link').click();
   await expect(page).toHaveURL(/\/expenses\?period=2026-Q3&q=Synthetic$/);
   await expect(page.locator('.expense-detail')).toHaveCount(0);
   await page.goBack();

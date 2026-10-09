@@ -1,8 +1,10 @@
 {
+  "dashboard.analyticsTitle": "Analytics",
   "dashboard.approvedNotPosted": "This period has approved transactions that are not posted yet. The “posted” cards count only rows that are posted or in a filed return.",
   "dashboard.calculatedAsOf": "Preview as of {date}",
   "dashboard.carryForward": "carry-forward {amount}",
   "dashboard.expensesPosted": "Posted expenses",
+  "dashboard.figuresTitle": "Quarter figures",
   "dashboard.incomePosted": "Posted income",
   "dashboard.modelo130Box": "Modelo 130 · box 19",
   "dashboard.modelo303Result": "Modelo 303 · result",

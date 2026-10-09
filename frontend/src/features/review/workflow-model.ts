@@ -100,6 +100,7 @@ export interface PostedExpense {
 }
 export interface WorkflowContext {
   transactionId: string;
+  period: string;
   services: ViewServices;
   onPosted(result: PostedExpense): void;
   onLegacy(): void;
