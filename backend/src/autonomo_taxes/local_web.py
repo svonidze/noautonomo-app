@@ -430,18 +430,21 @@ class LocalAccountingApp:
                     "validation_issues",
                 )
             }
+        today = date.today()
+        current = _quarter_key(today)
+        # The current quarter if it has a row, else the latest with one, else the current quarter.
+        default_period = _current_or_latest_period([row["period_key"] for row in periods]) or current
+        # The current quarter is always offered; one without a row is offered as "missing", not
+        # created: the first document's intake creates the row. A ledger straight from `db init`
+        # also offers the quarter before it, where the first document may be dated.
         if not periods:
-            # A ledger straight from `db init`: offer the current quarter and the one before it (the
-            # first document may be dated there) without creating them; the first document's intake
-            # creates its row.
-            today = date.today()
             quarter_start = date(today.year, today.month - (today.month - 1) % 3, 1)
-            periods = [
-                _missing_period(_quarter_key(today)),
-                _missing_period(_quarter_key(quarter_start - timedelta(days=1))),
-            ]
-        period_keys = [row["period_key"] for row in periods]
-        default_period = _current_or_latest_period(period_keys)
+            periods = [_missing_period(_quarter_key(quarter_start - timedelta(days=1)))]
+        if current not in [row["period_key"] for row in periods]:
+            periods = sorted(
+                [*periods, _missing_period(current)],
+                key=lambda row: str(row["starts_on"]), reverse=True,
+            )
         return {
             "profile_name": profile["full_name"] if profile else "Autónomo",
             "profile_configured": profile is not None,

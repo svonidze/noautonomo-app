@@ -306,12 +306,15 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   (positive), «Можно начать» (pending) or «Не начато» (neutral, waiting for
   an earlier step). The rows are task rows, never primary buttons. The
   sidebar names the owner only when `profile_configured` is true.
-- A ledger straight from `db init` has no quarter. `/api/bootstrap` then
-  offers the current calendar quarter, the default, and the one before it,
-  where the first document may be dated (`status: "missing"`; no row is
-  created), and the read endpoints answer a valid quarter without a row with
-  empty data (`period.status: "missing"`, zero counts, empty lists), never
-  400/404; malformed keys still fail. The first document's intake creates the
+- `/api/bootstrap` always offers the current calendar quarter: without a
+  row it is listed as `status: "missing"` beside the quarters that have rows
+  (no row is created). The default is the current quarter if it has a row,
+  else the latest quarter with a row, else the current quarter. A ledger
+  straight from `db init` has no quarter: it is offered the current quarter
+  and the one before it, where the first document may be dated. The read
+  endpoints answer a valid quarter without a row with empty data
+  (`period.status: "missing"`, zero counts, empty lists), never 400/404;
+  malformed keys still fail. The first document's intake creates the
   quarter's row. Calculation needs that row: until then
   `/api/dashboard/refresh` answers 409 `period_missing` with the text
   `taxes.periodEmpty`, and the posting tab reads the quarter as open with

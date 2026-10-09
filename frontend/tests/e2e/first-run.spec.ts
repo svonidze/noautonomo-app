@@ -16,7 +16,8 @@ import taxes from '../../src/locales/ru/taxes.json' with { type: 'json' };
 // quarter, no record, no profile. The server offers the current quarter and the one before it
 // without creating them. The tests share that ledger and run in file order: the read-only ones
 // first, then the two that write to it. The @previous-quarter test runs alone on a second fresh
-// ledger (project empty-ledger-previous): its document would end the offer of the current quarter.
+// ledger (project empty-ledger-previous): once a ledger has a row, the previous quarter is no
+// longer offered.
 test.describe.configure({ mode: 'serial' });
 const today = new Date();
 const quarter = `${today.getFullYear()}-Q${Math.floor(today.getMonth() / 3) + 1}`;
@@ -211,7 +212,7 @@ test('the first document opens its quarter and moves the start list on to its re
 });
 
 test(
-  'a first document dated in the quarter that just ended goes to that quarter',
+  'a first document dated in the quarter that just ended goes there, and the current quarter stays offered',
   { tag: '@previous-quarter' },
   async ({ page }) => {
     const errors = consoleErrors(page);
@@ -245,6 +246,34 @@ test(
     await form.locator('[name="gross"]').fill('121.00');
     await page.locator('#vue-submit-intake').click();
     await expect(page).toHaveURL(new RegExp(`/review/[0-9a-f-]{36}\\?period=${previous}$`));
+    // A fresh start: the quarter with a row is the default, and the current one, still without a
+    // row, stays offered and takes records.
+    await page.goto('/');
+    await expect(page).toHaveURL(`/dashboard?period=${previous}`);
+    const options = select.locator('option');
+    expect(
+      await options.evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value)),
+    ).toEqual([quarter, previous]);
+    for (const label of await options.allTextContents())
+      expect(label.trim()).toMatch(/^[IV]+ квартал \d{4}$/);
+    await select.selectOption(quarter);
+    await expect(page).toHaveURL(`/dashboard?period=${quarter}`);
+    await page.locator('#new-entry-button').click();
+    await expect(form.locator('[name="period"]')).toHaveValue(quarter);
+    const now = [today.getFullYear(), today.getMonth() + 1, today.getDate()]
+      .map((part) => String(part).padStart(2, '0'))
+      .join('-');
+    await page.locator('#vue-intake-file').setInputFiles({
+      name: 'synthetic-current-invoice.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(`Synthetic invoice SYN-CURR-1 dated ${now}. Total EUR 60.50.`),
+    });
+    await form.locator('[name="issued_on"]').fill(now);
+    await form.locator('[name="document_number"]').fill('SYN-CURR-1');
+    await form.locator('[name="counterparty_name"]').fill('Synthetic Supplier');
+    await form.locator('[name="gross"]').fill('60.50');
+    await page.locator('#vue-submit-intake').click();
+    await expect(page).toHaveURL(new RegExp(`/review/[0-9a-f-]{36}\\?period=${quarter}$`));
     expect(errors).toEqual([]);
   },
 );

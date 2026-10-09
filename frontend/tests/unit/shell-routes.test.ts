@@ -46,6 +46,13 @@ test('copy target chooses an open current quarter before the existing fallback',
   ];
   expect(knownPeriod('?period=2026-q3', fresh)).toBe('2026-Q3');
   expect(copyTarget(fresh, true, new Date(2026, 9, 10))).toBe('2026-Q4');
+  // Beside quarters with rows, a current quarter without one is offered too, and selectable.
+  const started = [
+    { period_key: '2026-Q4', status: 'missing' },
+    { period_key: '2026-Q3', status: 'open' },
+  ];
+  expect(knownPeriod('?period=2026-Q4', started)).toBe('2026-Q4');
+  expect(copyTarget(started, true, new Date(2026, 9, 10))).toBe('2026-Q4');
 });
 
 test('AEAT document registry is global and never carries a quarter', () => {

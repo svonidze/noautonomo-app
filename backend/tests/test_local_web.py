@@ -291,6 +291,30 @@ def test_bootstrap_offers_the_current_and_previous_quarters_of_a_ledger_without_
         assert db.connection.execute("SELECT COUNT(*) FROM periods").fetchone()[0] == 0
 
 
+def test_bootstrap_always_offers_the_current_quarter_beside_the_quarters_with_rows(
+    tmp_path: Path,
+) -> None:
+    app = _fresh_app(tmp_path)
+    current = local_web._quarter_key(date.today())
+    [_, previous] = [row["period_key"] for row in app.bootstrap()["periods"]]
+    with LedgerDB.open(app.config.database) as db:
+        db.ensure_period(previous)
+
+    bootstrap = app.bootstrap()
+
+    # Offered, not created: the quarter with a row stays the default.
+    assert [(row["period_key"], row["status"]) for row in bootstrap["periods"]] == [
+        (current, "missing"), (previous, "open")]
+    assert bootstrap["default_period"] == previous
+    with LedgerDB.open(app.config.database, read_only=True) as db:
+        assert db.connection.execute("SELECT COUNT(*) FROM periods").fetchone()[0] == 1
+    with LedgerDB.open(app.config.database) as db:
+        db.ensure_period(current)
+    bootstrap = app.bootstrap()
+    assert [row["status"] for row in bootstrap["periods"]] == ["open", "open"]
+    assert bootstrap["default_period"] == current
+
+
 def test_intake_names_both_quarters_when_the_document_date_is_in_another(tmp_path: Path) -> None:
     app = _fresh_app(tmp_path)
     fields = {"period": "2026-Q4", "kind": "expense_invoice", "issued_on": "2026-09-30"}
