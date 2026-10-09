@@ -1,5 +1,5 @@
 import { message, type Locale, type UiMessage } from '../../core/i18n.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { eur, formatDateText, isFuturePeriod } from '../../core/format.ts';
 import type { DashboardData } from './model.ts';
 
 export interface DashboardTask {
@@ -10,17 +10,6 @@ export interface DashboardTask {
   tag: UiMessage;
   href?: string;
   action?: 'calculate';
-}
-
-/** A quarter after today's: it has no calculation by design (DESIGN.md, Taxes-page headline). */
-export function isFuturePeriod(period: string, today = new Date()): boolean {
-  const match = /^(\d{4})-Q([1-4])$/.exec(period);
-  const quarter = (year: number, number: number) => year * 4 + number;
-  return (
-    !!match &&
-    quarter(Number(match[1]), Number(match[2])) >
-      quarter(today.getFullYear(), Math.floor(today.getMonth() / 3) + 1)
-  );
 }
 
 const positive = (value: unknown) => (typeof value === 'number' && value > 0 ? value : 0);

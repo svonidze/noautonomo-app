@@ -62,6 +62,16 @@ export function formatPeriod(
       )
     : key;
 }
+/** A quarter after today's: it has no calculation by design (DESIGN.md, Taxes-page headline). */
+export function isFuturePeriod(periodKey: string, today = new Date()): boolean {
+  const match = /^(\d{4})-Q([1-4])$/.exec(periodKey);
+  const quarter = (year: number, number: number) => year * 4 + number;
+  return (
+    !!match &&
+    quarter(Number(match[1]), Number(match[2])) >
+      quarter(today.getFullYear(), Math.floor(today.getMonth() / 3) + 1)
+  );
+}
 /** Catalog label for a server code under `prefix`; the code itself when the catalog has none. */
 export function codeLabel(prefix: string, code: unknown, locale: unknown): string {
   const value = String(code ?? '');

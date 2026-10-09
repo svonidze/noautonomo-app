@@ -1841,6 +1841,13 @@ class LocalAccountingApp:
                         ELSE 0
                     END
                 ), 0) AS gross_minor,
+                COALESCE(SUM(
+                    CASE
+                        WHEN t.amount_eur_minor IS NULL AND COALESCE(t.currency, '') <> 'EUR'
+                            THEN 1
+                        ELSE 0
+                    END
+                ), 0) AS missing_amount_count,
                 COALESCE(SUM(tt.deductible_irpf_minor), 0) AS deductible_irpf_minor,
                 COALESCE(SUM(tt.deductible_vat_minor), 0) AS deductible_vat_minor
             FROM transactions t
@@ -1862,6 +1869,9 @@ class LocalAccountingApp:
             if row["entry_type"] == "income":
                 scope["income_transaction_count"] += int(row["transaction_count"])
                 scope["income_eur"] = _minor_to_text(row["gross_minor"])
+                # Display aggregates: `income_eur` counts rows without a EUR amount as zero.
+                scope["income_known_amount_minor"] = int(row["gross_minor"])
+                scope["income_missing_amount_count"] = int(row["missing_amount_count"])
             elif row["entry_type"] == "expense":
                 scope["expense_transaction_count"] += int(row["transaction_count"])
                 scope["expense_gross_eur"] = _minor_to_text(row["gross_minor"])
@@ -3153,6 +3163,8 @@ def _empty_scope() -> dict[str, Any]:
         "income_transaction_count": 0,
         "expense_transaction_count": 0,
         "income_eur": "0.00",
+        "income_known_amount_minor": 0,
+        "income_missing_amount_count": 0,
         "expense_gross_eur": "0.00",
         "deductible_irpf_eur": "0.00",
         "deductible_vat_eur": "0.00",

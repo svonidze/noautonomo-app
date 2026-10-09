@@ -38,7 +38,9 @@ const navigate = (url: string) => emit('navigate', url);
           <span
             ><strong>{{ text(task.title) }}</strong
             ><small>{{ text(task.hint) }}</small></span
-          ><span class="badge" :class="`status-${task.tone}`">{{ text(task.tag) }}</span>
+          ><span class="badge" :class="`status-${task.tone}`">{{
+            busy ? t('common.calculating') : text(task.tag)
+          }}</span>
         </button>
       </li>
     </ul>

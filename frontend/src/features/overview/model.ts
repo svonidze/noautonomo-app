@@ -92,8 +92,13 @@ export interface ExpenseScope {
 export interface DashboardData {
   totals: {
     actual: { income_eur: Amount; income_transaction_count: number };
-    /** Approved, not yet posted. */
-    forecast: { transaction_count?: number; income_transaction_count?: number };
+    /** Approved, not yet posted; the known amount leaves out rows without a EUR amount. */
+    forecast: {
+      transaction_count?: number;
+      income_transaction_count?: number;
+      income_known_amount_minor?: number;
+      income_missing_amount_count?: number;
+    };
   };
   expense_summary: Record<
     'purchase' | 'amortization',

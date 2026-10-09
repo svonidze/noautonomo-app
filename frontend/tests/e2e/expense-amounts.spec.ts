@@ -55,7 +55,7 @@ test('original amounts and manual review stay readable in both locales and at mo
       const zero = page.locator('[data-transaction-id="synthetic-zero"]');
       await expect(foreign).toContainText(locale === 'ru' ? '43,25 USD' : '43.25 USD');
       await expect(foreign).toContainText(
-        locale === 'ru' ? 'Курс в EUR не подтвержден' : 'EUR exchange rate is not confirmed',
+        locale === 'ru' ? 'Курс в EUR не подтверждён' : 'EUR exchange rate is not confirmed',
       );
       await expect(foreign).toContainText(
         locale === 'ru' ? 'Нужна ручная проверка документа' : 'Document needs manual review',

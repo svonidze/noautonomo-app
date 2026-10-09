@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod, isFuturePeriod } from '../../core/format.ts';
 import { errorDescriptor, errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import { message } from '../../core/i18n.ts';
@@ -11,7 +11,7 @@ import type { ChartKind } from '../../charts/builders.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import RecentTransactions from './RecentTransactions.vue';
 import TaskList from './TaskList.vue';
-import { buildTasks, isFuturePeriod } from './tasks.ts';
+import { buildTasks } from './tasks.ts';
 import { createFinancePresentation } from './presentation.ts';
 import type { OverviewContext, DashboardData, ExpenseScope } from './model.ts';
 const props = defineProps<{ context: OverviewContext }>();
@@ -108,6 +108,20 @@ const amount = (scope?: ExpenseScope) =>
         count: scope.missing_amount_count,
       })
     : eur(scope?.amount_eur, locale.value);
+/** Reviewed, unposted income: its amount, or the count alone when no amount is known. */
+const reviewedIncome = computed(() => {
+  const forecast = data.value?.totals.forecast,
+    count = forecast?.income_transaction_count ?? 0,
+    known = forecast?.income_known_amount_minor,
+    missing = forecast?.income_missing_amount_count ?? 0;
+  if (!count) return '';
+  if (known == null || missing >= count) return t('common.counts.operations', { count });
+  return amount({
+    amount_eur: known / 100,
+    known_amount_minor: known,
+    missing_amount_count: missing,
+  });
+});
 const taxLines = computed(() =>
   (['130', '303'] as const).map((code) => {
     const obligation = data.value?.obligations.find((row) => String(row.obligation_code) === code);
@@ -225,14 +239,8 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
           ><small>{{
             t('common.counts.operations', { count: data.totals.actual.income_transaction_count })
           }}</small>
-          <!-- ponytail: a count only, because totals.forecast.income_eur counts rows without a EUR
-          amount as zero; name the amount once the server reports its missing rows. -->
-          <small v-if="data.totals.forecast.income_transaction_count">{{
-            t('dashboard.reviewedNotPosted', {
-              value: t('common.counts.operations', {
-                count: data.totals.forecast.income_transaction_count,
-              }),
-            })
+          <small v-if="reviewedIncome">{{
+            t('dashboard.reviewedNotPosted', { value: reviewedIncome })
           }}</small>
         </div>
         <div class="metric">

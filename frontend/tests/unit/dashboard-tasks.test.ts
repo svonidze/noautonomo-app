@@ -1,13 +1,9 @@
 import { nextTick } from 'vue';
 import { afterEach, expect, test, vi } from 'vitest';
-import {
-  buildTasks,
-  isFuturePeriod,
-  type DashboardTask,
-} from '../../src/features/overview/tasks.ts';
+import { buildTasks, type DashboardTask } from '../../src/features/overview/tasks.ts';
 import DashboardView from '../../src/features/overview/DashboardView.vue';
 import { messageText, type Locale } from '../../src/core/i18n.ts';
-import { eur, formatDateText } from '../../src/core/format.ts';
+import { eur, formatDateText, isFuturePeriod } from '../../src/core/format.ts';
 import { mountOverview } from '../support/mount.ts';
 import type { DashboardData, FormView } from '../../src/features/overview/model.ts';
 import ru from '../../src/locales/ru/dashboard.json' with { type: 'json' };
@@ -264,8 +260,15 @@ test('the overview opens with the task list, then three figure cards, without ba
   expect(post.querySelector('.badge')!.className).toBe('badge status-positive');
   post.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
   expect(context.services.navigate).toHaveBeenCalledWith('/review?period=2026-Q3&tab=posting');
-  root.querySelector<HTMLButtonElement>('button.task-row')!.click();
+  const calculate = root.querySelector<HTMLButtonElement>('button.task-row')!;
+  calculate.click();
+  await nextTick();
   expect(context.refreshCalculation).toHaveBeenCalledTimes(1);
+  // While it runs, the disabled row says why.
+  expect([calculate.disabled, calculate.querySelector('.badge')!.textContent]).toEqual([
+    true,
+    'Считаем…',
+  ]);
   expect(
     root.querySelectorAll('.posting-banner, #dashboard-ready-banner, .deadline-strip'),
   ).toHaveLength(0);

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod, isFuturePeriod } from '../../core/format.ts';
 import { errorDescriptor, errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import { formatMessage, message, messageIds } from '../../core/i18n.ts';
@@ -9,7 +9,6 @@ import ChartHost from '../../charts/ChartHost.vue';
 import TaxFormCard from './TaxFormCard.vue';
 import RetaCheckCard from './RetaCheckCard.vue';
 import { createFinancePresentation } from './presentation.ts';
-import { isFuturePeriod } from './tasks.ts';
 import type { OverviewContext, TaxesData } from './model.ts';
 const props = defineProps<{ context: OverviewContext }>();
 const { locale, t } = useLocale();

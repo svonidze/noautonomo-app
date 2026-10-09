@@ -176,22 +176,36 @@ def test_dashboard_counts_every_open_question_and_this_quarters_queue_rows_witho
                                     severity="warning", message="Synthetic open question", blocking=False)
         db.add_validation_issue(period_key="2026-Q3", issue_code="synthetic_answered", severity="warning",
                                 message="Synthetic answered question", blocking=False, issue_status="resolved")
-        for key, period, day, status in (
-            ("usd-approved", "2026-Q3", "2026-08-10", "approved"),
-            ("usd-review", "2026-Q3", "2026-08-11", "needs_review"),
-            ("usd-posted", "2026-Q3", "2026-08-12", "posted"),
-            ("usd-next-quarter", "2026-Q4", "2026-10-05", "approved"),
+        for key, period, day, entry, currency, status in (
+            ("usd-approved", "2026-Q3", "2026-08-10", "expense", "USD", "approved"),
+            ("usd-review", "2026-Q3", "2026-08-11", "expense", "USD", "needs_review"),
+            ("usd-received", "2026-Q3", "2026-08-12", "expense", "USD", "received"),
+            ("usd-posted", "2026-Q3", "2026-08-13", "expense", "USD", "posted"),
+            ("usd-next-quarter", "2026-Q4", "2026-10-05", "expense", "USD", "approved"),
+            # A EUR row needs no rate: its own amount is the EUR amount.
+            ("eur-without-copy", "2026-Q3", "2026-08-14", "expense", "EUR", "approved"),
+            ("usd-income", "2026-Q3", "2026-08-15", "income", "USD", "approved"),
         ):
             db.add_transaction(external_key=key, period_key=period, transaction_date=day, booking_date=day,
-                               entry_type="expense", description="Synthetic foreign expense", amount_minor=9900,
-                               currency="USD", amount_eur_minor=None, direction="debit", lifecycle_status=status)
+                               entry_type=entry, description="Synthetic row without a EUR copy", amount_minor=9900,
+                               currency=currency, amount_eur_minor=None,
+                               direction="credit" if entry == "income" else "debit", lifecycle_status=status)
+        db.add_transaction(external_key="eur-income", period_key="2026-Q3", transaction_date="2026-08-16",
+                           booking_date="2026-08-16", entry_type="income", description="Synthetic approved income",
+                           amount_minor=50000, amount_eur_minor=50000, direction="credit", lifecycle_status="approved")
 
     dashboard = LocalAccountingApp(config, session_token="test-token").dashboard("2026-Q3")
 
     assert len(dashboard["open_issues"]) == 6
     assert dashboard["open_issue_count"] == 7
-    # Only this quarter's queue: the posted row and the next quarter's row are not tasks here.
-    assert dashboard["missing_fx_count"] == 2
+    # This quarter's queue only, received rows included: not posted rows, other quarters or EUR rows.
+    assert dashboard["missing_fx_count"] == 4
+    # Reviewed, unposted income: the known part beside the rows without a EUR amount.
+    forecast = dashboard["totals"]["forecast"]
+    assert forecast["income_transaction_count"] == 2
+    assert forecast["income_known_amount_minor"] == 50000
+    assert forecast["income_missing_amount_count"] == 1
+    assert dashboard["totals"]["actual"]["income_missing_amount_count"] == 0
 
 
 @pytest.mark.parametrize(
