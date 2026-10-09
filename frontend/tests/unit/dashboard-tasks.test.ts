@@ -177,7 +177,7 @@ test('a blocked row without a rate is counted once: in the blocked row, not agai
     'Операции проверены, но провести их пока нельзя: причина указана в очереди. Из них без курса: 1.',
   );
   expect(text(blocked, 'en')[1]).toBe(
-    'These transactions are reviewed but cannot be posted yet; the queue names the reason. Without an exchange rate: 1.',
+    'These transactions are reviewed but cannot be posted yet; the queue names the reason. Of these, without an exchange rate: 1.',
   );
   // Rows still in review keep their own rate row, counted without the blocked ones.
   const tasks = build(

@@ -156,6 +156,7 @@
   "help.words.original": "Original message",
   "help.words.reasons": "What needs attention",
   "help.words.refreshHint": "Recalculate using current data. No return is submitted.",
+  "help.words.related": "Related actions",
   "help.words.review": "Open review",
   "help.words.safe": "Viewing explanations does not post transactions or change tax decisions.",
   "help.words.scope": "Amortization for",

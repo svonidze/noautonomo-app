@@ -472,13 +472,15 @@ class LocalAccountingApp:
             ).fetchone()[0]
             # Review-queue rows of this quarter without a EUR amount (the analytics quality count
             # covers two years and every status, so it cannot drive a task for this quarter), and
-            # the approved ones among them, whose posting the missing rate blocks.
+            # the approved ones among them, whose posting the missing rate blocks. Foreign means
+            # what posting.py checks: the original currency first, then the booked one.
             missing_fx_count, missing_fx_blocked_count = connection.execute(
                 """
                 SELECT COUNT(*), COALESCE(SUM(lifecycle_status = 'approved'), 0) FROM transactions
                 WHERE period_id = ?
                   AND lifecycle_status IN ('received', 'extracted', 'needs_review', 'approved')
-                  AND amount_eur_minor IS NULL AND UPPER(COALESCE(currency, '')) <> 'EUR'
+                  AND amount_eur_minor IS NULL
+                  AND UPPER(COALESCE(NULLIF(original_currency, ''), currency, '')) <> 'EUR'
                 """,
                 (period_row["period_id"],),
             ).fetchone()

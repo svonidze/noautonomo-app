@@ -148,7 +148,10 @@ test('help Back/Forward retains search and Router history; reload discards trans
   await page.goto('/expenses?period=2026-Q3');
   await page.locator('#expense-search').fill('Example');
   await expect(page).toHaveURL(/q=Example/);
-  const help = page.locator('#app [data-status-help]').first();
+  const help = page
+    .locator('#app tr')
+    .filter({ hasText: 'Example USD expense' })
+    .locator('[data-status-help]');
   await help.click();
   await expect.poll(() => page.evaluate(() => history.state.accountingHelp)).toBeTruthy();
   await page.goBack();

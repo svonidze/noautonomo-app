@@ -210,7 +210,9 @@ export const postItems = (rows: PostingItem[]) =>
     transaction_id: row.transactionId || transactionId(row.reviewId),
     expected_row_version: row.expectedRowVersion,
   }));
-export const helpContext = (row: PostingItem) => ({
+/** The status context of a posting row. `actions` are the server's own actions for that transaction
+ * (its queue row's); the client never makes up a review link. */
+export const helpContext = (row: PostingItem, actions: unknown = []) => ({
   domain: 'transaction',
   title: row.description,
   state: row.previewBucket || row.rowStatus || 'unknown',
@@ -220,10 +222,6 @@ export const helpContext = (row: PostingItem) => ({
     blockers: row.structuredReasons || [],
   },
   reasons: [],
-  // A row that can be posted as it is has nothing to review: only a row with blockers links there.
-  actions:
-    row.transactionId && row.structuredReasons.length
-      ? [{ kind: 'review', transaction_id: row.transactionId }]
-      : [],
+  actions: Array.isArray(actions) ? actions : [],
   facts: { transaction_date: row.transactionDate },
 });

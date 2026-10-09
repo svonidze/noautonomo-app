@@ -215,6 +215,8 @@ test('the queue opens posting at its ready row; ready rows come first and a miss
   ]);
   const usd = page.locator('#review-tabpanel tbody tr').filter({ hasText: 'Example USD expense' });
   await expect(usd.locator('td.amount')).toHaveText('—нет суммы в EUR');
+  // The server offers no review of it, so its status explains why instead of inventing one.
+  await expect(usd.locator('[data-status-help]')).toHaveText('Почему');
   await expect(page.locator('details.posting-technical > summary')).toHaveText(
     'Технические детали',
   );

@@ -133,45 +133,69 @@ test('the posting tab lists ready rows first, marks the row the queue opened and
     value: scrolled,
   });
   const DEFERRED = '22222222-2222-4222-8222-222222222222',
-    BLOCKED = '33333333-3333-4333-8333-333333333333';
-  history.replaceState(null, '', `/review?period=2026-Q3&tab=posting#posting-row-${ID}`);
+    BLOCKED = '33333333-3333-4333-8333-333333333333',
+    UNREVIEWABLE = '44444444-4444-4444-8444-444444444444';
+  // The fragment arrives percent-encoded when the address was typed or shared.
+  history.replaceState(
+    null,
+    '',
+    `/review?period=2026-Q3&tab=posting#posting-row-${ID.replace('-', '%2D')}`,
+  );
+  // The queue rows carry the server's review actions; the posting rows offer only those.
+  const queued = (id: string, state: string) => ({
+    transaction_id: id,
+    ui_context: {
+      domain: 'transaction',
+      state,
+      actions: [{ kind: 'review', transaction_id: id, period: '2026-Q3' }],
+    },
+  });
   const request = async (url: string) =>
-    url.includes('posting-preview')
-      ? {
-          period: '2026-Q3',
-          period_status: 'open',
-          ready: [ready],
-          deferred: [
-            {
-              transaction_id: DEFERRED,
-              description: 'Synthetic later row',
-              preview_bucket: 'deferred',
-              posting_deferred_until: '2026-11-02',
-              amount_eur: '5.00',
-              blockers: [{ code: 'future_dated' }],
+    url.startsWith('/api/transactions?')
+      ? [queued(ID, 'ready'), queued(DEFERRED, 'deferred'), queued(BLOCKED, 'blocked')]
+      : url.includes('posting-preview')
+        ? {
+            period: '2026-Q3',
+            period_status: 'open',
+            ready: [ready],
+            deferred: [
+              {
+                transaction_id: DEFERRED,
+                description: 'Synthetic later row',
+                preview_bucket: 'deferred',
+                posting_deferred_until: '2026-11-02',
+                amount_eur: '5.00',
+                blockers: [{ code: 'future_dated' }],
+              },
+            ],
+            blocked: [
+              {
+                transaction_id: BLOCKED,
+                description: 'Synthetic USD row',
+                preview_bucket: 'blocked',
+                amount_eur: null,
+                effective_amount_eur_minor: null,
+                blockers: [{ code: 'fx_missing' }],
+              },
+              {
+                transaction_id: UNREVIEWABLE,
+                description: 'Synthetic row without a review',
+                preview_bucket: 'blocked',
+                amount_eur: '7.00',
+                blockers: [{ code: 'fx_unsourced' }],
+              },
+            ],
+            summary: {
+              approved_count: 3,
+              ready_count: 1,
+              deferred_count: 1,
+              blocked_count: 1,
+              ready_total_eur: '12.00',
+              cleanup_count: 2,
+              cleanup_blocked_count: 1,
             },
-          ],
-          blocked: [
-            {
-              transaction_id: BLOCKED,
-              description: 'Synthetic USD row',
-              preview_bucket: 'blocked',
-              amount_eur: null,
-              effective_amount_eur_minor: null,
-              blockers: [{ code: 'fx_missing' }],
-            },
-          ],
-          summary: {
-            approved_count: 3,
-            ready_count: 1,
-            deferred_count: 1,
-            blocked_count: 1,
-            ready_total_eur: '12.00',
-            cleanup_count: 2,
-            cleanup_blocked_count: 1,
-          },
-        }
-      : [];
+          }
+        : [];
   const root = document.createElement('div');
   document.body.append(root);
   const host = mountView(root, ReviewOverviewView, context('2026-Q3', request));
@@ -188,12 +212,21 @@ test('the posting tab lists ready rows first, marks the row the queue opened and
   expect(root.querySelectorAll('.posting-row-target')).toHaveLength(1);
   expect(scrolled).toHaveBeenCalledTimes(1);
   expect(scrolled.mock.contexts[0]).toBe(target);
-  // A ready row has nothing to explain; it is not «manual review required».
+  // Keyboard and screen-reader users land on the row too.
+  expect(target.getAttribute('tabindex')).toBe('-1');
+  expect(document.activeElement).toBe(target);
+  // A ready row has nothing to explain; it is not «manual review required». Its review, which the
+  // server offers, is navigation, not a task: no link.
   expect(text(target.querySelector('.posting-result-message'))).toBe('');
   expect(target.querySelector('[data-status-help]')).toBeNull();
-  expect(text(root.querySelector(`#posting-row-${BLOCKED} [data-status-help]`))).toBe(
-    help['help.words.whatToDo'],
-  );
+  const link = (id: string) => text(root.querySelector(`#posting-row-${id} [data-status-help]`));
+  // Blocked with the server's review: the review is what to do.
+  expect(link(BLOCKED)).toBe(help['help.words.whatToDo']);
+  // Deferred: only the reason, and no review link in the row.
+  expect(link(DEFERRED)).toBe(help['help.words.why']);
+  expect(root.querySelector(`#posting-row-${DEFERRED} a[href^="/review/"]`)).toBeNull();
+  // Blocked without a review from the server: the client does not make one up.
+  expect(link(UNREVIEWABLE)).toBe(help['help.words.why']);
   // Unknown is not zero: no amount and the reason, while a known amount stays an amount.
   const unknown = root.querySelector(`#posting-row-${BLOCKED} td.amount`)!;
   expect(text(unknown)).toBe(`—${ru['review.noEurAmount']}`);

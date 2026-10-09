@@ -15,7 +15,7 @@
   "dashboard.reviewedNotPosted": "Reviewed, not posted yet: {value}",
   "dashboard.snapshotAvailable": "saved copy of the filed return available",
   "dashboard.task.blocked.hint": "These transactions are reviewed but cannot be posted yet; the queue names the reason.",
-  "dashboard.task.blocked.hintFx": "These transactions are reviewed but cannot be posted yet; the queue names the reason. Without an exchange rate: {count}.",
+  "dashboard.task.blocked.hintFx": "These transactions are reviewed but cannot be posted yet; the queue names the reason. Of these, without an exchange rate: {count}.",
   "dashboard.task.blocked.title": "See what blocks posting ({count})",
   "dashboard.task.calculate.hint": "Uses the current data; nothing is filed.",
   "dashboard.task.calculate.title": "Calculate the quarter's taxes",

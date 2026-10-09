@@ -193,9 +193,16 @@ def test_dashboard_counts_every_open_question_and_this_quarters_queue_rows_witho
         db.add_transaction(external_key="eur-income", period_key="2026-Q3", transaction_date="2026-08-16",
                            booking_date="2026-08-16", entry_type="income", description="Synthetic approved income",
                            amount_minor=50000, amount_eur_minor=50000, direction="credit", lifecycle_status="approved")
+        # Booked in EUR but originally in USD, without a converted amount: posting treats it as foreign
+        # (original_currency first), so it needs a rate like the USD rows.
+        db.add_transaction(external_key="usd-original", period_key="2026-Q3", transaction_date="2026-08-17",
+                           booking_date="2026-08-17", entry_type="expense", description="Synthetic USD original",
+                           amount_minor=9900, currency="EUR", original_currency="USD", amount_original_minor=9900,
+                           direction="debit", lifecycle_status="approved")
         # The ledger copies a EUR amount into amount_eur_minor; legacy rows may lack that copy.
         db.connection.execute(
-            "UPDATE transactions SET amount_eur_minor = NULL WHERE external_key IN ('eur-without-copy', 'eur-income')"
+            "UPDATE transactions SET amount_eur_minor = NULL"
+            " WHERE external_key IN ('eur-without-copy', 'eur-income', 'usd-original')"
         )
         db.connection.commit()
 
@@ -203,10 +210,11 @@ def test_dashboard_counts_every_open_question_and_this_quarters_queue_rows_witho
 
     assert len(dashboard["open_issues"]) == 6
     assert dashboard["open_issue_count"] == 7
-    # This quarter's queue only, received rows included: not posted rows, other quarters or EUR rows.
-    assert dashboard["missing_fx_count"] == 4
-    # Of those, the approved expense and income: a missing rate blocks their posting.
-    assert dashboard["missing_fx_blocked_count"] == 2
+    # This quarter's queue only, received rows included: not posted rows, other quarters or EUR rows;
+    # a row booked in EUR from a USD original counts, as posting.py treats it as foreign.
+    assert dashboard["missing_fx_count"] == 5
+    # Of those, the approved rows: a missing rate blocks their posting.
+    assert dashboard["missing_fx_blocked_count"] == 3
     # Reviewed, unposted income: the known part beside the rows without a EUR amount.
     forecast = dashboard["totals"]["forecast"]
     assert forecast["income_transaction_count"] == 2

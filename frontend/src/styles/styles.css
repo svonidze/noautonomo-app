@@ -962,6 +962,12 @@ tbody tr:hover td {
   box-shadow: inset 3px 0 0 var(--accent-dark);
 }
 
+/* The row takes focus when the tab opens at it. */
+.table-wrap tbody tr.posting-row-target:focus {
+  outline: 2px solid var(--accent-dark);
+  outline-offset: -2px;
+}
+
 .posting-technical summary {
   width: fit-content;
   color: var(--muted);

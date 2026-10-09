@@ -238,6 +238,7 @@ export function createAccountingHelp(doc = document, win = window) {
     summary: (value: HelpContext) => presentation.summary(value as AccountingContext),
     tone: (value: HelpContext) => presentation.tone(value as AccountingContext),
     link: (value: HelpContext) => presentation.link(value as AccountingContext),
+    reviewAction: (value: HelpContext) => presentation.reviewAction(value as AccountingContext),
     word: (key: string) => presentation.word(key),
     reasonInfo: (reason: Record<string, unknown>) => presentation.reasonInfo(reason as Reason),
     text: (key: string) => presentation.text(key),

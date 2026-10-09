@@ -211,7 +211,11 @@ test('the native expense workflow translates without reloading or losing its uns
 
 test('an open help dialog changes language without consuming its Back entry', async ({ page }) => {
   await page.goto('/expenses?period=2026-Q3');
-  await page.locator('#app [data-status-help]').first().click();
+  await page
+    .locator('#app tr')
+    .filter({ hasText: 'Example USD expense' })
+    .locator('[data-status-help]')
+    .click();
   const before = await page.evaluate(() => history.state.accountingHelp);
   await language(page, 'en');
   await expect(page.locator('#status-help-dialog')).toBeVisible();

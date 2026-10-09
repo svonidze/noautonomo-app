@@ -5,6 +5,7 @@ import type { ReviewOverviewContext, ReviewRow } from '../../src/features/postin
 import ru from '../../src/locales/ru/review.json' with { type: 'json' };
 import statuses from '../../src/locales/ru/statuses.json' with { type: 'json' };
 import help from '../../src/locales/ru/help.json' with { type: 'json' };
+import common from '../../src/locales/ru/common.json' with { type: 'json' };
 
 // Synthetic queue rows only; 9 October 2026 is "today".
 const id = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
@@ -21,13 +22,24 @@ function row(index: number, state: string | undefined, extra: Partial<ReviewRow>
     ...extra,
   };
 }
-const review = (index: number) => [
-  { kind: 'review', transaction_id: id(index), period: '2026-Q3' },
+// The review the server offers for a row (status_context.review_actions).
+const review = (index: number, period = '2026-Q3') => [
+  { kind: 'review', transaction_id: id(index), period },
 ];
 const rows = [
-  row(1, 'needs_review'),
+  // The link is built from the action's own ids, here a period other than the screen's.
+  row(1, 'needs_review', {
+    ui_context: {
+      domain: 'transaction',
+      state: 'needs_review',
+      actions: review(1, '2026-Q2'),
+    } as never,
+  }),
+  // In review, but the server offers no review of it (e.g. not exactly one invoice review).
   row(2, 'needs_review'),
-  row(3, 'ready'),
+  row(3, 'ready', {
+    ui_context: { domain: 'transaction', state: 'ready', actions: review(3) } as never,
+  }),
   row(4, 'deferred', {
     ui_context: {
       domain: 'transaction',
@@ -37,6 +49,7 @@ const rows = [
         posting_deferred_until: '2026-11-02',
         blockers: [{ code: 'future_dated' }],
       },
+      actions: review(4),
     } as never,
   }),
   row(5, 'blocked', {
@@ -167,7 +180,7 @@ test('a state without rows cannot be chosen and the unknown card appears only wh
   ]);
 });
 
-test('every queued row offers exactly one next action chosen by its state', () => {
+test('every queued row offers exactly one next action: a review only where the server offers it and work is due', () => {
   const { root } = show(rows);
   const actions = [...root.querySelectorAll('tbody tr')].map((tr) => {
     const controls = [...tr.querySelectorAll('td.table-actions > *')];
@@ -180,22 +193,27 @@ test('every queued row offers exactly one next action chosen by its state', () =
       control.getAttribute('href'),
     ];
   });
-  const open = (index: number) => `/review/${id(index)}?period=2026-Q3`;
+  const open = (index: number, period = '2026-Q3') => `/review/${id(index)}?period=${period}`;
+  const explain = (label: string) => ['BUTTON', 'text-button status-details-button', label, null];
   expect(actions).toEqual([
-    ['A', 'secondary-button compact-button', ru['review.openWorkspace'], open(1)],
-    ['A', 'secondary-button compact-button', ru['review.openWorkspace'], open(2)],
+    ['A', 'secondary-button compact-button', ru['review.openWorkspace'], open(1, '2026-Q2')],
+    explain(ru['review.whatBlocks']),
+    // A ready row is posted, even where the server would also open its review.
     [
       'A',
       'secondary-button compact-button',
       ru['review.postRow'],
       `/review?period=2026-Q3&tab=posting#posting-row-${id(3)}`,
     ],
-    ['BUTTON', 'text-button status-details-button', help['help.words.why'], null],
-    ['BUTTON', 'text-button status-details-button', ru['review.whatBlocks'], null],
+    explain(help['help.words.why']),
+    explain(ru['review.whatBlocks']),
     // The server offers a review for this blocked row, so the row opens it directly.
     ['A', 'secondary-button compact-button', ru['review.openWorkspace'], open(6)],
-    ['BUTTON', 'text-button status-details-button', help['help.words.why'], null],
+    explain(help['help.words.why']),
   ]);
+  expect(root.querySelector('[data-open-review-id]')!.getAttribute('data-open-review-id')).toBe(
+    `transaction:${id(1)}`,
+  );
   for (const button of root.querySelectorAll<HTMLElement>('td.table-actions button'))
     expect(button.dataset.statusHelp).toBeTruthy();
   // Where the row's action opens the explanation, the status cell does not repeat that link.
@@ -203,8 +221,9 @@ test('every queued row offers exactly one next action chosen by its state', () =
     [...tr.querySelectorAll('[data-status-help]')].map((link) => link.textContent!.trim()),
   );
   expect(links).toEqual([
-    [],
-    [],
+    [help['help.words.whatToDo']],
+    [ru['review.whatBlocks']],
+    // Ready and nothing to explain: the server's review is navigation, not a task.
     [],
     [help['help.words.why']],
     [ru['review.whatBlocks']],
@@ -218,6 +237,15 @@ test('every queued row offers exactly one next action chosen by its state', () =
   // The unknown row's result reads as unknown, not as blocked.
   expect(root.querySelectorAll('tbody tr')[6].textContent).toContain(
     statuses['statuses.labels.unknown'],
+  );
+});
+
+test('the document link reads apart from the document number', () => {
+  const { root } = show([row(1, 'needs_review', { document_id: id(9), document_number: 'SYN-1' })]);
+  const line = root.querySelector('tbody td.cell-primary small')!;
+  expect(line.textContent).toBe(`SYN-1 ${common['common.openDocument']}`);
+  expect(line.querySelector('a.text-button')!.getAttribute('href')).toBe(
+    `/api/document/${id(9)}/content`,
   );
 });
 

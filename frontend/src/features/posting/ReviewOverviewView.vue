@@ -252,6 +252,19 @@ async function submit() {
     submitting.value = false;
   }
 }
+// The queue's «Провести» opens this tab at `#posting-row-<id>`; a malformed fragment names nothing.
+const target = (() => {
+  try {
+    return decodeURIComponent(window.location.hash.slice(1));
+  } catch {
+    return '';
+  }
+})();
+// The server's review actions per transaction (its queue row): posting rows offer only those.
+const actions = computed(
+  () =>
+    new Map((data.value?.rows || []).map((row) => [row.transaction_id, row.ui_context?.actions])),
+);
 const forbidden = () => error.value instanceof ApiError && error.value.code === 'session_forbidden';
 const reload = () => (forbidden() ? window.location.reload() : void load());
 </script>
@@ -371,14 +384,20 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
               :title="t('statuses.labels.ready')"
               :rows="data.preview.ready"
               anchored
+              :target="target"
+              :actions="actions"
             /><PostingRows
               :title="t('statuses.labels.deferred')"
               :rows="data.preview.deferred"
               anchored
+              :target="target"
+              :actions="actions"
             /><PostingRows
               :title="t('statuses.labels.blocked')"
               :rows="data.preview.blocked"
               anchored
+              :target="target"
+              :actions="actions"
             />
             <div v-if="last" class="posting-results">
               <div class="posting-results-header">

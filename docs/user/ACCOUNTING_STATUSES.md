@@ -1,11 +1,13 @@
 # Understanding accounting statuses
 
 A status shows a badge and, when there is one, its reason in one line. When a
-record has a next action, the line ends with **What to do / Что сделать**; when
-it has reasons but no action, with **Why / Почему**. Either opens the
-explanation with the record's facts, reasons, related documents and next
-actions. A record with neither, such as a posted transaction, shows only its
-badge. Read the explanation as well as the badge: the
+record still needs work and the server offers its review, the line ends with
+**What to do / Что сделать**; when it has reasons, with **Why / Почему**.
+Either opens the explanation with the record's facts, reasons, related
+documents and next actions. A record with neither, such as a posted
+transaction, shows only its badge. On a ready or deferred record an offered
+review is listed under **Related actions / Связанные действия**, not as a next
+action. Read the explanation as well as the badge: the
 same short status can have different causes. The **?** help buttons define
 terms; required actions do not depend on hovering over them.
 
@@ -31,14 +33,14 @@ lifecycle remains `approved`.
 | `blocked` | Reviewed, posting blocked / Проверено, проведение заблокировано | Read every blocking reason and address the stated evidence, review or period requirement. A future date does not hide other blockers; waiting alone may not resolve them. |
 | `posted` | Posted / Проведено | The transaction is recorded as posted. Inspect its result and use the supported correction process if needed. This is not an AEAT submission receipt. |
 
-In the review queue every row offers one next action: **Open review /
-Открыть проверку** for a review that is not finished (and for a blocked row
-when the server offers its review), **Post / Провести** for a ready row (it
-opens the posting tab at that row; posting itself stays a separate,
-confirmed action), and **Why / Почему** for a deferred row or **What blocks
-it / Что мешает** for another blocked row, which open the explanation. The
-summary cards above the queue filter it by state; **All / Все** shows every
-row again.
+In the review queue every row offers one next action: **Post / Провести** for
+a ready row (it opens the posting tab at that row; posting itself stays a
+separate, confirmed action) and **Why / Почему** for a deferred row. A row
+that still needs work (review required or blocked) offers **Open review /
+Открыть проверку** when the server offers its review, and otherwise **What
+blocks it / Что мешает**, which opens the explanation with the reasons and
+who takes the next step. The summary cards above the queue filter it by
+state; **All / Все** shows every row again.
 
 Receiving a document or extracting its data is not review approval. Excluded
 states such as `duplicate`, `rejected` and `void` require checking the recorded

@@ -8,18 +8,26 @@ import TermHelp from '../../components/TermHelp.vue';
 import { helpContext } from './normalize.ts';
 import type { PostingItem } from './model.ts';
 /** `anchored`: the posting tab's own lists give each row the id `posting-row-<transaction id>`; the
- * dialog and the results reuse rows of those lists, so they stay without ids. */
-const props = defineProps<{ title: string; rows: PostingItem[]; anchored?: boolean }>();
+ * dialog and the results reuse rows of those lists, so they stay without ids. `target` is the id
+ * the address names; `actions` are the server's actions per transaction id. */
+const props = defineProps<{
+  title: string;
+  rows: PostingItem[];
+  anchored?: boolean;
+  target?: string;
+  actions?: ReadonlyMap<string, unknown>;
+}>();
 const { locale, t } = useLocale();
 const help = helpAdapter();
 const anchor = (row: PostingItem) =>
   props.anchored && row.transactionId ? `posting-row-${row.transactionId}` : undefined;
-// The queue's «Провести» opens this tab at `#posting-row-<id>`. A router (pushState) navigation
-// does not update `:target`, so the row the fragment names is marked and scrolled to here.
-const target = props.anchored ? window.location.hash.slice(1) : '';
+const targeted = (row: PostingItem) => !!props.target && anchor(row) === props.target;
+// A router (pushState) navigation does not update `:target`, so the named row is marked, scrolled
+// into view and focused here.
 onMounted(() => {
-  if (target && props.rows.some((row) => anchor(row) === target))
-    document.getElementById(target)?.scrollIntoView({ block: 'center' });
+  const row = props.rows.some(targeted) ? document.getElementById(props.target!) : null;
+  row?.scrollIntoView({ block: 'center' });
+  row?.focus({ preventScroll: true });
 });
 const explanation = (row: PostingItem) => {
   void locale.value;
@@ -50,7 +58,8 @@ const explanation = (row: PostingItem) => {
             v-for="(row, index) in rows"
             :key="`${row.transactionId || row.reviewId}:${index}`"
             :id="anchor(row)"
-            :class="{ 'posting-row-target': !!target && anchor(row) === target }"
+            :class="{ 'posting-row-target': targeted(row) }"
+            :tabindex="targeted(row) ? -1 : undefined"
           >
             <td :data-label="t('transactions.date')">
               {{ formatDateText(row.transactionDate, locale) }}
@@ -62,7 +71,7 @@ const explanation = (row: PostingItem) => {
               ><small>{{ codeLabel('transactions.types', row.entryType, locale) || '—' }}</small>
             </td>
             <td :data-label="t('transactions.status')">
-              <StatusCell :context="helpContext(row)" />
+              <StatusCell :context="helpContext(row, actions?.get(row.transactionId))" />
             </td>
             <td class="amount" :data-label="t('transactions.amount')">
               <template v-if="row.amountEur">{{ eur(row.amountEur, locale) }}</template

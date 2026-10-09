@@ -187,19 +187,22 @@ navigation added by the clarity redesign.
   posting row links to the posting tab.
 - The queue's summary cards are filter toggles (`aria-pressed`; «Все»
   resets; component state, not the URL). Each queue row offers one next
-  action chosen by its server state: open the review (needs review, or
-  blocked when the server offers a review), «Провести» to the posting tab at
-  `#posting-row-<id>` (ready), or the status explanation (deferred, other
-  blocked rows), in which case the row's status cell drops its own link to
-  that explanation. An unknown state counts as unknown, never as blocked. The
-  aging chart draws from ten queued rows; below that one line names the
-  oldest row's age.
+  action chosen by its server state: «Провести» to the posting tab at
+  `#posting-row-<id>` (ready), «Почему» (deferred), and for a row that still
+  needs work (needs review, blocked, unknown) «Открыть проверку» when the
+  server offers its review action, otherwise «Что мешает» («Почему» for an
+  unknown state). A row whose action opens the explanation shows no second
+  link in its status cell. An unknown state counts as unknown, never as
+  blocked. The aging chart draws from ten queued rows; below that one line
+  names the oldest row's age.
 - The posting tab lists the ready rows before anything is posted, then the
   deferred and blocked ones; the row named by `#posting-row-<id>` is
   highlighted and scrolled into view (a router navigation does not update
-  `:target`, so the tab marks it). Archive-transfer counts sit under
-  «Технические детали». A row without a EUR amount shows «—» and says so;
-  the posting preview sends `null` for it, never `0`.
+  `:target`, so the tab marks and focuses it). Posting rows offer only the
+  server's actions (their queue rows'); the client never makes up a review
+  link. Archive-transfer counts sit under «Технические детали». A row
+  without a EUR amount shows «—» and says so; the posting preview sends
+  `null` for it, never `0`.
 - The workspace posting-readiness chip (`reviewCategoryBadge`) maps the
   evaluation categories ready/later/blocked/needs_review onto the
   status-help tone classes with localized labels; an unexpected category
@@ -272,8 +275,12 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 - One catalog (`statuses.*`) supplies every lifecycle, readiness, filing and
   calculation label; see the canonical table in the plan. Synonym keys are
   removed. A status cell is a badge plus at most one line of reason; the
-  link to the explanation ends that line only when an action («Что
-  сделать» / "What to do") or a reason («Почему» / "Why") exists.
+  link to the explanation ends that line only when the record still needs
+  work (needs review, blocked, unknown) and the server offers its review
+  («Что сделать» / "What to do"), or when it has reasons («Почему» /
+  "Why"). On a ready, deferred or finished record a review link is
+  navigation, not a task: the explanation lists it under «Связанные
+  действия» / "Related actions" instead of «Следующие действия».
 - Unknown, zero and not applicable are worded, not dashed, whenever the
   missing piece has a known cause: "Not calculated yet. Calculate",
   "242.00 € plus 1 operation without a EUR amount".

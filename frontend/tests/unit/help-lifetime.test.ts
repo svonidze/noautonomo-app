@@ -39,12 +39,35 @@ for (const locale of ['ru', 'en'] as const)
     // Reasons without an action: the panel says who takes the next step.
     expect(help.content(blocked)).toContain(help.word('noAction'));
     const id = '11111111-1111-4111-8111-111111111111';
-    expect(help.link({ ...blocked, actions: [{ kind: 'review', transaction_id: id }] })).toBe(
-      help.word('whatToDo'),
-    );
-    // An action the panel would not offer does not count.
+    const review = [{ kind: 'review', transaction_id: id, period: '2026-Q3' }];
+    // While work is due, a review the server offers is the next action.
+    for (const state of ['needs_review', 'blocked', 'unknown']) {
+      expect(help.link({ ...blocked, state, actions: review })).toBe(help.word('whatToDo'));
+      expect(help.content({ ...blocked, state, actions: review })).toContain(
+        `<h3>${help.word('next')}</h3>`,
+      );
+    }
+    expect(help.reviewAction({ ...blocked, actions: review })).toEqual(review[0]);
+    // One rule for every review link: an action without a well-formed id is not offered at all.
     const odd = [{ kind: 'review', transaction_id: 'not-an-id' }];
-    expect(help.link({ domain: 'transaction', state: 'ready', actions: odd })).toBe('');
+    expect(help.reviewAction({ domain: 'transaction', state: 'needs_review', actions: odd })).toBe(
+      undefined,
+    );
+    expect(help.link({ domain: 'transaction', state: 'needs_review', actions: odd })).toBe('');
+    // On a ready or deferred row the review is a related link, not a task.
+    const ready = { domain: 'transaction', state: 'ready', actions: review };
+    expect(help.link(ready)).toBe('');
+    expect(help.content(ready)).toContain(`<h3>${help.word('related')}</h3>`);
+    expect(help.content(ready)).not.toContain(`<h3>${help.word('next')}</h3>`);
+    const waiting = {
+      domain: 'transaction',
+      state: 'deferred',
+      posting: { preview_bucket: 'deferred', blockers: [{ code: 'future_dated' }] },
+      actions: review,
+    };
+    expect(help.link(waiting)).toBe(help.word('why'));
+    expect(help.content(waiting)).toContain(`<h3>${help.word('related')}</h3>`);
+    expect(help.content(waiting)).toContain('data-help-review');
     const deferred = {
       domain: 'transaction',
       state: 'deferred',

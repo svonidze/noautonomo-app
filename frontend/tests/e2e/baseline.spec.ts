@@ -26,7 +26,11 @@ test('real backend serves routes, scripts and guarded history under CSP', async 
     ].some((name) => name in window),
   );
   expect(globals).toBe(false);
-  const help = page.locator('#app [data-status-help]').first();
+  // The fixture's reviewed USD expense has a reason, so its status links to the explanation.
+  const help = page
+    .locator('#app tr')
+    .filter({ hasText: 'Example USD expense' })
+    .locator('[data-status-help]');
   await help.click();
   await expect(page.locator('#status-help-dialog')).toBeVisible();
   await page.goBack();

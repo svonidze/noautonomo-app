@@ -3,12 +3,14 @@ import { computed, ref, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { eur, formatDateText, formatPeriod, taxCodeLabel } from '../../core/format.ts';
 import { followSpaLink } from '../../vue/services.ts';
+import { helpAdapter } from '../../vue/help.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import StatusHelpButton from '../../components/StatusHelpButton.vue';
 import ChartHost from '../../charts/ChartHost.vue';
 import type { ReviewRow, ReviewOverviewContext } from './model.ts';
 const props = defineProps<{ rows: ReviewRow[]; context: ReviewOverviewContext }>();
 const { locale, t } = useLocale();
+const help = helpAdapter();
 // The queue states the server sends; any other state reads as unknown, never as blocked.
 const labels = {
   needs_review: 'statuses.labels.needs_review',
@@ -53,19 +55,21 @@ const result = (row: ReviewRow) => {
       })
     : t(labels[state]);
 };
-/** One next action per row. A blocked row opens its review when the server offers one, otherwise
- * the explanation of what blocks it; a deferred row explains its date. */
+/** One next action per row: a ready row is posted, a deferred row explains its date. A row that
+ * still needs work opens its review when the server offers one; otherwise the explanation says what
+ * blocks it (or, for an unknown state, why). */
 function action(row: ReviewRow) {
-  const state = stateOf(row),
-    actions = row.ui_context.actions as { kind?: string }[] | undefined;
+  const state = stateOf(row);
   if (state === 'ready') return 'post';
-  if (
-    state === 'needs_review' ||
-    (state !== 'deferred' && actions?.some((a) => a.kind === 'review'))
-  )
-    return 'review';
-  return state === 'blocked' ? 'blocks' : 'why';
+  if (state === 'deferred') return 'why';
+  if (help.reviewAction(row.ui_context)) return 'review';
+  return state === 'unknown' ? 'why' : 'blocks';
 }
+// The review link comes from the server's action, with its own ids.
+const reviewUrl = (row: ReviewRow) => {
+  const review = help.reviewAction(row.ui_context)!;
+  return `/review/${encodeURIComponent(review.transaction_id)}?period=${encodeURIComponent(review.period || props.context.period)}`;
+};
 const period = () => encodeURIComponent(props.context.period);
 // Below ten queued rows the aging chart has too little to show; one line names the oldest row.
 const oldestDays = computed(() => {
@@ -143,8 +147,9 @@ const oldestDays = computed(() => {
               }}</strong
               ><small
                 >{{ row.document_number || row.description || ''
-                }}<template v-if="row.document_id">
-                  <a
+                }}<template v-if="row.document_id"
+                  >{{ ' '
+                  }}<a
                     class="text-button inline-button"
                     :href="`/api/document/${encodeURIComponent(row.document_id)}/content`"
                     target="_blank"
@@ -175,8 +180,8 @@ const oldestDays = computed(() => {
               <a
                 v-if="action(row) === 'review'"
                 class="secondary-button compact-button"
-                :href="`/review/${encodeURIComponent(row.transaction_id)}?period=${period()}`"
-                :data-open-review-id="`transaction:${row.transaction_id}`"
+                :href="reviewUrl(row)"
+                :data-open-review-id="`transaction:${help.reviewAction(row.ui_context)!.transaction_id}`"
                 @click="followSpaLink($event, context.services.navigate)"
                 >{{ t('review.openWorkspace') }}</a
               ><a
