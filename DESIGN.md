@@ -369,10 +369,13 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 - Tables and filters stay inside their panels at every width: the AEAT
   filters are `repeat(auto-fit, minmax(min(180px, 100%), 1fr))` inside the
   panel padding, «Modelo» never breaks, and the queue's action column is as
-  wide as its one control.
+  wide as its one control. Table rows become labelled cards whenever the
+  content column is at most 736 px: on a phone, and beside the sidebar up to
+  a 1008 px window (a 768 px tablet), where columns broke words letter by
+  letter.
 - `frontend/tests/e2e/mobile.spec.ts` pins the bar height, the menu by
-  keyboard, folded charts and no horizontal scroll on five screens, and the
-  AEAT filters and the queue actions at 1440 px.
+  keyboard, folded charts and no horizontal scroll on five screens, cards at
+  768 px, and the AEAT filters and the queue actions at 1440 px.
 
 ### Accessibility tokens
 - Control borders at least 3:1 against the surface; focus ring

@@ -3,6 +3,7 @@ import { nativeFixture, REVIEW_ID as ID, DOCUMENT_ID as DOC } from '../fixtures/
 import analyticsFixture from '../fixtures/analytics.json' with { type: 'json' };
 import nav from '../../src/locales/ru/nav.json' with { type: 'json' };
 import charts from '../../src/locales/ru/charts.json' with { type: 'json' };
+import transactions from '../../src/locales/ru/transactions.json' with { type: 'json' };
 
 const PHONE = { width: 375, height: 812 };
 const overflows = (page: Page) =>
@@ -147,4 +148,20 @@ test('on a wide screen the AEAT filters stay inside their panel and short header
   const actions = page.locator('.review-queue-table td.table-actions > *');
   await expect(actions).toHaveCount(2);
   for (const control of await actions.all()) expect(await control.evaluate(lines)).toBe(1);
+});
+
+test('beside the sidebar on a tablet a table reads as labelled cards', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto('/review?period=2026-Q3');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.nav-toggle')).toBeHidden();
+  // Each cell is a block under its own column label, as on a phone.
+  const amount = page.locator('.review-queue-table td.amount').first();
+  expect(
+    await amount.evaluate((cell) => [
+      getComputedStyle(cell).display,
+      getComputedStyle(cell, '::before').content,
+    ]),
+  ).toEqual(['block', `"${transactions['transactions.amount']}"`]);
+  expect(await overflows(page)).toBe(false);
 });
