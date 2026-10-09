@@ -422,6 +422,7 @@ test('a blocked approved row in the queue opens its review when the server offer
     .locator('#review-tabpanel tbody tr')
     .filter({ hasText: 'Synthetic USD expense' });
   await expect(row).toContainText('Проверено, проведение заблокировано');
+  await expect(row.locator('.status-context [data-status-help]')).toHaveText('Что сделать');
   const action = row.locator('td.table-actions > *');
   await expect(action).toHaveCount(1);
   await expect(action).toHaveText('Открыть проверку');

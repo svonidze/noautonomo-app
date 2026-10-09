@@ -15,7 +15,8 @@ const party = (name = 'Synthetic Supplier', revision = 1) => ({
     state: 'unknown',
     subject_id: ID,
     title: name,
-    reasons: [],
+    // Only a record with a reason or an action links to its explanation.
+    reasons: [{ code: 'counterparty_tax_profile_review' }],
     facts: { country_code: 'ES' },
   },
 });

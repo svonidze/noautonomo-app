@@ -220,6 +220,10 @@ export const helpContext = (row: PostingItem) => ({
     blockers: row.structuredReasons || [],
   },
   reasons: [],
-  actions: row.transactionId ? [{ kind: 'review', transaction_id: row.transactionId }] : [],
+  // A row that can be posted as it is has nothing to review: only a row with blockers links there.
+  actions:
+    row.transactionId && row.structuredReasons.length
+      ? [{ kind: 'review', transaction_id: row.transactionId }]
+      : [],
   facts: { transaction_date: row.transactionDate },
 });

@@ -167,6 +167,12 @@ test('a blocked approved row in the queue says what blocks it', async ({ page })
   const rows = page.locator('#review-tabpanel tbody tr');
   const blocked = rows.filter({ hasText: 'Example USD expense' });
   await expect(blocked).toContainText('Проверено, проведение заблокировано');
+  // Its one action opens the explanation, so its status cell does not repeat that link.
+  await expect(blocked.locator('.status-context small')).toHaveText('Не хватает суммы в евро');
+  await expect(blocked.locator('[data-status-help]')).toHaveCount(1);
+  const ready = rows.filter({ hasText: 'Example expense' });
+  await expect(ready.locator('.badge')).toHaveText('Проверено, можно провести');
+  await expect(ready.locator('.status-context small')).toHaveCount(0);
   const action = blocked.locator('td.table-actions > *');
   await expect(action).toHaveCount(1);
   await expect(action).toHaveText('Что мешает');
@@ -200,6 +206,8 @@ test('the queue opens posting at its ready row; ready rows come first and a miss
   await expect(target).toHaveClass('posting-row-target');
   await expect(target).toContainText('Example expense');
   await expect(target).toBeInViewport();
+  // Ready to post as it is: nothing to explain, so no link beside its badge.
+  await expect(target.locator('[data-status-help]')).toHaveCount(0);
   // Ready rows are listed before anything is posted, then the blocked ones.
   await expect(page.locator('.posting-section-label')).toHaveText([
     'Проверено, можно провести',

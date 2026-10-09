@@ -6,6 +6,7 @@ import { postingState } from '../../src/features/posting/state.ts';
 import type { ReviewOverviewContext } from '../../src/features/posting/model.ts';
 import ru from '../../src/locales/ru/review.json' with { type: 'json' };
 import statuses from '../../src/locales/ru/statuses.json' with { type: 'json' };
+import help from '../../src/locales/ru/help.json' with { type: 'json' };
 const ID = '11111111-1111-4111-8111-111111111111';
 const ready = {
   transaction_id: ID,
@@ -189,6 +190,10 @@ test('the posting tab lists ready rows first, marks the row the queue opened and
   expect(scrolled.mock.contexts[0]).toBe(target);
   // A ready row has nothing to explain; it is not «manual review required».
   expect(text(target.querySelector('.posting-result-message'))).toBe('');
+  expect(target.querySelector('[data-status-help]')).toBeNull();
+  expect(text(root.querySelector(`#posting-row-${BLOCKED} [data-status-help]`))).toBe(
+    help['help.words.whatToDo'],
+  );
   // Unknown is not zero: no amount and the reason, while a known amount stays an amount.
   const unknown = root.querySelector(`#posting-row-${BLOCKED} td.amount`)!;
   expect(text(unknown)).toBe(`—${ru['review.noEurAmount']}`);

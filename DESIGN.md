@@ -190,7 +190,8 @@ navigation added by the clarity redesign.
   action chosen by its server state: open the review (needs review, or
   blocked when the server offers a review), «Провести» to the posting tab at
   `#posting-row-<id>` (ready), or the status explanation (deferred, other
-  blocked rows). An unknown state counts as unknown, never as blocked. The
+  blocked rows), in which case the row's status cell drops its own link to
+  that explanation. An unknown state counts as unknown, never as blocked. The
   aging chart draws from ten queued rows; below that one line names the
   oldest row's age.
 - The posting tab lists the ready rows before anything is posted, then the
@@ -271,7 +272,8 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 - One catalog (`statuses.*`) supplies every lifecycle, readiness, filing and
   calculation label; see the canonical table in the plan. Synonym keys are
   removed. A status cell is a badge plus at most one line of reason; the
-  details link appears only when a reason or an action exists.
+  link to the explanation ends that line only when an action («Что
+  сделать» / "What to do") or a reason («Почему» / "Why") exists.
 - Unknown, zero and not applicable are worded, not dashed, whenever the
   missing piece has a known cause: "Not calculated yet. Calculate",
   "242.00 € plus 1 operation without a EUR amount".

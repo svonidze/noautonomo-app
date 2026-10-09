@@ -1,5 +1,5 @@
 import { formatMessage, localeTag, type Locale } from '../core/i18n.ts';
-import { formatPeriod } from '../core/format.ts';
+import { formatDateText, formatPeriod } from '../core/format.ts';
 import refs from './references.json' with { type: 'json' };
 import type { HelpContext } from '../vue/help.ts';
 export interface Reason {
@@ -69,13 +69,10 @@ export function createPresentation(currentLocale: Locale) {
           style: 'currency',
           currency,
         }).format(Number(v) / 100);
+  // The app's date format («01 окт. 2026 г.»); a missing date says so.
   function dateText(v: unknown) {
     const text = String(v || '').slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return word('missing');
-    const date = new Date(text + 'T12:00:00');
-    return Number.isNaN(date.getTime())
-      ? word('missing')
-      : new Intl.DateTimeFormat(localeTag(currentLocale)).format(date);
+    return /^\d{4}-\d{2}-\d{2}$/.test(text) ? formatDateText(text, currentLocale) : word('missing');
   }
   function reasonKey(r: Reason) {
     return r.details?.issue_code || r.code || 'unknown';
@@ -99,6 +96,17 @@ export function createPresentation(currentLocale: Locale) {
     return [...result.values()].sort(
       (a, b) => Number(b.blocking !== false) - Number(a.blocking !== false),
     );
+  }
+  // Only server-offered review links with a well-formed transaction id are shown.
+  const reviewActions = (ctx: AccountingContext) =>
+    (ctx.actions || []).filter(
+      (a) => a.kind === 'review' && /^[\da-f-]{36}$/i.test(a.transaction_id || ''),
+    );
+  /** The status cell's link to the explanation: «Что сделать» when the record has an action,
+   * «Почему» when it has reasons only, none for a record with neither. */
+  function link(ctx: AccountingContext) {
+    if (reviewActions(ctx).length) return word('whatToDo');
+    return allReasons(ctx).length ? word('why') : '';
   }
   function label(ctx: AccountingContext) {
     if (ctx.domain === 'counterparty')
@@ -149,8 +157,6 @@ export function createPresentation(currentLocale: Locale) {
     if (ctx.posting?.preview_bucket === 'blocked' && ctx.state === 'approved')
       return lang('statuses.labels.blocked');
     if (ctx.domain === 'asset' && !ctx.facts?.advisor_decision) return word('noDecision');
-    if (ctx.domain === 'transaction' && !['posted', 'included_in_snapshot'].includes(ctx.state))
-      return word('valueProposal');
     if ((ctx.reasons || []).length) return word('advisory');
     return '';
   }
@@ -176,9 +182,7 @@ export function createPresentation(currentLocale: Locale) {
     const rs = allReasons(ctx);
     const docs = ctx.documents || [];
     const facts = Object.entries(ctx.facts || {}).filter(([key]) => fields[key]);
-    const actions = (ctx.actions || []).filter(
-      (a) => a.kind === 'review' && /^[\da-f-]{36}$/i.test(a.transaction_id || ''),
-    );
+    const actions = reviewActions(ctx);
     const am = ctx.amortization;
     return `<p class="status-panel-state badge status-${tone(ctx)}">${esc(label(ctx))}</p><p>${esc(summary(ctx))}</p>${
       rs.length
@@ -190,7 +194,7 @@ export function createPresentation(currentLocale: Locale) {
             .join('')}</section>`
         : ''
     }
-      <section><h3>${esc(word('next'))}</h3>${actions.length ? actions.map((a) => `<a class="primary-button" data-help-review href="/review/${encodeURIComponent(a.transaction_id)}${a.period ? '?period=' + encodeURIComponent(a.period) : ''}">${esc(word('review'))}</a>`).join(' ') : `<p>${esc(word(['not_due', 'filed', 'registered'].includes(ctx.state) ? 'noActionNeeded' : 'noAction'))}</p>`}</section>
+      <section><h3>${esc(word('next'))}</h3>${actions.length ? actions.map((a) => `<a class="primary-button" data-help-review href="/review/${encodeURIComponent(a.transaction_id)}${a.period ? '?period=' + encodeURIComponent(a.period) : ''}">${esc(word('review'))}</a>`).join(' ') : `<p>${esc(word('noAction'))}</p>`}</section>
       <section><h3>${esc(word('known'))}</h3><dl class="status-facts">${facts.map(([key, v]) => `<div><dt>${esc(lang(fields[key]))}</dt><dd>${esc(formatted(key, v, ctx))}</dd></div>`).join('')}</dl></section>
       ${am ? `<section><h3>${esc(word('scope') + ' ' + formatPeriod(am.period, currentLocale))}</h3>${schedule({ ui_context: ctx })}<p>${esc(word('sourceNote'))}</p><ul>${am.rows.map((r) => `<li>${esc(formatPeriod(r.period_key, currentLocale))} · ${esc(money(r.amount_minor))} · ${esc(r.entry_kind === 'adjustment' ? word('adjustment') : r.include_in_books ? word('book') : word('excluded'))}</li>`).join('')}</ul>${am.annual_evidence.length ? `<details><summary>${esc(word('annual'))}</summary><ul>${am.annual_evidence.map((r) => `<li>${esc(r.tax_year)} · ${esc(money(r.amount_minor))}</li>`).join('')}</ul></details>` : ''}</section>` : ''}
       ${docs.length ? `<section><h3>${esc(word('sources'))}</h3><ul class="status-sources">${docs.map((d) => `<li><strong>${esc(d.document_number || d.document_type)}</strong><span>${esc(dateText(d.issued_on))}${d.total_minor != null ? ' · ' + esc(money(d.total_minor, d.currency)) : ''}</span>${d.available ? `<a href="/api/document/${encodeURIComponent(d.document_id)}/content" target="_blank" rel="noreferrer">${esc(lang('common.openDocument'))}</a>` : `<span>${esc(word('missingFile'))}</span>`}</li>`).join('')}</ul></section>` : ''}
@@ -200,6 +204,7 @@ export function createPresentation(currentLocale: Locale) {
     label,
     tone,
     summary,
+    link,
     word,
     money,
     reasonInfo,

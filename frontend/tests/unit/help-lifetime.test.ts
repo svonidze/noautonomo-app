@@ -1,6 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { createAccountingHelp } from '../../src/help/registry.ts';
 import { createPresentation } from '../../src/help/presentation.ts';
+import { formatDateText } from '../../src/core/format.ts';
 for (const locale of ['ru', 'en'] as const)
   test(`help presents amounts, blockers and hostile text safely in ${locale}`, () => {
     const help = createPresentation(locale);
@@ -19,6 +20,43 @@ for (const locale of ['ru', 'en'] as const)
     expect(help.content(context)).toContain('&lt;img');
     expect(help.content(context)).not.toContain('<img');
     expect(help.reasonInfo({ code: 'unknown' })).toHaveLength(3);
+  });
+for (const locale of ['ru', 'en'] as const)
+  test(`the status link names what the explanation offers, and its dates read as elsewhere, in ${locale}`, () => {
+    const help = createPresentation(locale);
+    // Healthy records have nothing to explain: no link.
+    expect(help.link({ domain: 'transaction', state: 'posted' })).toBe('');
+    expect(help.link({ domain: 'obligation', state: 'filed' })).toBe('');
+    expect(help.link({ domain: 'counterparty', state: 'registered' })).toBe('');
+    // A reviewed row without a reason has no reason line either.
+    expect(help.summary({ domain: 'transaction', state: 'ready' })).toBe('');
+    const blocked = {
+      domain: 'transaction',
+      state: 'blocked',
+      posting: { preview_bucket: 'blocked', blockers: [{ code: 'fx_missing' }] },
+    };
+    expect(help.link(blocked)).toBe(help.word('why'));
+    // Reasons without an action: the panel says who takes the next step.
+    expect(help.content(blocked)).toContain(help.word('noAction'));
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(help.link({ ...blocked, actions: [{ kind: 'review', transaction_id: id }] })).toBe(
+      help.word('whatToDo'),
+    );
+    // An action the panel would not offer does not count.
+    const odd = [{ kind: 'review', transaction_id: 'not-an-id' }];
+    expect(help.link({ domain: 'transaction', state: 'ready', actions: odd })).toBe('');
+    const deferred = {
+      domain: 'transaction',
+      state: 'deferred',
+      posting: { preview_bucket: 'deferred', posting_deferred_until: '2026-11-02' },
+      facts: { transaction_date: '2026-11-02' },
+    };
+    const date = formatDateText('2026-11-02', locale);
+    expect(help.summary(deferred)).toContain(date);
+    expect(help.content(deferred)).toContain(`<dd>${date}</dd>`);
+    expect(help.content({ ...deferred, facts: { transaction_date: null } })).toContain(
+      `<dd>${help.word('missing')}</dd>`,
+    );
   });
 test('scoped help survives history and locale changes, and releases disposed records', async () => {
   document.body.innerHTML =

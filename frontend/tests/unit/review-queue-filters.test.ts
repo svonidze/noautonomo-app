@@ -28,8 +28,24 @@ const rows = [
   row(1, 'needs_review'),
   row(2, 'needs_review'),
   row(3, 'ready'),
-  row(4, 'deferred'),
-  row(5, 'blocked'),
+  row(4, 'deferred', {
+    ui_context: {
+      domain: 'transaction',
+      state: 'deferred',
+      posting: {
+        preview_bucket: 'deferred',
+        posting_deferred_until: '2026-11-02',
+        blockers: [{ code: 'future_dated' }],
+      },
+    } as never,
+  }),
+  row(5, 'blocked', {
+    ui_context: {
+      domain: 'transaction',
+      state: 'blocked',
+      posting: { preview_bucket: 'blocked', blockers: [{ code: 'fx_missing' }] },
+    } as never,
+  }),
   row(6, 'blocked', {
     ui_context: { domain: 'transaction', state: 'blocked', actions: review(6) } as never,
   }),
@@ -182,6 +198,23 @@ test('every queued row offers exactly one next action chosen by its state', () =
   ]);
   for (const button of root.querySelectorAll<HTMLElement>('td.table-actions button'))
     expect(button.dataset.statusHelp).toBeTruthy();
+  // Where the row's action opens the explanation, the status cell does not repeat that link.
+  const links = [...root.querySelectorAll('tbody tr')].map((tr) =>
+    [...tr.querySelectorAll('[data-status-help]')].map((link) => link.textContent!.trim()),
+  );
+  expect(links).toEqual([
+    [],
+    [],
+    [],
+    [help['help.words.why']],
+    [ru['review.whatBlocks']],
+    [help['help.words.whatToDo']],
+    [help['help.words.why']],
+  ]);
+  // The deferred row's result names its date.
+  expect(root.querySelectorAll('tbody tr')[3].textContent).toContain(
+    'Проверено, провести после 02 нояб. 2026 г.',
+  );
   // The unknown row's result reads as unknown, not as blocked.
   expect(root.querySelectorAll('tbody tr')[6].textContent).toContain(
     statuses['statuses.labels.unknown'],

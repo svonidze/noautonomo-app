@@ -154,7 +154,12 @@ const oldestDays = computed(() => {
                 ></small
               >
             </td>
-            <td :data-label="t('review.taxDecision')"><StatusCell :context="row.ui_context" /></td>
+            <td :data-label="t('review.taxDecision')">
+              <StatusCell
+                :context="row.ui_context"
+                :bare="['why', 'blocks'].includes(action(row))"
+              />
+            </td>
             <td class="cell-primary" :data-label="t('review.result')">
               <strong>{{ result(row) }}</strong
               ><small>{{ taxCodeLabel(row.tax_code, locale) }}</small>

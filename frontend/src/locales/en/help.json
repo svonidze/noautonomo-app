@@ -144,7 +144,6 @@
   "help.words.copy": "Copy question",
   "help.words.copyError": "Could not copy. Select the question text below.",
   "help.words.dated": "Not before",
-  "help.words.details": "Understand status",
   "help.words.excluded": "Not included in books",
   "help.words.help": "Explanation",
   "help.words.known": "What is known",
@@ -152,7 +151,6 @@
   "help.words.missingFile": "File unavailable: check the original in storage",
   "help.words.next": "Next actions",
   "help.words.noAction": "No confirmation form is available for this record. Check the sources and pass the result to your accountant or ledger operator.",
-  "help.words.noActionNeeded": "No action is needed now.",
   "help.words.noDecision": "No separate decision was saved. This does not prove that earlier deductions were absent.",
   "help.words.none": "No schedule entries for the selected quarter",
   "help.words.original": "Original message",
@@ -164,6 +162,6 @@
   "help.words.sourceNote": "A schedule or book entry does not establish that a return was filed.",
   "help.words.sources": "Related documents",
   "help.words.technical": "Source details",
-  "help.words.valueProposal": "Proposed deduction; not proof of tax recognition",
+  "help.words.whatToDo": "What to do",
   "help.words.why": "Why"
 }

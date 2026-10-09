@@ -15,6 +15,8 @@ export interface HelpAdapter {
   label(context: HelpContext): string;
   summary(context: HelpContext): string;
   tone(context: HelpContext): string;
+  /** «Что сделать», «Почему», or '' when the record has neither an action nor a reason. */
+  link(context: HelpContext): string;
   word(key: string): string;
   termLabel?(key: string): string;
   reasonInfo(reason: Record<string, unknown>): string[];

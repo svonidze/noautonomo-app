@@ -64,6 +64,10 @@ test('original amounts and manual review stay readable in both locales and at mo
         locale === 'ru' ? 'Не хватает данных о сумме' : 'Amount information is missing',
       );
       await expect(zero).toContainText(locale === 'ru' ? '0,00 USD' : '0.00 USD');
+      for (const row of [foreign, missing, zero])
+        await expect(row.locator('.status-context [data-status-help]')).toHaveText(
+          locale === 'ru' ? 'Почему' : 'Why',
+        );
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );

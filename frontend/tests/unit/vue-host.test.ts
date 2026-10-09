@@ -34,18 +34,34 @@ test('host context and locale updates keep one component instance; disposal is i
   root.remove();
   setLocale('ru');
 });
-test('Vue status cell owns a stable help record and disposes only that record', async () => {
+test('Vue status cell owns a stable help record while it links to an explanation', async () => {
   const update = vi.fn(),
     dispose = vi.fn();
-  vi.spyOn(helpAdapter(), 'createScope').mockReturnValue({ id: 'owned', update, dispose });
+  const create = vi
+    .spyOn(helpAdapter(), 'createScope')
+    .mockReturnValue({ id: 'owned', update, dispose });
   const root = document.createElement('div');
   document.body.append(root);
-  // mountView passes its context as the cell's typed context prop.
-  const host = mountView(root, StatusCell, { domain: 'transaction', state: 'ready' });
-  expect(root.querySelector('button')?.dataset.statusHelp).toBe('owned');
-  host.updateContext({ domain: 'transaction', state: 'posted' });
+  // mountView passes its context as the cell's typed context prop. A healthy record shows its
+  // badge only: no link and no help record.
+  const host = mountView(root, StatusCell, { domain: 'transaction', state: 'posted' });
+  expect(root.querySelector('button')).toBeNull();
+  expect(create).not.toHaveBeenCalled();
+  const blocked = { domain: 'transaction', state: 'blocked', reasons: [{ code: 'fx_missing' }] };
+  host.updateContext(blocked);
   await nextTick();
-  expect(update).toHaveBeenCalledWith({ domain: 'transaction', state: 'posted' });
+  const link = () => root.querySelector('button')!;
+  expect(link().dataset.statusHelp).toBe('owned');
+  expect(link().textContent!.trim()).toBe('Почему');
+  const actionable = {
+    ...blocked,
+    actions: [{ kind: 'review', transaction_id: '11111111-1111-4111-8111-111111111111' }],
+  };
+  host.updateContext(actionable);
+  await nextTick();
+  expect(update).toHaveBeenCalledWith(actionable);
+  expect(link().textContent!.trim()).toBe('Что сделать');
+  expect(create).toHaveBeenCalledTimes(1);
   host.dispose();
   expect(dispose).toHaveBeenCalledTimes(1);
   root.remove();

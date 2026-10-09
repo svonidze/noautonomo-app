@@ -26,10 +26,12 @@
 
 /* Contextual status controls use the existing palette and remain readable
    without relying on color or a hover-only interaction. */
-.status-context { display: grid; gap: 6px; justify-items: start; min-width: 0; }
+/* A status cell is a badge and at most one line: the reason, then its link inline. */
+.status-context { display: grid; gap: 2px; justify-items: start; min-width: 0; }
 .status-context small { color: var(--muted); line-height: 1.4; max-width: 34ch; }
 .status-context .badge { white-space: normal; text-align: left; }
 .status-details-button { padding: 3px 0; text-decoration: underline; text-underline-offset: 3px; }
+.status-context .status-details-button { padding: 0; }
 .badge.status-neutral { color: var(--text); background: var(--surface-muted); }
 .badge.status-pending { color: #714307; background: var(--warning-soft); }
 .badge.status-attention { color: #812525; background: var(--danger-soft); }
