@@ -410,7 +410,6 @@ export function useShell() {
           if (owns() && next.view === 'expenses')
             void replacePresentation(routeUrl('expenses', sourcePeriod, { q: value }));
         },
-        openIntake: add,
         copy: (row) => copy(row, sourcePeriod),
       } satisfies TransactionListContext);
     else

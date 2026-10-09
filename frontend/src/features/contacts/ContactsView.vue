@@ -343,9 +343,6 @@ defineExpose({
       </details>
     </div>
     <template v-else-if="!context.contactId">
-      <div class="table-toolbar">
-        <h2>{{ t('contacts.title') }}</h2>
-      </div>
       <section class="panel">
         <div class="table-wrap" id="contacts-list-wrap">
           <table>

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import intake from '../../src/locales/ru/intake.json' with { type: 'json' };
 
 test('real backend serves routes, scripts and guarded history under CSP', async ({ page }) => {
   const errors: string[] = [];
@@ -93,6 +94,47 @@ test('AEAT document registry is global, searchable and responsive', async ({ pag
   await page.setViewportSize({ width: 375, height: 800 });
   await expect(page.locator('.aeat-documents-table thead')).toBeHidden();
   await expect(page.locator('.aeat-documents-table tbody tr').first()).toBeVisible();
+});
+
+test('every screen states its purpose and offers exactly one primary action', async ({ page }) => {
+  const routes = [
+    '/dashboard?period=2026-Q3',
+    '/income?period=2026-Q3',
+    '/expenses?period=2026-Q3',
+    '/review?period=2026-Q3',
+    '/review?period=2026-Q3&tab=posting',
+    '/assets?period=2026-Q3',
+    '/taxes?period=2026-Q3',
+    '/contacts',
+    '/aeat-documents',
+    '/settings',
+  ];
+  const seen = [];
+  for (const route of routes) {
+    await page.goto(route);
+    await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator('dialog[open]')).toHaveCount(0);
+    const lead = (await page.locator('#page-lead').allTextContents()).join('').trim();
+    seen.push({
+      route,
+      primaries: await page.locator('.primary-button:visible').count(),
+      lead: !!lead,
+    });
+  }
+  expect(seen).toEqual(routes.map((route) => ({ route, primaries: 1, lead: true })));
+});
+
+test('a disabled add button says why in visible text', async ({ page }) => {
+  await page.route('**/api/bootstrap', async (route) => {
+    const data = await (await route.fetch()).json();
+    await route.fulfill({ json: { ...data, intake_enabled: false } });
+  });
+  await page.goto('/income?period=2026-Q3');
+  const add = page.locator('#new-entry-button');
+  await expect(add).toBeDisabled();
+  await expect(add).not.toHaveAttribute('title');
+  await expect(page.locator('#new-entry-disabled')).toHaveText(intake['intake.disabledReason']);
+  await expect(add).toHaveAccessibleDescription(intake['intake.disabledReason']);
 });
 
 test('settings preserves a private draft when leaving is declined', async ({ page }) => {

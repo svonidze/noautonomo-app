@@ -181,7 +181,6 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
     <button @click="load">{{ t('common.retry') }}</button>
   </div>
   <div v-else class="settings-page">
-    <p class="settings-intro">{{ t('settings.form.intro') }}</p>
     <div class="settings-grid">
       <section class="settings-panel" aria-labelledby="settings-profile-title">
         <h2 id="settings-profile-title">{{ t('settings.form.profile') }}</h2>
@@ -294,7 +293,7 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
                 {{ t('settings.form.monthlyHelp') }}
               </p>
               <p class="settings-warning">{{ t('settings.form.backupNote') }}</p>
-              <button class="primary-button" type="submit">
+              <button class="secondary-button" type="submit">
                 {{ t('settings.form.saveBackups') }}
               </button>
             </fieldset>

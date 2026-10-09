@@ -48,7 +48,30 @@ const title = computed(() =>
     ? t('contacts.cardTitle')
     : route.value?.view === 'expense-detail'
       ? t('expense.title')
-      : formatMessage(shellMessageKey('titles', route.value?.view || 'dashboard')),
+      : formatMessage(
+          shellMessageKey('titles', route.value?.view || 'dashboard'),
+          {},
+          locale.value,
+        ),
+);
+// The server names a missing profile after the brand; the brand line already shows that name.
+const profileName = computed(() =>
+  bootstrap.value?.profile_name && bootstrap.value.profile_name !== 'Autónomo'
+    ? bootstrap.value.profile_name
+    : t('brand.subtitle'),
+);
+const lead = computed(() =>
+  route.value?.view === 'contact-detail'
+    ? t('contacts.cardLead')
+    : route.value?.view === 'expense-detail'
+      ? t('expense.lead')
+      : route.value?.view === 'review' && detail.value
+        ? t('review.detailLead')
+        : formatMessage(
+            `${shellMessageKey('titles', route.value?.view || 'dashboard')}Lead`,
+            {},
+            locale.value,
+          ),
 );
 const refreshLabel = computed(() =>
   t(
@@ -65,7 +88,7 @@ const refreshLabel = computed(() =>
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">A</span
       ><span
-        ><strong>Autónomo</strong><small>{{ t('brand.subtitle') }}</small></span
+        ><strong>Autónomo</strong><small id="profile-name">{{ profileName }}</small></span
       >
     </div>
     <nav class="primary-nav" :aria-label="t('nav.aria')">
@@ -84,19 +107,12 @@ const refreshLabel = computed(() =>
         }}</span></a
       >
     </nav>
-    <a
-      class="sidebar-footer storage-settings-link"
-      href="/settings"
-      data-spa
-      @click="followSpaLink($event, navigate)"
-      ><span aria-hidden="true">⚙</span><span>{{ t('storage.settings') }}</span></a
-    >
   </aside>
   <main class="workspace">
     <header class="topbar">
-      <div>
+      <div class="page-heading">
         <h1 id="page-title">{{ title }}</h1>
-        <p id="profile-name">{{ bootstrap?.profile_name || 'Autónomo' }}</p>
+        <p id="page-lead">{{ lead }}</p>
       </div>
       <div class="topbar-actions">
         <div class="locale-control" role="group" :aria-label="t('locale.aria')">
@@ -145,16 +161,29 @@ const refreshLabel = computed(() =>
         >
           ↻
         </button>
-        <button
-          id="new-entry-button"
-          class="primary-button"
-          :hidden="detail || ['settings', 'aeat-documents'].includes(route?.view || '')"
-          :disabled="!bootstrap?.intake_enabled"
-          :title="bootstrap?.intake_enabled ? '' : t('intake.disabledReason')"
-          @click="add"
+        <div
+          class="new-entry"
+          :hidden="
+            detail ||
+            ['settings', 'aeat-documents'].includes(route?.view || '') ||
+            (route?.view === 'review' && reviewTab === 'posting')
+          "
         >
-          <span aria-hidden="true">+</span> <span>{{ t('common.add') }}</span>
-        </button>
+          <button
+            id="new-entry-button"
+            class="primary-button"
+            :disabled="!bootstrap?.intake_enabled"
+            :aria-describedby="
+              bootstrap && !bootstrap.intake_enabled ? 'new-entry-disabled' : undefined
+            "
+            @click="add"
+          >
+            <span aria-hidden="true">+</span> <span>{{ t('common.add') }}</span>
+          </button>
+          <small v-if="bootstrap && !bootstrap.intake_enabled" id="new-entry-disabled">{{
+            t('intake.disabledReason')
+          }}</small>
+        </div>
       </div>
     </header>
     <section id="app" class="content" data-vue-owned :aria-busy="loading">

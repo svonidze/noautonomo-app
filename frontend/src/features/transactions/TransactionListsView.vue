@@ -159,9 +159,6 @@ function copy(row: TransactionRow) {
           :placeholder="t('transactions.search')"
           @input="searchChanged"
         />
-        <button class="primary-button" id="view-add-entry" @click="context.openIntake">
-          <span aria-hidden="true">+</span> {{ t('common.add') }}
-        </button>
       </div>
     </div>
     <template v-if="expense">

@@ -14,6 +14,7 @@
   "review.confirmHint": "The review is applied in one step: the FX rate (when needed) and the invoice decision.",
   "review.confirmSuccess": "Review confirmed, decision applied.",
   "review.counterpartyFacts": "Verified counterparty facts",
+  "review.detailLead": "Review of one operation next to its original",
   "review.documents": "Documents to review",
   "review.errorGeneral": "The decision could not be applied. Check the highlighted fields.",
   "review.facts": "Facts",

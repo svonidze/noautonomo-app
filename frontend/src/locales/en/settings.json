@@ -24,7 +24,6 @@
   "settings.form.identityError": "The identifier is now protected by accounting history. Load the current data.",
   "settings.form.inherit": "Operator managed",
   "settings.form.interface": "Interface",
-  "settings.form.intro": "Taxpayer details, backup retention and interface language.",
   "settings.form.language": "Interface language",
   "settings.form.languageNote": "Language is remembered only in this browser. Taxpayer details and settings drafts are not stored in browser storage.",
   "settings.form.lastSuccess": "Last successful runs",

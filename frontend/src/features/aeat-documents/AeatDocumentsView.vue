@@ -12,6 +12,8 @@ const data = shallowRef<AeatDocumentsData>();
 const error = shallowRef<unknown>();
 const loading = ref(true);
 const saving = ref(false);
+// Closed, the upload form's summary is the page's one primary action; open, its save button is.
+const uploadOpen = ref(false);
 const preview = shallowRef<Record<string, unknown>>();
 const file = shallowRef<File>();
 const filters = reactive({ year: '', form: '', kind: '', status: '', q: '' });
@@ -206,10 +208,7 @@ async function saveStatus() {
   <div class="section-stack aeat-documents-page">
     <section class="panel">
       <header class="panel-header">
-        <div>
-          <h2>{{ t('aeatDocuments.title') }}</h2>
-          <p>{{ t('aeatDocuments.intro') }}</p>
-        </div>
+        <p>{{ t('aeatDocuments.intro') }}</p>
         <small>{{ rows.length }}</small>
       </header>
       <div class="table-toolbar aeat-filter-grid">
@@ -361,8 +360,11 @@ async function saveStatus() {
       </div>
     </section>
 
-    <details class="panel aeat-upload-panel">
-      <summary>{{ t('aeatDocuments.add') }}</summary>
+    <details
+      class="panel aeat-upload-panel"
+      @toggle="uploadOpen = ($event.target as HTMLDetailsElement).open"
+    >
+      <summary :class="{ 'primary-button': !uploadOpen }">{{ t('aeatDocuments.add') }}</summary>
       <form
         class="form-grid"
         @submit.prevent="submit(false)"

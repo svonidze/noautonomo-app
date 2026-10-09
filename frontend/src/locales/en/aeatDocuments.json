@@ -40,7 +40,6 @@
   "aeatDocuments.status.responded": "Response submitted",
   "aeatDocuments.status.submitted": "Submitted, awaiting decision",
   "aeatDocuments.statusSaved": "Case status saved",
-  "aeatDocuments.title": "AEAT documents",
   "aeatDocuments.verificationCode": "Verification code (CSV)",
   "aeatDocuments.year": "Year"
 }

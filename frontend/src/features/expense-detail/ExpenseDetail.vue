@@ -199,7 +199,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
       <header class="review-workspace-header">
         <a class="secondary-button" :href="back" @click="navigate">{{ backLabel(back) }}</a>
         <div>
-          <h2>{{ data.document?.document_number || t('expense.title') }}</h2>
+          <h2>{{ data.document?.document_number || t('expense.noNumber') }}</h2>
           <p>{{ data.counterparty?.display_name || '—' }}</p>
         </div>
         <div>

@@ -73,6 +73,7 @@
   "workflow.purchase": "Purchase",
   "workflow.rateSelectedCheckTaxAmountsInEur": "Rate selected. Check tax amounts in EUR.",
   "workflow.reasonForFactCorrectionInvalidatingApproval": "Reason for fact correction / invalidating approval",
+  "workflow.recalculate": "Recalculate",
   "workflow.recognitionDate": "Recognition date",
   "workflow.refreshOrInboxCleanupNeedsRetryDoNotRepost": "The calculation refresh or moving the originals to the archive needs a retry. Do not post again.",
   "workflow.replaceFieldsWithCurrentSourceValuesTheSavedDraft": "Replace fields with current source values? The saved draft remains in audit history.",

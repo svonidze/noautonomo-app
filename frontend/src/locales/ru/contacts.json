@@ -5,6 +5,7 @@
   "contacts.allPeriods": "Все периоды",
   "contacts.back": "К списку контрагентов",
   "contacts.backToParty": "К контрагенту",
+  "contacts.cardLead": "Реквизиты, операции и история имени",
   "contacts.cardTitle": "Карточка контрагента",
   "contacts.country": "Страна",
   "contacts.currentName": "Актуальное имя: {name}",
@@ -45,6 +46,5 @@
   "contacts.shown": "Показано {count} из {total}",
   "contacts.sourceDocument": "Документ-источник",
   "contacts.taxIds": "NIF / номер VAT",
-  "contacts.title": "Контрагенты",
   "contacts.transactions": "Операций"
 }

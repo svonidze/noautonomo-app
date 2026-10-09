@@ -40,7 +40,6 @@
   "aeatDocuments.status.responded": "Ответ отправлен",
   "aeatDocuments.status.submitted": "Подано, ожидается решение",
   "aeatDocuments.statusSaved": "Статус дела сохранён",
-  "aeatDocuments.title": "Документы AEAT",
   "aeatDocuments.verificationCode": "Код проверки (CSV)",
   "aeatDocuments.year": "Год"
 }

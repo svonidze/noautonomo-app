@@ -73,6 +73,7 @@
   "workflow.purchase": "Покупка",
   "workflow.rateSelectedCheckTaxAmountsInEur": "Курс выбран. Проверьте налоговые суммы в EUR.",
   "workflow.reasonForFactCorrectionInvalidatingApproval": "Причина исправления данных / отмены подтверждения",
+  "workflow.recalculate": "Пересчитать",
   "workflow.recognitionDate": "Дата признания",
   "workflow.refreshOrInboxCleanupNeedsRetryDoNotRepost": "Требуется повторить обновление расчётов или перенос оригиналов в архив. Не проводите повторно.",
   "workflow.replaceFieldsWithCurrentSourceValuesTheSavedDraft": "Заменить поля текущими данными источника? Сохранённый черновик останется в истории.",

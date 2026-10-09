@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import chartMessages from '../../src/locales/en/charts.json' with { type: 'json' };
+import ruTitles from '../../src/locales/ru/titles.json' with { type: 'json' };
+import enTitles from '../../src/locales/en/titles.json' with { type: 'json' };
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const DOCUMENT = '22222222-2222-4222-8222-222222222222';
@@ -219,6 +221,14 @@ test('an open help dialog changes language without consuming its Back entry', as
   await expect(page).toHaveURL(/\/expenses\?period=2026-Q3$/);
   await page.goForward();
   await expect(page.locator('#status-help-dialog')).toBeVisible();
+});
+
+test('the page title and purpose line follow a locale change', async ({ page }) => {
+  await page.goto('/income?period=2026-Q3');
+  await expect(page.locator('#page-lead')).toHaveText(ruTitles['titles.incomeLead']);
+  await language(page, 'en');
+  await expect(page.locator('#page-title')).toHaveText(enTitles['titles.income']);
+  await expect(page.locator('#page-lead')).toHaveText(enTitles['titles.incomeLead']);
 });
 
 test('income search remains selected after changing the language', async ({ page }) => {

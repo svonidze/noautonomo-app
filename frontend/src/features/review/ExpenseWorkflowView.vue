@@ -942,8 +942,12 @@ const supplierHidden = (party: Counterparty) =>
             <footer class="wf-actions">
               <button type="button" id="wf-save" class="secondary-button" @click="saveOnly">
                 {{ t('workflow.saveDraft') }}</button
-              ><button type="submit" class="primary-button" :disabled="draft.conflict">
-                {{ t('workflow.previewResult') }}
+              ><button
+                type="submit"
+                :class="proposed ? 'secondary-button' : 'primary-button'"
+                :disabled="draft.conflict"
+              >
+                {{ t(proposed ? 'workflow.recalculate' : 'workflow.previewResult') }}
               </button>
             </footer>
           </fieldset>
