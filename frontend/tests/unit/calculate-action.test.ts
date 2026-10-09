@@ -2,7 +2,7 @@ import { nextTick, type Component } from 'vue';
 import { afterEach, expect, test, vi } from 'vitest';
 import DashboardView from '../../src/features/overview/DashboardView.vue';
 import TaxesView from '../../src/features/overview/TaxesView.vue';
-import { mountView } from '../support/mount.ts';
+import { mountOverview } from '../support/mount.ts';
 import type { OverviewContext } from '../../src/features/overview/model.ts';
 import common from '../../src/locales/ru/common.json' with { type: 'json' };
 
@@ -21,54 +21,16 @@ function mount(
   component: Component,
   view: OverviewContext['view'],
   payload: (read: number) => unknown,
+  period = '2026-Q3',
 ) {
-  // jsdom has no dialog methods; ChartHost closes its expanded view on unmount.
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-    configurable: true,
-    value(this: HTMLDialogElement) {
-      this.open = false;
-    },
-  });
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      disconnect() {}
-    },
-  );
-  const reads: string[] = [];
-  const request = vi.fn((url: string): Promise<unknown> => {
-    if (url.startsWith(`/api/${view}?`)) {
-      reads.push(url);
-      return Promise.resolve(payload(reads.length));
-    }
-    if (url.startsWith('/api/analytics?')) return Promise.reject(new Error('Synthetic no chart'));
-    return new Promise(() => {}); // RETA stays pending: not under test
-  });
-  let release!: () => void;
-  const context: OverviewContext = {
-    view,
-    period: '2026-Q3',
-    services: { request, navigate: vi.fn() },
-    copyTarget: null,
-    settled: vi.fn(),
-    refreshCalculation: vi.fn(() => new Promise<void>((resolve) => (release = resolve))),
-    copy: vi.fn(),
-    notify: vi.fn(),
-  };
-  const root = document.createElement('div');
-  document.body.append(root);
-  const host = mountView(root, component, context);
-  unmounts.push(() => {
-    host.dispose();
-    root.remove();
-  });
+  const mounted = mountOverview(component, view, payload, { period });
+  unmounts.push(mounted.unmount);
   const buttons = (selector = '.calculate-button') =>
-    [...root.querySelectorAll<HTMLButtonElement>(selector)].map((button) => [
+    [...mounted.root.querySelectorAll<HTMLButtonElement>(selector)].map((button) => [
       button.textContent!.trim(),
       button.disabled,
     ]);
-  return { root, context, reads, buttons, release: () => release() };
+  return { ...mounted, buttons };
 }
 const scope = { posted: {}, approved: {}, future_approved: {} };
 const dashboard = (calculated: boolean) => ({
@@ -87,16 +49,16 @@ const dashboard = (calculated: boolean) => ({
   open_issues: [],
 });
 
-test('an uncalculated quarter offers Calculate on the dashboard Modelo cards', async () => {
+test('an uncalculated quarter offers Calculate on the tax card and in the task list', async () => {
   const view = mount(DashboardView, 'dashboard', (read) => dashboard(read > 1));
   await settle();
-  const idle = [common['common.calculate'], false];
-  expect(view.buttons()).toEqual([idle, idle]);
+  expect(view.buttons()).toEqual([[common['common.calculate'], false]]);
+  expect(view.buttons('button.task-row')).toHaveLength(1);
   view.root.querySelector<HTMLButtonElement>('.calculate-button')!.click();
   await settle();
   expect(view.context.refreshCalculation).toHaveBeenCalledTimes(1);
-  const busy = [common['common.calculating'], true];
-  expect(view.buttons()).toEqual([busy, busy]);
+  expect(view.buttons()).toEqual([[common['common.calculating'], true]]);
+  expect(view.buttons('button.task-row').map(([, disabled]) => disabled)).toEqual([true]);
   view.release();
   await settle();
   expect(view.context.notify).toHaveBeenCalledWith({
@@ -105,10 +67,18 @@ test('an uncalculated quarter offers Calculate on the dashboard Modelo cards', a
   });
   expect(view.reads).toHaveLength(2);
   expect(view.buttons()).toEqual([]);
+  expect(view.buttons('button.task-row')).toEqual([]);
 });
 
-const taxes = (phase: string) => ({
-  period: '2026-Q3',
+test('a quarter that has not started offers no Calculate on the dashboard', async () => {
+  const view = mount(DashboardView, 'dashboard', () => dashboard(false), '2999-Q1');
+  await settle();
+  expect(view.buttons()).toEqual([]);
+  expect(view.buttons('button.task-row')).toEqual([]);
+});
+
+const taxes = (phase: string, period = '2026-Q3') => ({
+  period,
   period_state: { phase },
   obligations: [{ obligation_code: '130', determination: 'due' }],
   tax_forms: {},
@@ -135,8 +105,13 @@ test('the taxes headline and form cards offer Calculate outside the folded detai
   expect(view.reads).toHaveLength(2);
 });
 
-test('a quarter that has not started has no Calculate in the headline', async () => {
-  const view = mount(TaxesView, 'taxes', () => taxes('future'));
-  await settle();
-  expect(view.buttons('.tax-hero-copy .calculate-button')).toEqual([]);
+test('a quarter that has not started has no Calculate in the headline or the form cards', async () => {
+  for (const [phase, period] of [
+    ['future', '2026-Q3'],
+    ['current', '2999-Q1'],
+  ]) {
+    const view = mount(TaxesView, 'taxes', () => taxes(phase, period), period);
+    await settle();
+    expect(view.buttons(), `${phase} ${period}`).toEqual([]);
+  }
 });

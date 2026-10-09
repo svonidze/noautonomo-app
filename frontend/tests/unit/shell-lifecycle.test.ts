@@ -19,7 +19,10 @@ vi.mock('../../src/shell/request.ts', () => ({
   refreshCalculation: vi.fn(),
 }));
 import { router } from '../../src/shell/router.ts';
+import { refreshCalculation } from '../../src/shell/request.ts';
 import { useShell } from '../../src/shell/controller.ts';
+import { markStale, postingState } from '../../src/features/posting/state.ts';
+import type { OverviewContext } from '../../src/features/overview/model.ts';
 async function flush() {
   for (let i = 0; i < 15; i++) {
     await Promise.resolve();
@@ -98,5 +101,44 @@ test('shell teardown releases help listeners and remount creates a fresh registr
   expect(second).not.toBe(first);
   expect(second.createScope({ domain: 'transaction', state: 'ready' }).id).not.toBe(old.id);
   next.unmount();
+  root.remove();
+});
+
+test('an in-page Calculate runs under the shell busy flag, after a running one, and clears the stale marker', async () => {
+  await router.push('/dashboard?period=2026-Q3');
+  let shell!: ReturnType<typeof useShell>;
+  const app = createApp(
+    defineComponent({
+      setup() {
+        shell = useShell();
+        return () => h('div');
+      },
+    }),
+  );
+  const root = document.createElement('div');
+  document.body.append(root);
+  app.mount(root);
+  await vi.waitFor(() => expect(shell.screen.value).toBeTruthy());
+  const context = shell.screen.value!.context as OverviewContext;
+  const releases: (() => void)[] = [];
+  vi.mocked(refreshCalculation).mockImplementation(
+    () => new Promise<void>((resolve) => releases.push(resolve)),
+  );
+  markStale('2026-Q3');
+  const first = context.refreshCalculation(),
+    second = context.refreshCalculation();
+  await flush();
+  expect(shell.busy.value).toBe(true);
+  expect(releases).toHaveLength(1);
+  releases[0]();
+  await flush();
+  expect(postingState.stale.has('2026-Q3')).toBe(false);
+  expect(releases).toHaveLength(2);
+  expect(shell.busy.value).toBe(true);
+  releases[1]();
+  await Promise.all([first, second]);
+  expect(shell.busy.value).toBe(false);
+  expect(vi.mocked(refreshCalculation).mock.calls).toEqual([['2026-Q3'], ['2026-Q3']]);
+  app.unmount();
   root.remove();
 });

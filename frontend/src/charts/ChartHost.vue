@@ -2,14 +2,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../vue/locale.ts';
 import { captureFocus, restoreFocus } from '../core/focus.ts';
-import type { ViewServices } from '../vue/services.ts';
 import { createChartBuilders, type ChartKind } from './builders.ts';
 import type { Analytics, ChartSpec } from './types.ts';
 import { renderCartesian, renderHorizontalBars, renderBullet } from './renderer.js';
 const props = defineProps<{
   kind: ChartKind;
   period: string;
-  request?: ViewServices['request'];
+  // A plain function type: the SFC compiler reads `ViewServices['request']` as a Promise prop.
+  request?: (url: string) => Promise<unknown>;
   analytics?: Analytics;
   failed?: boolean;
   revision?: number;

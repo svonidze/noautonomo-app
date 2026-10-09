@@ -9,6 +9,7 @@ import ChartHost from '../../charts/ChartHost.vue';
 import TaxFormCard from './TaxFormCard.vue';
 import RetaCheckCard from './RetaCheckCard.vue';
 import { createFinancePresentation } from './presentation.ts';
+import { isFuturePeriod } from './tasks.ts';
 import type { OverviewContext, TaxesData } from './model.ts';
 const props = defineProps<{ context: OverviewContext }>();
 const { locale, t } = useLocale();
@@ -72,10 +73,14 @@ const p = computed(() => createFinancePresentation(locale.value));
 const headline = computed(() =>
   p.value.taxHeadlineModel(data.value?.period_state, data.value?.tax_summary),
 );
+// A quarter that has not started has no calculation by design: no «Рассчитать» anywhere.
+const future = computed(
+  () => data.value?.period_state?.phase === 'future' || isFuturePeriod(props.context.period),
+);
 // No calculation exists yet for a started quarter: the headline cannot name an amount.
 const uncalculated = computed(
   () =>
-    data.value?.period_state?.phase !== 'future' &&
+    !future.value &&
     ['attention', 'neutral'].includes(headline.value.tone) &&
     (['130', '303'] as const).every((code) => form(code).display_state === 'unavailable'),
 );
@@ -175,6 +180,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
         :form="form(code)"
         :summary="data.tax_summary?.forms?.[code]"
         :refreshing="refreshing"
+        :future="future"
         @refresh="refresh"
       />
     </div>

@@ -183,8 +183,8 @@ navigation added by the clarity redesign.
   issues). The active tab travels in `?tab=`; `queue` is the implied default
   and never appears in the URL; unknown values normalize to queue in the
   current history entry; review and expense detail routes never carry a tab;
-  a period switch preserves the active tab. The dashboard posting banner
-  deep-links to the posting tab via `data-nav-tab`.
+  a period switch preserves the active tab. The dashboard task list's
+  posting row links to the posting tab.
 - The workspace posting-readiness chip (`reviewCategoryBadge`) maps the
   evaluation categories ready/later/blocked/needs_review onto the
   status-help tone classes with localized labels; an unexpected category
@@ -247,7 +247,9 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 - Header: h1 title, one-line purpose, one primary action. Sections start at
   h2, nested at h3; no heading repeats the title; no section without a heading.
 - One primary button per screen; secondary and text buttons for the rest.
-  Disabled controls explain why in visible text, never only in `title`.
+  Disabled controls explain why in visible text, never only in `title`. A
+  `<summary>` styled as the primary button is acceptable when the page's main
+  action is to open an inline form (AEAT documents).
 - Technical values (AEAT codes, minor units, basis points, identifiers) live
   behind `<details>`; a shown code always follows its human label.
 

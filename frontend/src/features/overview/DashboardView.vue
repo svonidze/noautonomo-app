@@ -10,8 +10,10 @@ import type { Analytics } from '../../charts/types.ts';
 import type { ChartKind } from '../../charts/builders.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import RecentTransactions from './RecentTransactions.vue';
+import TaskList from './TaskList.vue';
+import { buildTasks, isFuturePeriod } from './tasks.ts';
 import { createFinancePresentation } from './presentation.ts';
-import type { OverviewContext, DashboardData } from './model.ts';
+import type { OverviewContext, DashboardData, ExpenseScope } from './model.ts';
 const props = defineProps<{ context: OverviewContext }>();
 const { locale, t } = useLocale();
 const data = shallowRef<DashboardData>(),
@@ -80,38 +82,57 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', refreshVisible);
 });
 const presentation = computed(() => createFinancePresentation(locale.value));
-const integer = (value: unknown, fallback = 0) => {
-  const number = Number.parseInt(String(value ?? ''), 10);
-  return Number.isFinite(number) ? number : fallback;
-};
-const approved = computed(() => {
-  const summary = data.value?.posting_preview_summary || data.value?.summary;
-  return integer(
-    summary?.approved_count,
-    integer(summary?.ready_count, integer(summary?.ready_to_post)) +
-      integer(summary?.deferred_count) +
-      integer(summary?.blocked_count),
-  );
-});
-const ready = computed(() =>
-  Number(
-    data.value?.readyCount ??
-      data.value?.ready_count ??
-      data.value?.totals.forecast.transaction_count ??
-      0,
-  ),
+const future = computed(() => isFuturePeriod(props.context.period));
+const tasks = computed(() =>
+  data.value
+    ? buildTasks({
+        data: data.value,
+        period: props.context.period,
+        today: new Date(),
+        locale: locale.value,
+      })
+    : [],
 );
-const nextDue = computed(() =>
-  data.value?.obligations.find(
-    (row) => row.determination === 'due' && row.filing_status !== 'filed',
-  ),
+/** The amount, or its known part and the number of rows without a EUR amount: never a bare dash. */
+const amount = (scope?: ExpenseScope) =>
+  scope?.missing_amount_count
+    ? t('dashboard.partialAmount', {
+        amount: eur((scope.known_amount_minor ?? NaN) / 100, locale.value),
+        count: scope.missing_amount_count,
+      })
+    : eur(scope?.amount_eur, locale.value);
+const taxLines = computed(() =>
+  (['130', '303'] as const).map((code) => {
+    const obligation = data.value?.obligations.find((row) => String(row.obligation_code) === code);
+    const form = presentation.value.formCardData(
+      data.value?.tax_forms?.[`modelo${code}`],
+      obligation,
+      { warnOnMissingHeadline: true },
+    );
+    const unavailable = form.display_state === 'unavailable';
+    return {
+      code,
+      form,
+      // A missing amount with a known cause is said in words below it; only an unexplained one is «—».
+      value:
+        form.headline_value != null
+          ? eur(form.headline_value, locale.value)
+          : unavailable || form.display_state === 'filed_without_values'
+            ? ''
+            : '—',
+      note:
+        unavailable && future.value
+          ? t('taxes.headlineNotStarted')
+          : presentation.value.formSubtitle(form, obligation),
+    };
+  }),
 );
-const form = (code: string) =>
-  presentation.value.formCardData(
-    data.value?.tax_forms?.[`modelo${code}`],
-    data.value?.obligations.find((row) => String(row.obligation_code) === code),
-    { warnOnMissingHeadline: true },
-  );
+const taxAccent = computed(() =>
+  taxLines.value.some((line) => presentation.value.formAccentClass(line.form)) ? 'warning' : '',
+);
+const calculable = computed(
+  () => !future.value && taxLines.value.some((line) => line.form.display_state === 'unavailable'),
+);
 const charts: { id: string; kind: ChartKind }[] = [
   { id: 'chart-business-result', kind: 'businessResult' },
   { id: 'chart-tax-due', kind: 'taxDue' },
@@ -120,10 +141,6 @@ const charts: { id: string; kind: ChartKind }[] = [
   { id: 'chart-cumulative-net', kind: 'cumulativeNet' },
   { id: 'chart-cumulative-expenses', kind: 'cumulativeExpenses' },
 ];
-const review = (posting = false) =>
-  props.context.services.navigate(
-    `/review?${new URLSearchParams({ period: props.context.period, ...(posting ? { tab: 'posting' } : {}) })}`,
-  );
 async function calculate() {
   if (calculating.value) return;
   const context = props.context,
@@ -179,15 +196,18 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
       </button>
     </div>
     <template v-if="data">
-      <div v-if="approved" class="period-note posting-banner">
-        <div>
-          <strong>{{ t('dashboard.postingBannerTitle', { count: approved }) }}</strong>
-          <p>{{ t('dashboard.approvedNotPosted') }}</p>
-        </div>
-        <button class="secondary-button" type="button" @click="review(true)">
-          {{ t('dashboard.postingBannerCta') }}
-        </button>
-      </div>
+      <TaskList
+        :tasks="tasks"
+        :empty-text="t('dashboard.tasksEmpty')"
+        :note="
+          data.forecast_as_of
+            ? t('dashboard.calculatedAsOf', { date: formatDateText(data.forecast_as_of, locale) })
+            : undefined
+        "
+        :busy="calculating"
+        @navigate="context.services.navigate"
+        @action="calculate"
+      />
       <section class="metric-grid" aria-labelledby="dashboard-figures-title">
         <h2 id="dashboard-figures-title" class="visually-hidden">
           {{ t('dashboard.figuresTitle') }}
@@ -198,49 +218,50 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
           ><small>{{
             t('common.counts.operations', { count: data.totals.actual.income_transaction_count })
           }}</small>
-        </div>
-        <div v-for="kind in ['purchase', 'amortization'] as const" :key="kind" class="metric">
-          <span>{{ t(kind === 'purchase' ? 'expense.purchase' : 'expense.amortization') }}</span
-          ><strong>{{ eur(data.expense_summary[kind]?.posted?.amount_eur, locale) }}</strong
-          ><small>{{ t('expense.posted') }}</small
-          ><small>{{
-            t('expense.approved', {
-              amount: eur(data.expense_summary[kind]?.approved?.amount_eur, locale),
+          <!-- ponytail: a count only, because totals.forecast.income_eur counts rows without a EUR
+          amount as zero; name the amount once the server reports its missing rows. -->
+          <small v-if="data.totals.forecast.income_transaction_count">{{
+            t('dashboard.reviewedNotPosted', {
+              value: t('common.counts.operations', {
+                count: data.totals.forecast.income_transaction_count,
+              }),
             })
-          }}</small
-          ><small v-if="data.expense_summary[kind]?.future_approved?.count">{{
-            t('expense.futureAmount', {
-              amount: eur(data.expense_summary[kind].future_approved.amount_eur, locale),
-            })
-          }}</small
-          ><small
-            v-if="
-              data.expense_summary[kind] &&
-              [data.expense_summary[kind].posted, data.expense_summary[kind].approved].some(
-                (scope) => scope.missing_amount_count,
-              )
-            "
-            >{{ t('expense.missing') }}</small
-          >
-        </div>
-        <div
-          v-for="code in ['130', '303']"
-          :key="code"
-          class="metric"
-          :class="presentation.formAccentClass(form(code))"
-        >
-          <span>{{
-            t(code === '130' ? 'dashboard.modelo130Box' : 'dashboard.modelo303Result')
-          }}</span
-          ><strong>{{ presentation.formCardValue(form(code)) }}</strong
-          ><small>{{
-            presentation.formSubtitle(
-              form(code),
-              data.obligations.find((row) => String(row.obligation_code) === code),
-            )
           }}</small>
+        </div>
+        <div class="metric">
+          <span>{{ t('dashboard.expensesPosted') }}</span>
+          <dl>
+            <div v-for="kind in ['purchase', 'amortization'] as const" :key="kind">
+              <dt>{{ t(kind === 'purchase' ? 'expense.purchase' : 'expense.amortization') }}</dt>
+              <dd>
+                <strong>{{ amount(data.expense_summary[kind]?.posted) }}</strong
+                ><small v-if="data.expense_summary[kind]?.approved?.count">{{
+                  t('dashboard.reviewedNotPosted', {
+                    value: amount(data.expense_summary[kind].approved),
+                  })
+                }}</small
+                ><small v-if="data.expense_summary[kind]?.future_approved?.count">{{
+                  t('expense.futureAmount', {
+                    amount: amount(data.expense_summary[kind].future_approved),
+                  })
+                }}</small>
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div class="metric" :class="taxAccent">
+          <span>{{ t('dashboard.taxDue') }}</span>
+          <dl>
+            <div v-for="line in taxLines" :key="line.code">
+              <dt>{{ t(line.code === '130' ? 'dashboard.irpfLine' : 'dashboard.ivaLine') }}</dt>
+              <dd>
+                <strong v-if="line.value">{{ line.value }}</strong
+                ><small>{{ line.note }}</small>
+              </dd>
+            </div>
+          </dl>
           <button
-            v-if="form(code).display_state === 'unavailable'"
+            v-if="calculable"
             type="button"
             class="secondary-button calculate-button"
             :disabled="calculating"
@@ -250,22 +271,34 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
           </button>
         </div>
       </section>
-      <button
-        v-if="ready > 0"
-        class="review-banner"
-        type="button"
-        id="dashboard-ready-banner"
-        @click="review()"
-      >
-        <strong>{{ t('dashboard.readyBanner', { count: ready }) }}</strong
-        ><span>{{ t('dashboard.readyBannerAction') }}</span>
-      </button>
-      <div v-if="nextDue" class="deadline-strip">
-        <strong>Modelo {{ nextDue.obligation_code }}</strong>
-        <p>{{ t('dashboard.obligationDue') }}</p>
-        <time :datetime="nextDue.statutory_due_on || ''">{{
-          formatDateText(nextDue.statutory_due_on, locale)
-        }}</time>
+      <div class="dashboard-grid">
+        <section class="panel">
+          <header class="panel-header">
+            <h2>{{ t('dashboard.recentTransactions') }}</h2>
+            <small>{{ formatPeriod(context.period, locale) }}</small>
+          </header>
+          <RecentTransactions
+            :rows="data.recent_transactions"
+            :period="context.period"
+            :target="context.copyTarget"
+            :navigate="context.services.navigate"
+            :copy="context.copy"
+          />
+        </section>
+        <section v-if="data.open_issues.length" class="panel">
+          <header class="panel-header">
+            <h2>{{ t('dashboard.openIssues') }}</h2>
+            <small>{{ data.open_issue_count ?? data.open_issues.length }}</small>
+          </header>
+          <ul class="issues-list">
+            <li
+              v-for="(issue, index) in data.open_issues"
+              :key="issue.ui_context.subject_id || index"
+            >
+              <StatusCell :context="issue.ui_context" />
+            </li>
+          </ul>
+        </section>
       </div>
       <section
         class="charts-panel"
@@ -283,36 +316,6 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
           :failed="chartFailure"
         />
       </section>
-      <div class="dashboard-grid">
-        <section class="panel">
-          <header class="panel-header">
-            <h2>{{ t('dashboard.recentTransactions') }}</h2>
-            <small>{{ formatPeriod(context.period, locale) }}</small>
-          </header>
-          <RecentTransactions
-            :rows="data.recent_transactions"
-            :period="context.period"
-            :target="context.copyTarget"
-            :navigate="context.services.navigate"
-            :copy="context.copy"
-          />
-        </section>
-        <section class="panel">
-          <header class="panel-header">
-            <h2>{{ t('dashboard.needsAttention') }}</h2>
-            <small>{{ data.open_issues.length }}</small>
-          </header>
-          <ul v-if="data.open_issues.length" class="issues-list">
-            <li
-              v-for="(issue, index) in data.open_issues"
-              :key="issue.ui_context.subject_id || index"
-            >
-              <StatusCell :context="issue.ui_context" />
-            </li>
-          </ul>
-          <div v-else class="empty-state">{{ t('issues.none') }}</div>
-        </section>
-      </div>
     </template>
   </div>
 </template>

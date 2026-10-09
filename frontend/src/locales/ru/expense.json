@@ -1,7 +1,6 @@
 {
   "expense.amortization": "Амортизация техники",
   "expense.amount": "Сумма расхода",
-  "expense.approved": "Проверено, не проведено: {amount}",
   "expense.assetDocument": "Актив / исходный документ",
   "expense.back": "К списку: {title} · {period}",
   "expense.chartSourceNote": "График использует исходные суммы записей. Для амортизации это полная стоимость прежней покупки, а не новое списание: сумму за квартал смотрите в блоке выше.",
@@ -27,7 +26,6 @@
   "expense.notes": "Примечания",
   "expense.open": "Открыть расход",
   "expense.periodDate": "Период и дата учёта",
-  "expense.posted": "Проведено",
   "expense.purchase": "Покупки, услуги и прочие расходы",
   "expense.quarterAmount": "Амортизация за квартал",
   "expense.quarterTotal": "Проведено и проверено за весь квартал: {amount}",

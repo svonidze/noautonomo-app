@@ -165,6 +165,35 @@ def test_dashboard_and_transaction_views_use_sqlite_source_of_truth(
     assert expenses[0]["lifecycle_status"] == "approved"
 
 
+def test_dashboard_counts_every_open_question_and_this_quarters_queue_rows_without_a_rate(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    _database(config)
+    with LedgerDB.open(config.database) as db:
+        for index in range(7):
+            db.add_validation_issue(period_key="2026-Q3", issue_code=f"synthetic_question_{index}",
+                                    severity="warning", message="Synthetic open question", blocking=False)
+        db.add_validation_issue(period_key="2026-Q3", issue_code="synthetic_answered", severity="warning",
+                                message="Synthetic answered question", blocking=False, issue_status="resolved")
+        for key, period, day, status in (
+            ("usd-approved", "2026-Q3", "2026-08-10", "approved"),
+            ("usd-review", "2026-Q3", "2026-08-11", "needs_review"),
+            ("usd-posted", "2026-Q3", "2026-08-12", "posted"),
+            ("usd-next-quarter", "2026-Q4", "2026-10-05", "approved"),
+        ):
+            db.add_transaction(external_key=key, period_key=period, transaction_date=day, booking_date=day,
+                               entry_type="expense", description="Synthetic foreign expense", amount_minor=9900,
+                               currency="USD", amount_eur_minor=None, direction="debit", lifecycle_status=status)
+
+    dashboard = LocalAccountingApp(config, session_token="test-token").dashboard("2026-Q3")
+
+    assert len(dashboard["open_issues"]) == 6
+    assert dashboard["open_issue_count"] == 7
+    # Only this quarter's queue: the posted row and the next quarter's row are not tasks here.
+    assert dashboard["missing_fx_count"] == 2
+
+
 @pytest.mark.parametrize(
     ("source", "expected_id"),
     [

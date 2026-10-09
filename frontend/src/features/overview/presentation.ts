@@ -33,12 +33,6 @@ export function createFinancePresentation(locale: Locale) {
     };
   }
 
-  function formCardValue(form: FormView) {
-    return form.headline_value !== null && form.headline_value !== undefined
-      ? eur(form.headline_value)
-      : '—';
-  }
-
   function formAccentClass(form: FormView) {
     return ['filed', 'snapshot_only'].includes(form.display_state) ? '' : 'warning';
   }
@@ -212,7 +206,6 @@ export function createFinancePresentation(locale: Locale) {
 
   return {
     formCardData,
-    formCardValue,
     formAccentClass,
     formSubtitle,
     formEmptyState,

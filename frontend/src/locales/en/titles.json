@@ -4,7 +4,7 @@
   "titles.aeatDocuments": "AEAT documents",
   "titles.aeatDocumentsLead": "AEAT receipts, requests and decisions",
   "titles.contacts": "Counterparties",
-  "titles.contactsLead": "Clients and suppliers, their details and operations",
+  "titles.contactsLead": "Clients and suppliers, their details and transactions",
   "titles.dashboard": "Overview",
   "titles.dashboardLead": "What to do this quarter and how things are going",
   "titles.expenses": "Expenses",
@@ -12,9 +12,9 @@
   "titles.income": "Income",
   "titles.incomeLead": "Invoices issued and income received this quarter",
   "titles.review": "Review",
-  "titles.reviewLead": "Review documents, then post them: include reviewed operations in the tax calculation. This is not a payment or a tax filing",
+  "titles.reviewLead": "Review documents, then post the reviewed entries: posting includes reviewed transactions in the tax calculation. This is not a payment or a tax filing",
   "titles.settings": "Account settings",
-  "titles.settingsLead": "Taxpayer details, backup retention and interface language",
+  "titles.settingsLead": "Taxpayer details, backups and interface language",
   "titles.taxes": "Taxes and deadlines",
   "titles.taxesLead": "How much to pay AEAT for the quarter and when"
 }

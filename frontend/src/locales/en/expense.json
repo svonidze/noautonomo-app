@@ -1,7 +1,6 @@
 {
   "expense.amortization": "Asset depreciation",
   "expense.amount": "Expense amount",
-  "expense.approved": "Reviewed, not posted: {amount}",
   "expense.assetDocument": "Asset / source document",
   "expense.back": "Back to {title} · {period}",
   "expense.chartSourceNote": "The chart uses source entry amounts. For depreciation this is the original purchase cost, not a new charge; see the section above for the quarterly deduction.",
@@ -27,7 +26,6 @@
   "expense.notes": "Notes",
   "expense.open": "Open expense",
   "expense.periodDate": "Period and recognition date",
-  "expense.posted": "Posted",
   "expense.purchase": "Purchases, services and other expenses",
   "expense.quarterAmount": "Quarterly depreciation",
   "expense.quarterTotal": "Posted and reviewed for the whole quarter: {amount}",

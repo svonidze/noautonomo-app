@@ -10,6 +10,8 @@ const props = defineProps<{
   form: FormView;
   summary?: TaxFormSummary;
   refreshing: boolean;
+  /** The quarter has not started: nothing to calculate yet. */
+  future?: boolean;
 }>();
 const emit = defineEmits<{ refresh: [] }>();
 const { locale, t } = useLocale();
@@ -87,7 +89,7 @@ const filing = computed(() =>
       >
         {{ t('taxes.refundRequested') }}: {{ money(summary.refund_requested_minor) }}
       </p>
-      <template v-if="form.display_state === 'unavailable'"
+      <template v-if="form.display_state === 'unavailable' && !future"
         ><p>{{ t('help.words.refreshHint') }}</p>
         <button
           type="button"

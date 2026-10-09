@@ -431,7 +431,7 @@ button:focus-visible {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -446,7 +446,6 @@ button:focus-visible {
   font-size: 0.84rem;
 }
 
-.period-note.posting-banner,
 .period-note.posting-warning {
   display: flex;
   align-items: center;
@@ -501,35 +500,120 @@ button:focus-visible {
   padding-top: 13px;
 }
 
-.deadline-strip {
+.metric dl {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 15px;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.metric dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.metric dd {
+  margin: 0;
+}
+
+.metric dd strong {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+}
+
+/* «Что сделать сейчас»: one row per task, the whole row is the link or the action. */
+.task-list {
   margin: 0 0 18px;
-  padding: 13px 15px;
-  background: var(--warning-soft);
-  border: 1px solid #ebcc9b;
+}
+
+.task-list h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.task-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
 }
 
-.deadline-strip strong {
-  white-space: nowrap;
+.task-list li + li {
+  border-top: 1px solid var(--line);
 }
 
-.deadline-strip p {
+.task-list p {
   margin: 0;
-  color: #71470f;
+  color: var(--muted);
 }
 
-.deadline-strip time {
-  font-weight: 700;
+.task-list p + p {
+  margin-top: 4px;
+  font-size: 0.84rem;
+}
+
+.task-row {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 12px 15px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  text-decoration: none;
+}
+
+.task-row:hover {
+  background: var(--surface-muted);
+}
+
+.task-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.task-row strong,
+.task-row small {
+  display: block;
+}
+
+.task-row strong {
+  color: var(--accent-dark);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.task-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* On narrow rows the status tag moves under the text instead of squeezing it. */
+.task-row > span:first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.task-row .badge {
+  flex: none;
 }
 
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(300px, 0.9fr);
   gap: 18px;
+}
+
+/* Without open questions the recent operations take the whole row. */
+.dashboard-grid > :only-child {
+  grid-column: 1 / -1;
 }
 
 .panel {
@@ -1581,31 +1665,6 @@ a:focus-visible {
   }
 }
 
-.review-banner {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 22px;
-  padding: 16px 18px;
-  color: var(--text);
-  background: linear-gradient(135deg, #ebf7f2, #dff1ea);
-  border: 1px solid #b8ddd0;
-  border-radius: 10px;
-  text-align: left;
-}
-
-.review-banner strong,
-.review-banner span {
-  display: block;
-}
-
-.review-banner span {
-  color: var(--accent-dark);
-  font-weight: 700;
-}
-
 .review-shell {
   gap: 18px;
 }
@@ -1971,10 +2030,6 @@ textarea:focus {
 }
 
 @media (max-width: 1080px) {
-  .metric-grid {
-    grid-template-columns: repeat(3, minmax(150px, 1fr));
-  }
-
   .dashboard-grid,
   .tax-form-grid,
   .review-facts-grid {
@@ -2043,20 +2098,6 @@ textarea:focus {
     padding: 16px 12px 36px;
   }
 
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .deadline-strip {
-    grid-template-columns: 1fr auto;
-  }
-
-  .deadline-strip p {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  .period-note.posting-banner,
   .period-note.posting-warning,
   .posting-action-row,
   .posting-results-header {
@@ -2086,10 +2127,6 @@ textarea:focus {
     min-width: 0;
   }
 
-  .review-banner {
-    align-items: flex-start;
-  }
-
   .tax-form-facts {
     grid-template-columns: 1fr;
   }
@@ -2112,10 +2149,6 @@ textarea:focus {
   .topbar-actions {
     margin-top: 12px;
     justify-content: flex-start;
-  }
-
-  .metric-grid {
-    grid-template-columns: 1fr;
   }
 
   .posting-summary-grid {

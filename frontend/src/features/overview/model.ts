@@ -83,14 +83,17 @@ export interface RetaCheck {
   }[];
 }
 export interface ExpenseScope {
+  /** Null when any row lacks an amount; `known_amount_minor` then sums the rows that have one. */
   amount_eur?: Amount;
+  known_amount_minor?: number;
   count?: number;
   missing_amount_count?: number;
 }
 export interface DashboardData {
   totals: {
     actual: { income_eur: Amount; income_transaction_count: number };
-    forecast: { transaction_count?: number };
+    /** Approved, not yet posted. */
+    forecast: { transaction_count?: number; income_transaction_count?: number };
   };
   expense_summary: Record<
     'purchase' | 'amortization',
@@ -98,12 +101,16 @@ export interface DashboardData {
   >;
   obligations: Obligation[];
   tax_forms?: Record<string, FormView>;
+  forecast_as_of?: string | null;
   posting_preview_summary?: Record<string, unknown>;
-  summary?: Record<string, unknown>;
-  readyCount?: number;
-  ready_count?: number;
+  /** Review queue by state: needs review, then approved rows by posting readiness. */
+  posting_summary?: { needs_review: number; ready: number; later: number; blocked: number };
   recent_transactions: TransactionRow[];
+  /** The six most urgent open questions; `open_issue_count` counts all of them. */
   open_issues: { ui_context: HelpContext }[];
+  open_issue_count?: number;
+  /** Review-queue rows of this quarter without a EUR amount. */
+  missing_fx_count?: number;
 }
 export interface AssetRow {
   asset_id: string;

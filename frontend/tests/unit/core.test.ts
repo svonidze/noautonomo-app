@@ -175,30 +175,6 @@ test('transport and fallback errors keep message codes that re-render in the cur
   expect(errorDescriptor(server)).toBe('Synthetic server text');
 });
 
-test('dashboard banners follow the plural categories of the interface language', () => {
-  expect(t('dashboard.readyBanner', { count: 1 }, 'ru')).toBe(
-    '1 операция уже проверена и может быть проведена',
-  );
-  expect(t('dashboard.readyBanner', { count: 5 }, 'ru')).toBe(
-    '5 операций уже проверены и могут быть проведены',
-  );
-  expect(t('dashboard.readyBanner', { count: 22 }, 'ru')).toBe(
-    '22 операции уже проверены и могут быть проведены',
-  );
-  expect(t('dashboard.readyBanner', { count: 1 }, 'en')).toBe(
-    '1 reviewed transaction can be posted now',
-  );
-  expect(t('dashboard.postingBannerTitle', { count: 1 }, 'en')).toBe(
-    '1 approved transaction is waiting to post',
-  );
-  expect(t('dashboard.postingBannerTitle', { count: 3 }, 'ru')).toBe(
-    '3 подтвержденные операции ждут проведения',
-  );
-  expect(t('dashboard.postingBannerTitle', { count: 11 }, 'ru')).toBe(
-    '11 подтвержденных операций ждут проведения',
-  );
-});
-
 test('bare diagnostic keys requiring parameters stay safe to render', async () => {
   const { errorDescriptor } = await import('../../src/core/error-message.ts');
   const { messageText } = await import('../../src/core/i18n.ts');
