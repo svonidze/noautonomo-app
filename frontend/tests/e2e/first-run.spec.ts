@@ -10,15 +10,22 @@ import contacts from '../../src/locales/ru/contacts.json' with { type: 'json' };
 import aeat from '../../src/locales/ru/aeatDocuments.json' with { type: 'json' };
 import settings from '../../src/locales/ru/settings.json' with { type: 'json' };
 import reta from '../../src/locales/ru/reta.json' with { type: 'json' };
+import taxes from '../../src/locales/ru/taxes.json' with { type: 'json' };
 
-// The empty-ledger project (playwright.config.mts) serves one open quarter with no records and no
-// profile: what a new owner sees on the first run.
+// The empty-ledger project (playwright.config.mts) serves a ledger straight from `db init`: no
+// quarter, no record, no profile. The server offers the current quarter without creating it.
+const today = new Date();
+const quarter = `${today.getFullYear()}-Q${Math.floor(today.getMonth() / 3) + 1}`;
+/** Console and page errors, plus any request that would ask for the period `null`. */
 function consoleErrors(page: Page) {
   const errors: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('request', (request) => {
+    if (request.url().includes('period=null')) errors.push(`request ${request.url()}`);
+  });
   return errors;
 }
 
@@ -27,7 +34,7 @@ test('a new ledger opens on four first steps, without charts or console errors',
 }) => {
   const errors = consoleErrors(page);
   await page.goto('/');
-  await expect(page).toHaveURL(/\/dashboard\?period=2026-Q3$/);
+  await expect(page).toHaveURL(`/dashboard?period=${quarter}`);
   await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
   const start = page.locator('.task-list');
   await expect(start.locator('h2')).toHaveText(dashboard['dashboard.start.title']);
@@ -45,15 +52,20 @@ test('a new ledger opens on four first steps, without charts or console errors',
     statuses['statuses.steps.notStarted'],
   ]);
   expect(await rows.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href')))).toEqual(
-    ['/settings', null, '/review?period=2026-Q3', '/taxes?period=2026-Q3'],
+    ['/settings', null, `/review?period=${quarter}`, `/taxes?period=${quarter}`],
   );
   // Below the data threshold no chart draws: the first screen is the start list, not charts.
   await expect(page.locator('svg.chart-svg')).toHaveCount(0);
   await expect(page.locator('.primary-button:visible')).toHaveCount(1);
-  await rows.nth(1).click();
-  await expect(page.locator('#vue-intake-dialog')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.locator('#vue-intake-dialog')).toBeHidden();
+  // The header button and the document step both open intake for the offered quarter.
+  const dialog = page.locator('#vue-intake-dialog');
+  for (const opener of [page.locator('#new-entry-button'), rows.nth(1)]) {
+    await opener.click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('[name="period"]')).toHaveValue(quarter);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+  }
   await page.setViewportSize({ width: 375, height: 812 });
   expect(
     await page.evaluate(() => {
@@ -73,38 +85,42 @@ test('every screen of an empty ledger says what is empty and what to do next', a
   const errors = consoleErrors(page);
   const screens: [string, string, string[]][] = [
     [
-      '/dashboard?period=2026-Q3',
+      `/dashboard?period=${quarter}`,
       '.dashboard-grid .empty-state',
       [dashboard['dashboard.recentEmpty']],
     ],
     [
-      '/income?period=2026-Q3',
+      `/income?period=${quarter}`,
       '#transactions-table .empty-state',
       [transactions['transactions.incomeEmpty']],
     ],
     // Purchases come from documents, depreciation from the equipment schedule.
     [
-      '/expenses?period=2026-Q3',
+      `/expenses?period=${quarter}`,
       '#expense-results .empty-state',
       [expense['expense.empty'], expense['expense.amortizationEmpty']],
     ],
     [
-      '/review?period=2026-Q3',
+      `/review?period=${quarter}`,
       '.review-queue-table .empty-state',
       [review['review.queueEmpty.noDocuments']],
     ],
-    ['/review?period=2026-Q3&tab=posting', '.posting-action-hint', [review['review.postingEmpty']]],
     [
-      '/review?period=2026-Q3&tab=documents',
+      `/review?period=${quarter}&tab=posting`,
+      '.posting-action-hint',
+      [review['review.postingEmpty']],
+    ],
+    [
+      `/review?period=${quarter}&tab=documents`,
       '#review-tabpanel .empty-state',
       [review['review.documentsEmpty'], issues['issues.none']],
     ],
     [
-      '/assets?period=2026-Q3',
+      `/assets?period=${quarter}`,
       '.asset-explanations-table .empty-state',
       [assets['assets.listEmpty']],
     ],
-    ['/taxes?period=2026-Q3', 'section.reta-check h3 + p', [reta['reta.basesEmpty']]],
+    [`/taxes?period=${quarter}`, 'section.reta-check h3 + p', [reta['reta.basesEmpty']]],
     ['/contacts', '#contacts-list-wrap .empty-state', [contacts['contacts.listEmpty']]],
     ['/aeat-documents', '.aeat-documents-table .empty-state', [aeat['aeatDocuments.listEmpty']]],
     ['/settings', '#settings-profile-picker p', [settings['settings.form.empty']]],
@@ -117,12 +133,20 @@ test('every screen of an empty ledger says what is empty and what to do next', a
   expect(errors).toEqual([]);
 });
 
+test('Calculate on a quarter without records says what to do instead of failing', async ({
+  page,
+}) => {
+  await page.goto(`/dashboard?period=${quarter}`);
+  await page.locator('.metric .calculate-button').click();
+  await expect(page.locator('#toast-message')).toHaveText(taxes['taxes.periodEmpty']);
+});
+
 // Runs last: it saves a profile into the shared empty ledger.
 test('a saved profile marks the first step done and names the owner in the sidebar', async ({
   page,
 }) => {
   const errors = consoleErrors(page);
-  await page.goto('/dashboard?period=2026-Q3');
+  await page.goto(`/dashboard?period=${quarter}`);
   await expect(page.locator('#profile-name')).not.toHaveText('Synthetic Owner');
   await page.locator('.task-row').first().click();
   await expect(page).toHaveURL(/\/settings$/);
@@ -140,5 +164,35 @@ test('a saved profile marks the first step done and names the owner in the sideb
   await expect(page.locator('.task-row .badge').first()).toHaveText(
     statuses['statuses.steps.done'],
   );
+  expect(errors).toEqual([]);
+});
+
+// Runs last: it adds the first document to the shared empty ledger.
+test('the first document opens its quarter and moves the start list on to its review', async ({
+  page,
+}) => {
+  const errors = consoleErrors(page);
+  const day = [today.getFullYear(), today.getMonth() + 1, today.getDate()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('-');
+  await page.goto(`/dashboard?period=${quarter}`);
+  await page.locator('#new-entry-button').click();
+  const form = page.locator('#vue-intake-form');
+  await page.locator('#vue-intake-file').setInputFiles({
+    name: 'synthetic-first-invoice.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(`Synthetic invoice SYN-FIRST-1 dated ${day}. Total EUR 121.00.`),
+  });
+  await form.locator('[name="issued_on"]').fill(day);
+  await form.locator('[name="document_number"]').fill('SYN-FIRST-1');
+  await form.locator('[name="counterparty_name"]').fill('Synthetic Supplier');
+  await form.locator('[name="gross"]').fill('121.00');
+  await page.locator('#vue-submit-intake').click();
+  // An expense opens its review: intake created the quarter and its first transaction.
+  await expect(page).toHaveURL(new RegExp(`/review/[0-9a-f-]{36}\\?period=${quarter}$`));
+  await page.locator('a[data-view="dashboard"]').click();
+  const tags = page.locator('.task-row .badge');
+  await expect(tags.nth(1)).toHaveText(statuses['statuses.steps.done']);
+  await expect(tags.nth(2)).toHaveText(statuses['statuses.steps.canStart']);
   expect(errors).toEqual([]);
 });

@@ -66,10 +66,9 @@ def main() -> None:
             inbox_root=root / "Inbox", archive_root=root / "Evidence", cache_root=root / "cache",
             static_root=package / "web_ui", private_root=root, allow_test_ui=os.environ.get("AUTONOMO_PSEUDO") == "1")
         with LedgerDB.initialize(config.database) as db:
-            # AUTONOMO_FIXTURE_EMPTY=1 is a first run: one open quarter, no records and no profile.
-            if os.environ.get("AUTONOMO_FIXTURE_EMPTY") == "1":
-                db.ensure_period("2026-Q3")
-            else:
+            # AUTONOMO_FIXTURE_EMPTY=1 is a first run straight after `db init`: no quarter, no record,
+            # no profile.
+            if os.environ.get("AUTONOMO_FIXTURE_EMPTY") != "1":
                 seed(db, config)
         app = LocalAccountingApp(config, session_token="synthetic-browser-session")
         port = int(os.environ.get("AUTONOMO_FIXTURE_PORT", "8765"))

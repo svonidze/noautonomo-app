@@ -1,5 +1,6 @@
 import { message, type Locale, type UiMessage } from '../../core/i18n.ts';
 import { eur, formatDateText, isFuturePeriod } from '../../core/format.ts';
+import { waitingDocumentStates } from '../posting/model.ts';
 import type { DashboardData } from './model.ts';
 
 export interface DashboardTask {
@@ -170,13 +171,17 @@ export function buildStartTasks({
     tag: message(`statuses.steps.${step}`),
   });
   const query = new URLSearchParams({ period }),
-    queue = data.posting_summary;
-  const added = data.recent_transactions.length > 0;
+    queue = data.posting_summary,
+    documents = data.document_counts ?? {};
+  // A document counts even when intake could not draft its transaction (no readable amount).
+  const added =
+    data.recent_transactions.length > 0 || Object.values(documents).some((count) => count > 0);
   const queued =
     positive(queue?.needs_review) +
     positive(queue?.ready) +
     positive(queue?.later) +
-    positive(queue?.blocked);
+    positive(queue?.blocked) +
+    waitingDocumentStates.reduce((sum, state) => sum + positive(documents[state]), 0);
   const document = row('document', added ? 'done' : canAdd ? 'canStart' : 'notStarted');
   return [
     { ...row('profile', profileConfigured ? 'done' : 'canStart'), href: '/settings' },

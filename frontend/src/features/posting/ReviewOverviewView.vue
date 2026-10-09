@@ -15,6 +15,7 @@ import {
   statusLabel,
 } from './normalize.ts';
 import { postingState, markStale, refreshToken, clearRefresh } from './state.ts';
+import { waitingDocumentStates } from './model.ts';
 import type {
   OverviewData,
   PostingItem,
@@ -96,6 +97,13 @@ watch(
   { immediate: true },
 );
 const tabs: ReviewTab[] = ['queue', 'posting', 'documents'];
+const quarterDocuments = computed(() =>
+  !data.value?.documents.length
+    ? 'noDocuments'
+    : data.value.documents.some((row) => waitingDocumentStates.includes(row.lifecycle_status))
+      ? 'documentsWaiting'
+      : 'allReviewed',
+);
 const selected = computed(() => (tabs.includes(props.context.tab) ? props.context.tab : 'queue'));
 const counts = computed(() => ({
   queue: data.value?.rows.filter((row) => row.ui_context?.state === 'needs_review').length || 0,
@@ -322,7 +330,7 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
           v-if="selected === 'queue'"
           :rows="data.rows"
           :context="context"
-          :has-documents="data.documents.length > 0"
+          :documents="quarterDocuments"
         />
         <ReviewDocuments
           v-else-if="selected === 'documents'"

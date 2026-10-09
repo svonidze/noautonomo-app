@@ -52,6 +52,7 @@
   "taxes.paidDetail": "The bank debit is confirmed.",
   "taxes.partialDetail": "Still to confirm or pay: {amount}.",
   "taxes.payable": "Amount due",
+  "taxes.periodEmpty": "This quarter has no records yet, so there is nothing to calculate. Add a document with the “Add document” button.",
   "taxes.previewUnconfirmedDetail": "Preliminary amount due: {amount}. The filed amount is unavailable and the bank debit is not confirmed.",
   "taxes.refundRequested": "Refund requested",
   "taxes.remaining": "Remaining",

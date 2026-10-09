@@ -45,6 +45,7 @@ from .account_settings import AccountSettingsError, read_settings, save_backups,
 from .fx_reference import ECBRateObservation, FXReferenceError, fetch_eur_rate
 from .expense_view import enrich_expense_context, expense_page, expense_summary
 from .ledger_db import LedgerDB, LedgerDbError, SchemaVersionError, StaleRowVersionError, open as open_ledger_db
+from .ledger_db import _default_period_bounds
 from .legacy_paths import LegacyPathResolver
 from .posting import build_posting_preview
 from .reta_ledger import RetaInputUnavailable, ledger_bracket_check
@@ -429,6 +430,10 @@ class LocalAccountingApp:
                     "validation_issues",
                 )
             }
+        if not periods:
+            # A ledger straight from `db init`: offer the current quarter without creating it; the
+            # first document's intake creates its row.
+            periods = [_missing_period(_quarter_key(date.today()))]
         period_keys = [row["period_key"] for row in periods]
         default_period = _current_or_latest_period(period_keys)
         return {
@@ -448,28 +453,30 @@ class LocalAccountingApp:
         today = date.today()
         cached = self._load_cached_dashboard(period)
         with closing(self._connect()) as connection:
-            period_row = self._period_row(connection, period)
+            period_row = self._period_row(connection, period, missing_ok=True)
+            # A quarter without a row (a fresh ledger) has no records: '' matches no period_id.
+            period_id = period_row["period_id"] if period_row else ""
             context_builder = self._status_context(connection, today=today)
-            totals = self._transaction_totals(connection, period_row["period_id"])
+            totals = self._transaction_totals(connection, period_id)
             expense_rows = self._transactions(
-                connection, period_id=period_row["period_id"], entry_type="expense", limit=-1, today=today,
+                connection, period_id=period_id, entry_type="expense", limit=-1, today=today,
                 context_builder=context_builder,
             )
             recent = self._transactions(
                 connection,
-                period_id=period_row["period_id"],
+                period_id=period_id,
                 limit=8,
                 today=today,
                 context_builder=context_builder,
             )
             open_issues = self._issues(
                 connection,
-                period_id=period_row["period_id"],
+                period_id=period_id,
                 limit=6, context_builder=context_builder,
             )
             open_issue_count = connection.execute(
                 "SELECT COUNT(*) FROM validation_issues WHERE period_id = ? AND issue_status = 'open'",
-                (period_row["period_id"],),
+                (period_id,),
             ).fetchone()[0]
             # Review-queue rows of this quarter without a EUR amount (the analytics quality count
             # covers two years and every status, so it cannot drive a task for this quarter), and
@@ -483,7 +490,7 @@ class LocalAccountingApp:
                   AND amount_eur_minor IS NULL
                   AND UPPER(COALESCE(NULLIF(original_currency, ''), currency, '')) <> 'EUR'
                 """,
-                (period_row["period_id"],),
+                (period_id,),
             ).fetchone()
             # Any quarter: until the first posting the overview leads with its first-run steps.
             ledger_has_postings = connection.execute(
@@ -492,7 +499,7 @@ class LocalAccountingApp:
             ).fetchone()[0]
             obligations = self._obligations(
                 connection,
-                period_id=period_row["period_id"],
+                period_id=period_id,
             )
             tax_forms = _dashboard_tax_forms(
                 connection,
@@ -500,7 +507,7 @@ class LocalAccountingApp:
                 obligations=obligations,
                 cached=cached,
             )
-            posting_preview = context_builder.preview_payload(period)
+            posting_preview = context_builder.preview_payload(period) if period_row else {}
             document_counts = {
                 row["lifecycle_status"]: int(row["count"])
                 for row in connection.execute(
@@ -510,18 +517,18 @@ class LocalAccountingApp:
                     WHERE period_id = ?
                     GROUP BY lifecycle_status
                     """,
-                    (period_row["period_id"],),
+                    (period_id,),
                 ).fetchall()
             }
             review_rows = self._transactions(
                 connection,
-                period_id=period_row["period_id"],
+                period_id=period_id,
                 lifecycle_status="review",
                 limit=500, context_builder=context_builder,
             )
             review_summary = _review_summary(review_rows)
         return {
-            "period": dict(period_row),
+            "period": dict(period_row) if period_row else _missing_period(period),
             "totals": totals,
             "expense_summary": expense_summary(expense_rows),
             "expense_view_as_of": today.isoformat(),
@@ -548,9 +555,14 @@ class LocalAccountingApp:
         try:
             return self._build_posting_preview(period)
         except LedgerDbError as exc:
-            if str(exc).startswith("Unknown period: "):
-                raise FileNotFoundError(str(exc)) from exc
-            raise
+            if not str(exc).startswith("Unknown period: "):
+                raise
+        # A quarter without a row yet (a fresh ledger) has nothing to post.
+        counts = ("items", "approved_count", "ready_count", "deferred_count", "blocked_count",
+                  "ready_income_eur_minor", "ready_expense_eur_minor", "cleanup_count", "cleanup_blocked_count")
+        return {"period": period, "period_status": "missing", "reason_code": None,
+                "summary": {**dict.fromkeys(counts, 0), "ready_total_eur": "0.00"},
+                "ready": [], "deferred": [], "blocked": [], "items": []}
 
     def post_ready(
         self,
@@ -620,7 +632,9 @@ class LocalAccountingApp:
         if lifecycle_status not in allowed_statuses | {None}:
             raise LocalWebError("Unsupported lifecycle status")
         with closing(self._connect()) as connection:
-            period_row = self._period_row(connection, period)
+            period_row = self._period_row(connection, period, missing_ok=True)
+            if period_row is None:
+                return []
             return self._transactions(
                 connection,
                 period_id=period_row["period_id"],
@@ -640,11 +654,11 @@ class LocalAccountingApp:
         effective_today = today or date.today()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN")
-            period_row = self._period_row(connection, period)
+            period_row = self._period_row(connection, period, missing_ok=True)
             rows = self._transactions(
                 connection, period_id=period_row["period_id"], entry_type="expense",
                 limit=-1, today=effective_today,
-            )
+            ) if period_row else []
             return expense_page(
                 rows, period=period, today=effective_today, query=query, offset=offset, limit=limit,
             )
@@ -854,7 +868,9 @@ class LocalAccountingApp:
     def issues(self, period_key: str) -> list[dict[str, Any]]:
         period = _validate_period(period_key)
         with closing(self._connect()) as connection:
-            period_row = self._period_row(connection, period)
+            period_row = self._period_row(connection, period, missing_ok=True)
+            if period_row is None:
+                return []
             return self._issues(
                 connection,
                 period_id=period_row["period_id"],
@@ -870,8 +886,6 @@ class LocalAccountingApp:
             periods = [r[0] for r in connection.execute(
                 "SELECT period_key FROM periods WHERE period_type='quarter' AND period_key LIKE '%-Q_' ORDER BY period_key DESC")]
             period = _validate_period(period_key) if period_key is not None else _current_or_latest_period(periods)
-            if period is not None and period not in periods:
-                raise LocalWebApiError(HTTPStatus.NOT_FOUND, "period_not_found", "Unknown quarter")
             rows = connection.execute("""
                 SELECT a.*, d.counterparty_id, c.display_name AS counterparty_name
                 FROM assets a LEFT JOIN documents d ON d.document_id=a.document_id
@@ -899,20 +913,18 @@ class LocalAccountingApp:
         period = _validate_period(period_key)
         cached = self._load_cached_dashboard(period)
         with closing(self._connect()) as connection:
-            period_row = self._period_row(connection, period)
+            period_row = self._period_row(connection, period, missing_ok=True)
             obligations = self._obligations(
                 connection,
                 period_id=period_row["period_id"],
-            )
+            ) if period_row else []
             tax_forms = _dashboard_tax_forms(
                 connection,
                 period_key=period,
                 obligations=obligations,
                 cached=cached,
             )
-            period_details = _tax_period_status(connection, period)
-            if period_details is None:  # pragma: no cover - guarded by _period_row
-                raise LocalWebError(f"Unknown quarter: {period}")
+            period_details = _tax_period_status(connection, period) or _missing_period(period)
             period_state, tax_summary = build_tax_summary(
                 connection,
                 period=period_details,
@@ -1409,6 +1421,10 @@ class LocalAccountingApp:
 
     def refresh_dashboard(self, period_key: str, *, as_of: str | None = None) -> dict[str, Any]:
         period = _validate_period(period_key)
+        with closing(self._connect()) as connection:
+            if self._period_row(connection, period, missing_ok=True) is None:
+                raise LocalWebApiError(HTTPStatus.CONFLICT, "period_missing",
+                    f"{period} has no records to calculate yet", message_code="taxes.periodEmpty")
         effective_as_of = date.fromisoformat(as_of) if as_of else date.today()
         output_dir = self.config.cache_root / period
         command = [
@@ -1820,13 +1836,13 @@ class LocalAccountingApp:
         return connection
 
     def _period_row(
-        self, connection: sqlite3.Connection, period_key: str
-    ) -> sqlite3.Row:
+        self, connection: sqlite3.Connection, period_key: str, *, missing_ok: bool = False
+    ) -> sqlite3.Row | None:
         row = connection.execute(
             "SELECT * FROM periods WHERE period_key = ? AND period_type = 'quarter'",
             (period_key,),
         ).fetchone()
-        if row is None:
+        if row is None and not missing_ok:
             raise LocalWebError(f"Unknown quarter: {period_key}")
         return row
 
@@ -3155,6 +3171,12 @@ def _validate_period(value: str) -> str:
 
 def _quarter_key(value: date) -> str:
     return f"{value.year}-Q{((value.month - 1) // 3) + 1}"
+
+
+def _missing_period(period_key: str) -> dict[str, Any]:
+    """A valid quarter that has no row yet: read endpoints answer for it with empty data."""
+    starts_on, ends_on = _default_period_bounds(period_key)
+    return {"period_key": period_key, "status": "missing", "starts_on": starts_on, "ends_on": ends_on}
 
 
 def _current_or_latest_period(period_keys: list[str]) -> str | None:

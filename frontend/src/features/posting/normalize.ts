@@ -139,9 +139,11 @@ export function preview(value: unknown, period: string): PostingPreview {
     ready = Array.isArray(raw.ready) ? items(raw.ready) : legacy.filter((row) => row.readyToPost),
     deferred = items(raw.deferred),
     blocked = items(raw.blocked);
+  // A quarter without a row yet (a fresh ledger) is not closed: its first document opens it.
+  const status = text(raw.period_status || raw.status || 'open') || 'open';
   return {
     period: text(raw.period || period),
-    periodStatus: text(raw.period_status || raw.status || 'open') || 'open',
+    periodStatus: status === 'missing' ? 'open' : status,
     generatedAt: (raw.generated_at || raw.as_of || null) as string | null,
     asOf: (raw.as_of || null) as string | null,
     summary: summary(raw.summary || raw.posting_summary, { ready, deferred, blocked }),

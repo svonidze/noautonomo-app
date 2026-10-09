@@ -296,17 +296,29 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   filed row in any quarter; a payload without the field keeps the task list).
   Its rows: fill in the profile (`/settings`; done when `/api/bootstrap`
   reports `profile_configured`), add a first document (opens the intake
-  dialog; done once the quarter has a transaction; disabled with the reason
-  when the server does not accept documents), review and post it (`/review`;
-  can start once the quarter's queue has a row) and calculate the quarter
+  dialog; done once the quarter has a document or a transaction; disabled
+  with the reason when the server does not accept documents), review and
+  post it (`/review`; can start once a transaction or a document of the
+  quarter waits for review) and calculate the quarter
   (`/taxes`; waits for the first posting, after which the task list offers
   the calculation). Each row has one tag from `statuses.steps.*`: «Сделано»
   (positive), «Можно начать» (pending) or «Не начато» (neutral, waiting for
   an earlier step). The rows are task rows, never primary buttons. The
   sidebar names the owner only when `profile_configured` is true.
+- A ledger straight from `db init` has no quarter. `/api/bootstrap` then
+  offers the current calendar quarter (`status: "missing"`; no row is
+  created), and the read endpoints answer a valid quarter without a row with
+  empty data (`period.status: "missing"`, zero counts, empty lists), never
+  400/404; malformed keys still fail. The first document's intake creates the
+  quarter's row. Calculation needs that row: until then
+  `/api/dashboard/refresh` answers 409 `period_missing` with the text
+  `taxes.periodEmpty`, and the posting tab reads the quarter as open with
+  nothing to post.
 - An empty review queue reads «В этом квартале нет документов на проверку»
-  when the quarter has no document and «Все документы квартала проверены»
-  when it has documents and none waits in the queue.
+  when the quarter has no document, sends to the documents tab
+  (`review.queueEmpty.documentsWaiting`) when documents still wait for
+  review without a transaction (intake could not read their amount), and
+  reads «Все документы квартала проверены» otherwise.
 - `frontend/tests/unit/plain-language.test.ts` checks every RU key matching
   `/\.(empty|none|noRecords|queueEmpty)\b|Empty$/`: the text uses an action
   word («Добавьте», «Откройте», «Нажмите», «Проверьте», «Рассчитайте»,
@@ -324,12 +336,12 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 | Overview, analytics | `charts.*.empty`, `charts.empty.*` (one line) | the task or start list above |
 | Income | `transactions.incomeEmpty`; search: `transactions.noMatches` | «Добавить документ»; change the search |
 | Expenses | `expense.empty`; depreciation: `expense.amortizationEmpty`; search: `expense.noMatches`; later pages: `expense.moreRecords` | «Добавить документ»; post the equipment schedule on «Активы»; change the search; «Показать ещё» |
-| Review, queue | `review.queueEmpty.noDocuments` or `review.queueEmpty.allReviewed` | «Добавить документ»; new documents join the queue |
+| Review, queue | `review.queueEmpty.noDocuments`, `review.queueEmpty.documentsWaiting` or `review.queueEmpty.allReviewed` | «Добавить документ»; the «Документы и вопросы» tab; new documents join the queue |
 | Review, posting | `review.postingEmpty` | the «Очередь» tab |
 | Review, documents and issues | `review.documentsEmpty`, `issues.none` | added documents and new issues appear there |
 | Expense card | `expense.treatmentEmpty` | the review of the expense |
 | Assets | `assets.listEmpty`; a quarter without schedule entries: `help.words.none` | review an expense of the type «Оборудование»; open the equipment schedule |
-| Taxes | form card `statuses.labels.calculation_unavailable`; RETA bases: `reta.basesEmpty` | «Рассчитать»; the operator records bases from the TGSS resolution |
+| Taxes | form card `statuses.labels.calculation_unavailable`; Calculate on a quarter without records: `taxes.periodEmpty`; RETA bases: `reta.basesEmpty` | «Рассчитать»; «Добавить документ» first; the operator records bases from the TGSS resolution |
 | Counterparties | `contacts.listEmpty`; a counterparty's period: `contacts.operationsEmpty` | add a first document; choose another period |
 | AEAT documents | `aeatDocuments.listEmpty`; filters: `transactions.noMatches` | «Добавить документ AEAT» below the table; change the filters |
 | Settings | `settings.form.empty` | fill in and save the profile |

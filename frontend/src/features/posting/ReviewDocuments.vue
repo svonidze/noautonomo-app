@@ -6,13 +6,11 @@ import { formatMessage, messageIds } from '../../core/i18n.ts';
 import type { HelpContext } from '../../vue/help.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import TermHelp from '../../components/TermHelp.vue';
-import type { ReviewDocument } from './model.ts';
+import { waitingDocumentStates, type ReviewDocument } from './model.ts';
 const props = defineProps<{ documents: ReviewDocument[]; issues: { ui_context: HelpContext }[] }>();
 const { locale, t } = useLocale();
 const rows = computed(() =>
-  props.documents.filter((row) =>
-    ['received', 'extracted', 'needs_review'].includes(row.lifecycle_status),
-  ),
+  props.documents.filter((row) => waitingDocumentStates.includes(row.lifecycle_status)),
 );
 const type = (value: string) => {
   const code = String(value || 'other_document');

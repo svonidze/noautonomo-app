@@ -8,11 +8,12 @@ import StatusCell from '../../components/StatusCell.vue';
 import StatusHelpButton from '../../components/StatusHelpButton.vue';
 import ChartHost from '../../charts/ChartHost.vue';
 import type { ReviewRow, ReviewOverviewContext } from './model.ts';
-// With documents in the quarter an empty queue means they are all reviewed; without, nothing came in.
+// What an empty queue means: no document came in this quarter, documents still wait for review on
+// the documents tab (intake could not draft a transaction), or every document is reviewed.
 const props = defineProps<{
   rows: ReviewRow[];
   context: ReviewOverviewContext;
-  hasDocuments: boolean;
+  documents: 'noDocuments' | 'documentsWaiting' | 'allReviewed';
 }>();
 const { locale, t } = useLocale();
 const help = helpAdapter();
@@ -204,15 +205,7 @@ const oldestDays = computed(() => {
           </tr>
           <tr v-if="!rows.length">
             <td colspan="6">
-              <div class="empty-state">
-                {{
-                  t(
-                    hasDocuments
-                      ? 'review.queueEmpty.allReviewed'
-                      : 'review.queueEmpty.noDocuments',
-                  )
-                }}
-              </div>
+              <div class="empty-state">{{ t(`review.queueEmpty.${documents}`) }}</div>
             </td>
           </tr>
         </tbody>

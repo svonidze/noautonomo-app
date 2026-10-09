@@ -83,6 +83,7 @@
   "review.primaryReject": "Reject invoice",
   "review.questionsTitle": "What we need from you",
   "review.queueEmpty.allReviewed": "Every document of this quarter is reviewed. New documents join the queue once added.",
+  "review.queueEmpty.documentsWaiting": "No transactions to review yet. Open the “Documents and issues” tab: this quarter's documents wait for review there.",
   "review.queueEmpty.noDocuments": "No documents to review in this quarter. Add a document with the “Add document” button.",
   "review.rejectAction": "Reject invoice",
   "review.rejectConfirm": "Confirm rejection",

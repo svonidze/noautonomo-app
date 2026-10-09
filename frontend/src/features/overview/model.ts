@@ -124,6 +124,8 @@ export interface DashboardData {
   missing_fx_blocked_count?: number;
   /** Any quarter has a posted row; until then the overview leads with its first steps. */
   ledger_has_postings?: boolean;
+  /** This quarter's documents by lifecycle state. */
+  document_counts?: Record<string, number>;
 }
 export interface AssetRow {
   asset_id: string;

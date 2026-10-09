@@ -418,6 +418,10 @@ test('each step is done, can start, or waits for an earlier one', () => {
     recent_transactions: [added],
   });
   expect(tags(start(reviewed))).toEqual([canStart, done, canStart, notStarted]);
+  // A document whose amount intake could not read has no transaction yet: it was still added,
+  // and it waits for review.
+  const documentOnly = dashboard({ ledger_has_postings: false, document_counts: { extracted: 1 } });
+  expect(tags(start(documentOnly))).toEqual([canStart, done, canStart, notStarted]);
   // With intake switched off on the server the document step cannot start and says why.
   const [, closed] = start(dashboard({ ledger_has_postings: false }), { canAdd: false });
   expect(closed).toMatchObject({ action: 'intake', disabled: true });

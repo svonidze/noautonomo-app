@@ -70,7 +70,10 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-function show(items: ReviewRow[], hasDocuments = true) {
+function show(
+  items: ReviewRow[],
+  documents: 'noDocuments' | 'documentsWaiting' | 'allReviewed' = 'allReviewed',
+) {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-09T12:00:00'));
   // jsdom has neither; the aging chart's host needs both once it renders.
@@ -100,7 +103,7 @@ function show(items: ReviewRow[], hasDocuments = true) {
   const root = document.createElement('div');
   document.body.append(root);
   const app = createApp({
-    render: () => h(ReviewQueue, { rows: items, context, hasDocuments }),
+    render: () => h(ReviewQueue, { rows: items, context, documents }),
   });
   app.mount(root);
   mounted.push(() => {
@@ -272,9 +275,9 @@ test('ten queued rows draw the aging chart; an empty queue says nothing about ag
   expect(empty.root.querySelector('#chart-review-aging')).toBeNull();
 });
 
-test('an empty queue says whether the quarter has no documents or has them all reviewed', () => {
+test('an empty queue says whether the quarter has no documents, documents waiting or none left', () => {
   const text = (root: HTMLElement) => root.querySelector('tbody .empty-state')!.textContent!.trim();
-  expect(text(show([], false).root)).toBe(ru['review.queueEmpty.noDocuments']);
-  expect(text(show([], true).root)).toBe(ru['review.queueEmpty.allReviewed']);
-  expect(show(rows, true).root.querySelector('tbody .empty-state')).toBeNull();
+  for (const state of ['noDocuments', 'documentsWaiting', 'allReviewed'] as const)
+    expect(text(show([], state).root)).toBe(ru[`review.queueEmpty.${state}`]);
+  expect(show(rows).root.querySelector('tbody .empty-state')).toBeNull();
 });

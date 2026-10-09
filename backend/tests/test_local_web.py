@@ -264,6 +264,99 @@ def test_dashboard_says_whether_any_quarter_has_a_posting(tmp_path: Path, posted
     assert app.dashboard("2026-Q4")["ledger_has_postings"] is True
 
 
+def _fresh_app(tmp_path: Path) -> LocalAccountingApp:
+    """A ledger straight from `db init`: no quarter, no profile, no records."""
+    config = _config(tmp_path)
+    with LedgerDB.initialize(config.database):
+        pass
+    return LocalAccountingApp(config, session_token="test-token")
+
+
+def test_bootstrap_offers_the_current_quarter_of_a_ledger_without_quarters(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+    today = date.today()
+
+    bootstrap = app.bootstrap()
+
+    [quarter] = bootstrap["periods"]
+    assert bootstrap["default_period"] == quarter["period_key"] == local_web._quarter_key(today)
+    assert quarter["status"] == "missing"
+    assert quarter["starts_on"] <= today.isoformat() <= quarter["ends_on"]
+    # Offered, not created: reading never writes a quarter.
+    with LedgerDB.open(app.config.database, read_only=True) as db:
+        assert db.connection.execute("SELECT COUNT(*) FROM periods").fetchone()[0] == 0
+
+
+def test_dashboard_reads_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    dashboard = _fresh_app(tmp_path).dashboard("2026-Q4")
+
+    assert dashboard["period"] == {"period_key": "2026-Q4", "status": "missing",
+                                   "starts_on": "2026-10-01", "ends_on": "2026-12-31"}
+    assert dashboard["totals"]["actual"]["income_transaction_count"] == 0
+    assert dashboard["expense_summary"]["purchase"]["posted"]["count"] == 0
+    assert dashboard["recent_transactions"] == dashboard["open_issues"] == dashboard["obligations"] == []
+    assert dashboard["posting_summary"] == {"needs_review": 0, "ready": 0, "later": 0, "blocked": 0}
+    assert (dashboard["open_issue_count"], dashboard["missing_fx_count"]) == (0, 0)
+    assert dashboard["ledger_has_postings"] is False
+
+
+def test_taxes_read_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    taxes = _fresh_app(tmp_path).taxes("2026-Q4", as_of=date(2026, 10, 9))
+
+    assert (taxes["period"], taxes["obligations"], taxes["forecast_as_of"]) == ("2026-Q4", [], None)
+    assert taxes["period_state"]["phase"] == "current"
+    assert taxes["period_state"]["accounting_status"] == "missing"
+    assert taxes["tax_summary"]["total_payable_minor"] is None
+
+
+def test_transaction_lists_read_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+
+    assert app.transactions("2026-Q4", entry_type="income") == []
+    assert app.transactions("2026-Q4", lifecycle_status="review") == []
+    with pytest.raises(LocalWebError, match="YYYY-QN"):
+        app.transactions("2026")
+
+
+def test_expense_page_reads_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    page = _fresh_app(tmp_path).expenses("2026-Q4")
+
+    assert (page["period"], page["rows"], page["matching_count"]) == ("2026-Q4", [], 0)
+    assert page["period_counts"] == {"purchase": 0, "amortization": 0}
+
+
+def test_issues_read_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    assert _fresh_app(tmp_path).issues("2026-Q4") == []
+
+
+def test_posting_preview_reads_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    preview = _fresh_app(tmp_path).posting_preview("2026-Q4")
+
+    assert (preview["period"], preview["period_status"]) == ("2026-Q4", "missing")
+    assert preview["ready"] == preview["deferred"] == preview["blocked"] == preview["items"] == []
+    assert preview["summary"]["ready_count"] == preview["summary"]["approved_count"] == 0
+    assert preview["summary"]["ready_total_eur"] == "0.00"
+
+
+def test_assets_read_a_quarter_without_a_row(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+
+    assert app.assets("2026-Q4") == []
+    with pytest.raises(LocalWebError, match="YYYY-QN"):
+        app.assets("2026")
+
+
+def test_calculation_of_a_quarter_without_a_row_explains_instead_of_failing(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+
+    with pytest.raises(LocalWebApiError) as refused:
+        app.refresh_dashboard("2026-Q4")
+
+    assert (refused.value.status, refused.value.code) == (409, "period_missing")
+    assert refused.value.message_code == "taxes.periodEmpty"
+    assert not (app.config.cache_root / "2026-Q4").exists()
+
+
 @pytest.mark.parametrize(
     ("source", "expected_id"),
     [
@@ -425,15 +518,21 @@ def test_google_picker_key_and_app_id_are_validated_together(
         local_web.load_config(tmp_path, config_path=config_file)
 
 
-def test_dashboard_rejects_unknown_or_malformed_quarter(tmp_path: Path) -> None:
+def test_dashboard_rejects_a_malformed_quarter_and_reads_an_absent_one_as_empty(
+    tmp_path: Path,
+) -> None:
     config = _config(tmp_path)
     _database(config)
     app = LocalAccountingApp(config)
 
     with pytest.raises(LocalWebError, match="YYYY-QN"):
         app.dashboard("2026")
-    with pytest.raises(LocalWebError, match="Unknown quarter"):
-        app.dashboard("2025-Q4")
+    # Another quarter's rows never leak into a quarter without a row.
+    absent = app.dashboard("2025-Q4")
+    assert absent["period"]["status"] == "missing"
+    assert absent["recent_transactions"] == [] and absent["posting_summary"]["ready"] == 0
+    assert absent["totals"]["actual"]["income_transaction_count"] == 0
+    assert absent["ledger_has_postings"] is True
 
 
 def test_posting_summary_keeps_review_ready_later_and_blocked_exclusive() -> None:

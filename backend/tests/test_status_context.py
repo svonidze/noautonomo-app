@@ -9,7 +9,6 @@ from autonomo_taxes import status_context
 from autonomo_taxes.ledger_db import LedgerDB
 from autonomo_taxes.local_web import (
     LocalAccountingApp,
-    LocalWebApiError,
     LocalWebConfig,
 )
 from autonomo_taxes.posting import build_posting_preview
@@ -133,9 +132,9 @@ def test_asset_period_separates_excluded_annual_and_adjustment(context_app):
     assert summary["book_minor"] == -500 and summary["adjustment_minor"] == -500
     assert summary["excluded_minor"] == 0
     assert app.assets()[0]["period"] == "2032-Q2"
-    with pytest.raises(LocalWebApiError) as e:
-        app.assets("2032-Q4")
-    assert e.value.status == 404
+    # A valid quarter without a row has no schedule entries: data, not an error, and no write.
+    [absent] = app.assets("2032-Q4")
+    assert (absent["period"], absent["schedule_rows"], absent["scheduled_minor"]) == ("2032-Q4", 0, 0)
     assert dump(config) == before
 
 
@@ -310,9 +309,12 @@ def test_get_array_contract_and_controlled_unknown_period(context_app):
                 data = json.load(response)
                 assert isinstance(data, list)
                 assert all("ui_context" in row for row in data)
+        # A valid quarter without a row answers with data; a malformed key still fails.
+        with client.open(base + "/api/assets?period=2032-Q4") as response:
+            assert [row["schedule_rows"] for row in json.load(response)] == [0]
         with pytest.raises(urllib.error.HTTPError) as error:
-            client.open(base + "/api/assets?period=2032-Q4")
-        assert error.value.code == 404
+            client.open(base + "/api/assets?period=2032")
+        assert error.value.code == 400
         for resource in server.app.ui_assets.files:
             if resource.endswith(".js"):
                 with client.open(base + "/" + resource) as response:

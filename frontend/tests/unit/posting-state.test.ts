@@ -57,3 +57,22 @@ test('a preview item without a EUR amount stays empty, never zero; a known zero 
     '0',
   );
 });
+
+test('a quarter without a row yet reads as open with nothing to post; a closed one stays closed', () => {
+  // The server answers for a quarter a fresh ledger has not recorded into with status "missing".
+  const empty = {
+    period: '2026-Q4',
+    period_status: 'missing',
+    ready: [],
+    deferred: [],
+    blocked: [],
+  };
+  expect(preview(empty, '2026-Q4')).toMatchObject({
+    period: '2026-Q4',
+    periodStatus: 'open',
+    ready: [],
+    deferred: [],
+    blocked: [],
+  });
+  expect(preview({ ...empty, period_status: 'closed' }, '2026-Q4').periodStatus).toBe('closed');
+});
