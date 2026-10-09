@@ -1,6 +1,7 @@
 {
   "dashboard.analyticsTitle": "Аналитика",
   "dashboard.analyticsToggle": "Показать графики",
+  "dashboard.analyticsToggleOpen": "Скрыть графики",
   "dashboard.calculatedAsOf": "Предварительный расчёт на {date}",
   "dashboard.carryForward": "к переносу {amount}",
   "dashboard.expensesPosted": "Расходы, проведено",

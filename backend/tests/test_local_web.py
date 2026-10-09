@@ -193,6 +193,11 @@ def test_dashboard_counts_every_open_question_and_this_quarters_queue_rows_witho
         db.add_transaction(external_key="eur-income", period_key="2026-Q3", transaction_date="2026-08-16",
                            booking_date="2026-08-16", entry_type="income", description="Synthetic approved income",
                            amount_minor=50000, amount_eur_minor=50000, direction="credit", lifecycle_status="approved")
+        # The ledger copies a EUR amount into amount_eur_minor; legacy rows may lack that copy.
+        db.connection.execute(
+            "UPDATE transactions SET amount_eur_minor = NULL WHERE external_key IN ('eur-without-copy', 'eur-income')"
+        )
+        db.connection.commit()
 
     dashboard = LocalAccountingApp(config, session_token="test-token").dashboard("2026-Q3")
 

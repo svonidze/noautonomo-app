@@ -418,8 +418,14 @@ test('on a phone the first screen lists tasks and draws no chart until Analytics
   await expect(
     page.getByRole('heading', { level: 2, name: ruDashboard['dashboard.analyticsTitle'] }),
   ).toBeVisible();
+  await expect(analytics.locator(':scope > summary')).toHaveText(
+    ruDashboard['dashboard.analyticsToggle'],
+  );
   await analytics.locator(':scope > summary').click();
   await expect(page.locator('svg.chart-svg').first()).toBeVisible();
+  await expect(analytics.locator(':scope > summary')).toHaveText(
+    ruDashboard['dashboard.analyticsToggleOpen'],
+  );
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
   ).toBe(true);

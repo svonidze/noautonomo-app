@@ -75,11 +75,14 @@ function refreshVisible() {
 }
 const interval = setInterval(refreshVisible, 60000);
 document.addEventListener('visibilitychange', refreshVisible);
-// Analytics is folded on phone widths; the query follows rotation and window resizes.
+// Analytics is folded on phone widths and open on wide ones; crossing the breakpoint (rotation, a
+// window resize) resets it, and the summary names what a click will do.
 const narrowQuery =
   typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 760px)') : undefined;
-const narrow = ref(!!narrowQuery?.matches);
-const followNarrow = () => (narrow.value = !!narrowQuery?.matches);
+const analyticsOpen = ref(!narrowQuery?.matches);
+const followNarrow = () => (analyticsOpen.value = !narrowQuery?.matches);
+const followToggle = (event: Event) =>
+  (analyticsOpen.value = (event.currentTarget as HTMLDetailsElement).open);
 narrowQuery?.addEventListener('change', followNarrow);
 onBeforeUnmount(() => {
   active = false;
@@ -316,8 +319,10 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
         </section>
       </div>
       <h2 id="dashboard-analytics-title">{{ t('dashboard.analyticsTitle') }}</h2>
-      <details class="analytics-details" :open="!narrow">
-        <summary>{{ t('dashboard.analyticsToggle') }}</summary>
+      <details class="analytics-details" :open="analyticsOpen" @toggle="followToggle">
+        <summary>
+          {{ t(analyticsOpen ? 'dashboard.analyticsToggleOpen' : 'dashboard.analyticsToggle') }}
+        </summary>
         <section
           class="charts-panel"
           id="dashboard-charts"

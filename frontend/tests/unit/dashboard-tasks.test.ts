@@ -291,6 +291,15 @@ test('the overview opens with the task list, then three figure cards, without ba
   const heading = root.querySelector('#dashboard-analytics-title')!;
   expect([heading.tagName, heading.closest('details')]).toEqual(['H2', null]);
   expect(heading.nextElementSibling!.className).toBe('analytics-details');
+  // Open on a wide screen, the summary offers to hide the charts; closed, to show them.
+  const analytics = root.querySelector<HTMLDetailsElement>('.analytics-details')!;
+  expect([analytics.open, lines(root, '.analytics-details > summary')]).toEqual([
+    true,
+    ['Скрыть графики'],
+  ]);
+  analytics.open = false;
+  analytics.dispatchEvent(new Event('toggle'));
+  await nextTick();
   expect(lines(root, '.analytics-details > summary')).toEqual(['Показать графики']);
 });
 

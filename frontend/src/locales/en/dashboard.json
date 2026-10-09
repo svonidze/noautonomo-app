@@ -1,6 +1,7 @@
 {
   "dashboard.analyticsTitle": "Analytics",
   "dashboard.analyticsToggle": "Show charts",
+  "dashboard.analyticsToggleOpen": "Hide charts",
   "dashboard.calculatedAsOf": "Preview as of {date}",
   "dashboard.carryForward": "carry-forward {amount}",
   "dashboard.expensesPosted": "Posted expenses",
