@@ -192,6 +192,7 @@ const refreshLabel = computed(() =>
         <div
           class="new-entry"
           :hidden="
+            !route ||
             detail ||
             ['settings', 'aeat-documents'].includes(route?.view || '') ||
             (route?.view === 'review' && reviewTab === 'posting')

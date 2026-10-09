@@ -330,12 +330,19 @@ def test_issues_read_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
 
 
 def test_posting_preview_reads_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
-    preview = _fresh_app(tmp_path).posting_preview("2026-Q4")
+    app = _fresh_app(tmp_path)
+    preview = app.posting_preview("2026-Q4")
 
-    assert (preview["period"], preview["period_status"]) == ("2026-Q4", "missing")
+    assert (preview["period"], preview["period_status"], preview["reason_code"]) == ("2026-Q4", "missing", None)
     assert preview["ready"] == preview["deferred"] == preview["blocked"] == preview["items"] == []
     assert preview["summary"]["ready_count"] == preview["summary"]["approved_count"] == 0
     assert preview["summary"]["ready_total_eur"] == "0.00"
+    # The posting module builds it, timestamps included, so the tab never reads "no timestamp".
+    assert preview["as_of"] == date.today().isoformat() and preview["generated_at"]
+    assert preview["cleanup_roots"] == {"inbox_root": str(app.config.inbox_root),
+                                        "archive_root": str(app.config.archive_root)}
+    with pytest.raises(LocalWebError, match="YYYY-QN"):
+        app.posting_preview("2026")
 
 
 def test_assets_read_a_quarter_without_a_row(tmp_path: Path) -> None:

@@ -35,6 +35,9 @@ test('copy target chooses an open current quarter before the existing fallback',
   expect(copyTarget(periods, true, new Date(2026, 8, 1))).toBe('2026-Q3');
   expect(copyTarget(periods, false)).toBeNull();
   expect(copyTarget(periods, true, new Date(2027, 0, 1))).toBe('2026-Q3');
+  // A fresh ledger: bootstrap offers the current quarter before its first record creates the row.
+  expect(copyTarget([{ period_key: '2026-Q4', status: 'missing' }], true)).toBe('2026-Q4');
+  expect(copyTarget([{ period_key: '2026-Q2', status: 'closed' }], true)).toBeNull();
 });
 
 test('AEAT document registry is global and never carries a quarter', () => {

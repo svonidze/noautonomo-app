@@ -110,10 +110,12 @@ export function currentQuarter(today = new Date()) {
 }
 export function copyTarget(periods: Period[], enabled: boolean, today = new Date()) {
   if (!enabled) return null;
+  // A quarter the server offers without a row yet ("missing") takes records like an open one: the
+  // copy's intake creates the row.
+  const open = (row: Period) => row.status === 'open' || row.status === 'missing';
   return (
-    periods.find((row) => row.period_key === currentQuarter(today) && row.status === 'open')
-      ?.period_key ||
-    periods.find((row) => row.status === 'open')?.period_key ||
+    periods.find((row) => row.period_key === currentQuarter(today) && open(row))?.period_key ||
+    periods.find(open)?.period_key ||
     null
   );
 }

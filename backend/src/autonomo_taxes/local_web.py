@@ -44,8 +44,8 @@ from .aeat_documents import MAX_AEAT_PDF_BYTES, unified_aeat_documents
 from .account_settings import AccountSettingsError, read_settings, save_backups, save_profile
 from .fx_reference import ECBRateObservation, FXReferenceError, fetch_eur_rate
 from .expense_view import enrich_expense_context, expense_page, expense_summary
-from .ledger_db import LedgerDB, LedgerDbError, SchemaVersionError, StaleRowVersionError, open as open_ledger_db
-from .ledger_db import _default_period_bounds
+from .ledger_db import LedgerDB, SchemaVersionError, StaleRowVersionError, open as open_ledger_db
+from .ledger_db import default_period_bounds
 from .legacy_paths import LegacyPathResolver
 from .posting import build_posting_preview
 from .reta_ledger import RetaInputUnavailable, ledger_bracket_check
@@ -551,18 +551,8 @@ class LocalAccountingApp:
         }
 
     def posting_preview(self, period_key: str) -> dict[str, Any]:
-        period = _validate_period(period_key)
-        try:
-            return self._build_posting_preview(period)
-        except LedgerDbError as exc:
-            if not str(exc).startswith("Unknown period: "):
-                raise
         # A quarter without a row yet (a fresh ledger) has nothing to post.
-        counts = ("items", "approved_count", "ready_count", "deferred_count", "blocked_count",
-                  "ready_income_eur_minor", "ready_expense_eur_minor", "cleanup_count", "cleanup_blocked_count")
-        return {"period": period, "period_status": "missing", "reason_code": None,
-                "summary": {**dict.fromkeys(counts, 0), "ready_total_eur": "0.00"},
-                "ready": [], "deferred": [], "blocked": [], "items": []}
+        return self._build_posting_preview(_validate_period(period_key), missing_ok=True)
 
     def post_ready(
         self,
@@ -1247,16 +1237,21 @@ class LocalAccountingApp:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN")
             _counterparty_api_state(connection, counterparty_id)
-            period_id = self._period_row(connection, period)["period_id"] if period else None
-            count = connection.execute(
-                """SELECT COUNT(*) FROM transactions
-                   WHERE counterparty_id = ? AND (? IS NULL OR period_id = ?)""",
-                (counterparty_id, period_id, period_id),
-            ).fetchone()[0]
-            rows = self._transactions(
-                connection, period_id=period_id, counterparty_id=counterparty_id,
-                offset=offset, limit=limit,
-            )
+            period_row = self._period_row(connection, period, missing_ok=True) if period else None
+            if period and period_row is None:
+                # A valid quarter without a row yet has no operations.
+                count, rows = 0, []
+            else:
+                period_id = period_row["period_id"] if period_row else None
+                count = connection.execute(
+                    """SELECT COUNT(*) FROM transactions
+                       WHERE counterparty_id = ? AND (? IS NULL OR period_id = ?)""",
+                    (counterparty_id, period_id, period_id),
+                ).fetchone()[0]
+                rows = self._transactions(
+                    connection, period_id=period_id, counterparty_id=counterparty_id,
+                    offset=offset, limit=limit,
+                )
             return {
                 "counterparty_id": counterparty_id, "period": period, "rows": rows,
                 "offset": offset, "limit": limit, "matching_count": count,
@@ -2142,6 +2137,8 @@ class LocalAccountingApp:
     def _build_posting_preview(
         self,
         period_key: str,
+        *,
+        missing_ok: bool = False,
     ) -> dict[str, Any]:
         with open_ledger_db(self.config.database, read_only=True) as db:
             preview = build_posting_preview(
@@ -2149,6 +2146,7 @@ class LocalAccountingApp:
                 period_key=period_key,
                 inbox_root=self.config.inbox_root,
                 archive_root=self.config.archive_root,
+                missing_ok=missing_ok,
             )
         if not isinstance(preview, dict):
             raise LocalWebError("Posting preview must be a JSON object")
@@ -3175,7 +3173,7 @@ def _quarter_key(value: date) -> str:
 
 def _missing_period(period_key: str) -> dict[str, Any]:
     """A valid quarter that has no row yet: read endpoints answer for it with empty data."""
-    starts_on, ends_on = _default_period_bounds(period_key)
+    starts_on, ends_on = default_period_bounds(period_key)
     return {"period_key": period_key, "status": "missing", "starts_on": starts_on, "ends_on": ends_on}
 
 

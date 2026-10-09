@@ -112,18 +112,16 @@ test('status labels come from the statuses catalog only', () => {
   ).toEqual([]);
 });
 
-// Principle 7 (an empty state teaches): every empty-state message says what to do next. It either
-// uses one of the action words below («Заполните профиль…», «Контрагенты появятся после…»), or it
-// says «нет» and adds a second sentence with the cause or the next step. Chart slots are exempt:
+// Principle 7 (an empty state teaches): every empty-state message says what to do next with one of
+// the action words below («Заполните профиль…») or a form of «появиться» («Контрагенты появятся
+// после…»). «Нет» and a second sentence count only when that sentence names the step: «Открытых
+// вопросов нет. Новых документов тоже.» says what is empty, not what to do. Chart slots are exempt:
 // below the data threshold a chart prints one line (principle 8), and the screen around it, the
 // task or start list on the overview, names the next step.
 const EMPTY_STATE = /\.(empty|none|noRecords|queueEmpty)\b|Empty$/;
 const NEXT_STEP =
-  /(?<!\p{L})(добавьте|откройте|нажмите|проверьте|рассчитайте|заполните|появятся|появится)(?!\p{L})/iu;
-const NONE = /(?<!\p{L})нет(?!\p{L})/iu;
-const sentences = (text: string) => text.split(/(?<=[.!?…])\s+/).filter(Boolean).length;
-const namesNextStep = (text: string) =>
-  NEXT_STEP.test(text) || (NONE.test(text) && sentences(text) >= 2);
+  /(?<!\p{L})(добавьте|откройте|нажмите|проверьте|рассчитайте|заполните|выберите|появ\p{L}*)(?!\p{L})/iu;
+const namesNextStep = (text: string) => NEXT_STEP.test(text);
 
 test('every empty state names its next step', () => {
   const silent = messages.filter(
@@ -131,17 +129,18 @@ test('every empty state names its next step', () => {
   );
   expect(
     silent.map(([key, text]) => `${key}: ${text}`),
-    'say what to do next: an action word, or «нет» and a second sentence',
+    'say what to do next: an action word or a form of «появиться»',
   ).toEqual([]);
 });
 
-test('the empty-state rule accepts an action or «нет» with a second sentence', () => {
+test('the empty-state rule accepts a next step, not «нет» with any second sentence', () => {
   const table: [string, boolean][] = [
     ['Нет записей', false],
     ['Очередь проверки пуста — всё проверено.', false],
     ['В этом квартале расходов ещё нет. Добавьте документ.', true],
     ['Контрагенты появятся после первого документа.', true],
-    ['Открытых вопросов нет. Новых документов тоже.', true],
+    ['Открытых вопросов нет. Новых документов тоже.', false],
+    ['Открытых вопросов нет. Новые появляются после проверки документов.', true],
     ['Нетто-сумма не рассчитана. Позже.', false],
   ];
   for (const [text, expected] of table) expect(namesNextStep(text), text).toBe(expected);

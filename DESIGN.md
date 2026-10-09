@@ -320,11 +320,13 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   review without a transaction (intake could not read their amount), and
   reads «Все документы квартала проверены» otherwise.
 - `frontend/tests/unit/plain-language.test.ts` checks every RU key matching
-  `/\.(empty|none|noRecords|queueEmpty)\b|Empty$/`: the text uses an action
-  word («Добавьте», «Откройте», «Нажмите», «Проверьте», «Рассчитайте»,
-  «Заполните», «появятся», «появится») or says «нет» and adds a second
-  sentence. Chart empties (`charts.*`) are exempt: below the data threshold a
-  chart prints one line, and the list above it names the next step.
+  `/\.(empty|none|noRecords|queueEmpty)\b|Empty$/`: the text names the next
+  step with an action word («Добавьте», «Откройте», «Нажмите», «Проверьте»,
+  «Рассчитайте», «Заполните», «Выберите») or a form of «появиться». «Нет»
+  and a second sentence count only when that sentence names the step
+  («Открытых вопросов нет. Новых документов тоже.» does not). Chart empties
+  (`charts.*`) are exempt: below the data threshold a chart prints one line,
+  and the list above it names the next step.
 
 #### Empty states
 
@@ -340,7 +342,7 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 | Review, posting | `review.postingEmpty` | the «Очередь» tab |
 | Review, documents and issues | `review.documentsEmpty`, `issues.none` | added documents and new issues appear there |
 | Expense card | `expense.treatmentEmpty` | the review of the expense |
-| Assets | `assets.listEmpty`; a quarter without schedule entries: `help.words.none` | review an expense of the type «Оборудование»; open the equipment schedule |
+| Assets | `assets.listEmpty`; an asset without schedule entries this quarter reads `assets.noScheduleCell` in its cell | review an expense of the type «Оборудование»; open the equipment schedule |
 | Taxes | form card `statuses.labels.calculation_unavailable`; Calculate on a quarter without records: `taxes.periodEmpty`; RETA bases: `reta.basesEmpty` | «Рассчитать»; «Добавить документ» first; the operator records bases from the TGSS resolution |
 | Counterparties | `contacts.listEmpty`; a counterparty's period: `contacts.operationsEmpty` | add a first document; choose another period |
 | AEAT documents | `aeatDocuments.listEmpty`; filters: `transactions.noMatches` | «Добавить документ AEAT» below the table; change the filters |

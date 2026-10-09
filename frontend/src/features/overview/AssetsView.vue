@@ -140,7 +140,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
                       {{ money(row.ui_context.amortization.adjustment_minor) }}</small
                     >
                   </div>
-                  <span v-else>{{ t('help.words.none') }}</span>
+                  <span v-else>{{ t('assets.noScheduleCell') }}</span>
                 </td>
                 <td :data-label="t('assets.decision')"><StatusCell :context="row.ui_context" /></td>
               </tr>

@@ -1266,6 +1266,8 @@ tbody tr:hover td {
   font-weight: 650;
 }
 
+.back-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; justify-self: start; }
+
 /* Pointer targets (WCAG 2.5.8): a text action in a table cell or a status line is at least 24 px
    tall; a link inside a sentence (.inline-button) is exempt. */
 td .text-button:not(.inline-button),
@@ -1381,7 +1383,6 @@ td .text-button:not(.inline-button),
   padding: 10px 12px; border: 0; background: transparent; color: var(--text);
 }
 .counterparty-actions-menu button:hover { background: var(--surface-muted); }
-.back-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; justify-self: start; }
 #contact-identity { display: grid; gap: 16px; }
 .contact-detail-header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;

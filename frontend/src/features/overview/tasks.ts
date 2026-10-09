@@ -185,8 +185,9 @@ export function buildStartTasks({
   const document = row('document', added ? 'done' : canAdd ? 'canStart' : 'notStarted');
   return [
     { ...row('profile', profileConfigured ? 'done' : 'canStart'), href: '/settings' },
-    canAdd
-      ? { ...document, action: 'intake', disabled: false }
+    // A done step keeps its hint; only a step still to do says why intake is closed.
+    canAdd || added
+      ? { ...document, action: 'intake', disabled: !canAdd }
       : { ...document, hint: message('intake.disabledReason'), action: 'intake', disabled: true },
     { ...row('review', queued ? 'canStart' : 'notStarted'), href: `/review?${query}` },
     // The calculation counts postings: it follows the first one, when the regular list offers it.
