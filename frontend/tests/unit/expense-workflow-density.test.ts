@@ -6,6 +6,8 @@ import type { ReviewDetailContext } from '../../src/features/review/guided-model
 import type { WorkflowDraft } from '../../src/features/review/workflow-model.ts';
 import { REVIEW_ID, nativeFixture, ruleFixture } from '../fixtures/review.ts';
 import workflow from '../../src/locales/ru/workflow.json' with { type: 'json' };
+import expenseRules from '../../src/locales/ru/expenseRules.json' with { type: 'json' };
+import { focusById } from '../../src/core/focus.ts';
 
 const SUPPLIER = '33333333-3333-4333-8333-333333333333';
 const ACTIVITY = '44444444-4444-4444-8444-444444444444';
@@ -19,13 +21,12 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 /** The default state: EUR, the source's supplier matched, one activity, an ordinary expense and
- * no rule chosen. */
+ * no rule chosen. Like intake, it has base and IVA but no IVA rate. */
 function defaultDraft(rules: boolean): WorkflowDraft {
   const draft = nativeFixture();
   for (const values of [draft.payload, draft.source_values])
     values.facts.counterparty_id = SUPPLIER;
   draft.payload.facts.business_activity_id = ACTIVITY;
-  draft.payload.decision.tax_treatment.rate_basis_points = 2100;
   draft.activities = [{ business_activity_id: ACTIVITY, description: 'Synthetic activity' }];
   if (rules) draft.deduction_rules = ruleFixture().deduction_rules;
   return draft;
@@ -78,6 +79,8 @@ test('the expense review shows at most 14 controls by default and three numbered
     expect(controls.length, controls.join(', ')).toBeLessThanOrEqual(14);
     expect(controls).not.toContain('wf-supplier-search');
     expect(controls).not.toContain('change_reason');
+    expect(controls).not.toContain('wf-kind');
+    expect(controls).toContain('decision.tax_treatment.rate_basis_points');
     const steps = [...root.querySelectorAll<HTMLAnchorElement>('nav.wf-steps a')];
     expect(steps.map((link) => link.getAttribute('href'))).toEqual([
       '#wf-document',
@@ -90,7 +93,7 @@ test('the expense review shows at most 14 controls by default and three numbered
   }
 });
 
-test('«Изменить» opens a matched supplier or activity, and usual facts fold until they differ', async () => {
+test('«Изменить» opens a matched supplier, activity or expense type, and usual facts fold until they differ', async () => {
   const { root, host } = await mount(defaultDraft(true));
   const chosen = [...root.querySelectorAll('.wf-chosen')].map((line) => line.textContent);
   expect(chosen[0]).toContain('Synthetic supplier · B00000000');
@@ -107,7 +110,20 @@ test('«Изменить» opens a matched supplier or activity, and usual facts
   root.querySelector<HTMLButtonElement>('.wf-chosen button')!.click();
   await flush();
   expect(document.activeElement?.id).toBe('wf-facts-business_activity_id');
+  const kind = root.querySelector('.wf-chosen')!;
+  expect(kind.textContent).toContain(workflow['workflow.ordinaryExpense']);
+  expect(kind.querySelector('button')!.getAttribute('aria-label')).toBe(
+    workflow['workflow.changeExpenseType'],
+  );
+  kind.querySelector('button')!.click();
+  await flush();
+  expect(document.activeElement?.id).toBe('wf-kind');
   expect(root.querySelectorAll('.wf-chosen')).toHaveLength(0);
+  const select = root.querySelector<HTMLSelectElement>('#wf-kind')!;
+  select.value = 'asset';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+  expect(root.querySelector('[data-p="asset.description"]')).not.toBeNull();
   const more = root.querySelector<HTMLDetailsElement>('details.wf-more')!;
   expect(more.open).toBe(false);
   expect(more.querySelector('summary')!.textContent).toContain('EUR');
@@ -161,21 +177,68 @@ test('the correction reason appears for an approved record or a corrected fact o
   host.dispose();
 });
 
-test('a missing IVA rate is named in «Что осталось» and its link opens the folded field', async () => {
-  const draft = defaultDraft(false);
-  draft.payload.decision.tax_treatment.rate_basis_points = null;
-  const { root, host } = await mount(draft);
-  const link = [...root.querySelectorAll<HTMLAnchorElement>('.wf-remaining a')].find(
-    (item) => item.textContent === workflow['workflow.remaining.ivaRate'],
+test('the IVA rate sits beside the invoice IVA and «Что осталось» names it while it is empty', async () => {
+  const { root, host } = await mount(defaultDraft(false));
+  const rate = root.querySelector<HTMLInputElement>(
+    '#wf-decision-tax_treatment-rate_basis_points',
   )!;
-  expect(link.getAttribute('href')).toBe('#wf-decision-tax_treatment-rate_basis_points');
-  const details = document
-    .getElementById('wf-decision-tax_treatment-rate_basis_points')!
-    .closest('details')!;
-  expect(details.open).toBe(false);
-  link.click();
+  expect(rate.closest('details')).toBeNull();
+  const facts = [...rate.closest('.wf-grid')!.querySelectorAll<HTMLElement>('[data-p]')];
+  expect(facts.map((input) => input.dataset.p)).toEqual([
+    'decision.tax_treatment.taxable_base_minor',
+    'decision.tax_treatment.vat_minor',
+    'decision.tax_treatment.rate_basis_points',
+  ]);
+  const item = () =>
+    [...root.querySelectorAll<HTMLAnchorElement>('.wf-remaining a')].find(
+      (link) => link.textContent === workflow['workflow.remaining.ivaRate'],
+    );
+  expect(item()!.getAttribute('href')).toBe('#wf-decision-tax_treatment-rate_basis_points');
+  item()!.click();
   await flush();
-  expect(details.open).toBe(true);
-  expect(document.activeElement?.id).toBe('wf-decision-tax_treatment-rate_basis_points');
+  expect(document.activeElement).toBe(rate);
+  rate.value = '21';
+  rate.dispatchEvent(new Event('input', { bubbles: true }));
+  await flush();
+  expect(item()).toBeUndefined();
+  host.dispose();
+});
+
+test('«Что осталось» reaches a control folded behind «Изменить»', async () => {
+  const { root, host } = await mount(defaultDraft(false));
+  expect(root.querySelector('#wf-kind')).toBeNull();
+  focusById('wf-kind');
+  await flush();
+  expect(document.activeElement?.id).toBe('wf-kind');
+  host.dispose();
+});
+
+test("the rule's missing facts leave «Что осталось» while unsaved input makes them stale", async () => {
+  const draft = ruleFixture();
+  draft.payload.decision.tax_treatment.deductible_ratio = null;
+  draft.deduction_proposal = {
+    ...draft.deduction_proposal!,
+    status: 'needs_facts',
+    irpf_minor: null,
+    vat_minor: null,
+    suggested: null,
+    missing: ['area_share'],
+    explanation: [],
+  };
+  const { root, host } = await mount(draft);
+  const facts = () =>
+    [...root.querySelectorAll<HTMLAnchorElement>('.wf-remaining a')].filter((link) =>
+      link.textContent!.includes(expenseRules['expenseRules.fact.area_share']),
+    );
+  expect(facts().map((link) => link.getAttribute('href'))).toEqual([
+    '#wf-decision-tax_treatment-deductible_ratio',
+  ]);
+  const share = root.querySelector<HTMLInputElement>(
+    '#wf-decision-tax_treatment-deductible_ratio',
+  )!;
+  share.value = '25';
+  share.dispatchEvent(new Event('input', { bubbles: true }));
+  await flush();
+  expect(facts()).toEqual([]);
   host.dispose();
 });

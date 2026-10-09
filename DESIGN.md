@@ -594,13 +594,15 @@ service stops or full-root backups. Keep the current palette, components and RU/
 - The form reads as three in-page steps under a strip of anchors («1 Документ ·
   2 Налоги · 3 Итог»; no new routes). «Что осталось» above them lists the
   source's open questions, a missing IVA or EUR rate and the rule's missing
-  facts, each a link that focuses the control settling it. By default at most
-  14 controls show: a matched supplier or activity is text with «Изменить»,
-  the currency and booking date fold while they are EUR and the transaction
-  date, the rule folds until one is chosen, and the IVA rate sits with the
-  additional tax fields. The three dates carry one-line hints; the correction
-  reason appears only for an approved record or a corrected source fact, the
-  cases in which the server asks for it. After «Проверить итог» the result
-  scrolls into view and takes focus, and «Подтвердить и провести» becomes the
-  one primary action. Without a previewable original (PDF, JPEG, PNG) the
-  source is one compact line with «Открыть документ».
+  facts, each a link that focuses the control settling it (opening a fold on
+  the way). By default at most 14 controls show: a matched supplier or
+  activity and the expense type are text with «Изменить», the currency and
+  booking date fold while they are EUR and the transaction date, and the rule
+  folds until one is chosen. The IVA rate stays visible beside the invoice
+  IVA, because the server requires it on every preview. The three dates carry
+  one-line hints; the correction reason appears only for an approved record
+  or a corrected source fact, the cases in which the server asks for it, and
+  while it holds text. After «Проверить итог» the result scrolls into view
+  and takes focus, and «Подтвердить и провести» becomes the one primary
+  action. Without a previewable original (PDF, JPEG, PNG) the source is one
+  compact line with «Открыть документ».

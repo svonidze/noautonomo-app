@@ -10,6 +10,7 @@
   "workflow.businessPurpose": "Деловое назначение",
   "workflow.change": "Изменить",
   "workflow.changeActivity": "Изменить деятельность",
+  "workflow.changeExpenseType": "Изменить вид расхода",
   "workflow.changeSupplier": "Изменить поставщика",
   "workflow.computerElectronic": "Компьютерное / электронное",
   "workflow.confirmAndPost": "Подтвердить и провести",

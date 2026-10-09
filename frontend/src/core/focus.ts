@@ -65,10 +65,15 @@ export function restoreFocus(host: HTMLElement | null, anchor: FocusAnchor | nul
 }
 
 /** Goes to an in-page target the way a fragment link would, without a router navigation: opens the
- * closed <details> around it, scrolls it into view and focuses it. */
+ * closed <details> around it (or the «Изменить» fold hiding it), scrolls it into view and focuses
+ * it. */
 export function focusById(id: string, block: ScrollLogicalPosition = 'center'): void {
   const target = document.getElementById(id);
-  if (!target) return;
+  if (!target) {
+    // A control folded behind «Изменить» is not rendered; its button opens it and focuses it.
+    document.querySelector<HTMLElement>(`[data-reveals="${id}"]`)?.click();
+    return;
+  }
   for (
     let details = target.closest('details');
     details;

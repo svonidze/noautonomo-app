@@ -35,12 +35,12 @@ administrative operation; it never appears in the expense form.
    confirmation; a collision with any existing identifier blocks creation. A
    shop's name does not rename a shared supplier. Use the separate contact
    correction action if a verified shared name correction is needed.
-4. Choose **Ordinary expense** or **Equipment**. Confirm the tax classification,
-   base, IVA quota and deduction, and the separate IVA current/investment choice.
-   Ordinary expenses also show the current IRPF deduction. The IVA rate sits
-   under **Additional tax decision fields**. Foreign-currency amounts need a
-   confirmed exchange rate and reconciled EUR tax amounts. A **Deduction
-   rule** can cap these amounts; see below.
+4. The expense type reads **Ordinary expense**; **Change** switches it to
+   **Equipment**. Confirm the tax classification, base, IVA quota and rate,
+   the IVA deduction, and the separate IVA current/investment choice.
+   Ordinary expenses also show the current IRPF deduction. Foreign-currency
+   amounts need a confirmed exchange rate and reconciled EUR tax amounts. A
+   **Deduction rule** can cap these amounts; see below.
 5. **Save draft** saves on the server so you can close the browser and resume.
    Unsaved fields are not durable. A saved change to an approved but unposted
    entry invalidates approval and requires a reason, retained in audit history;
@@ -108,8 +108,9 @@ may preselect a rule from the parser category; check it or change it.
 
 In the expense form, **Deduction rule** lists the catalog rules and **No rule —
 enter manually**; while no rule is chosen it is one folded line naming that
-choice. A rule preselected by intake is marked "from document parser". Fill in the facts the rule asks for and **Save draft**: the proposal
-card then shows the IRPF and IVA ceilings, how they were calculated, any
+choice. A rule preselected by intake is marked "from document parser". Fill
+in the facts the rule asks for and **Save draft**: the proposal card then
+shows the IRPF and IVA ceilings, how they were calculated, any
 missing facts, the risk and the sources with their check dates. After an
 unsaved change the card asks you to save the draft to recalculate. **Copy into
 fields** writes the amounts shown above the button. When IVA is manual, it

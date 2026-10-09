@@ -63,8 +63,8 @@ const supplierSearch = ref(''),
   moreOpen = ref(false),
   ruleOpen = ref(false),
   savedInputs = ref('');
-// A matched supplier or activity reads as text until «Изменить» opens its controls.
-const shown = reactive({ supplier: false, activity: false });
+// A matched supplier or activity, and the expense type, read as text until «Изменить» opens them.
+const shown = reactive({ supplier: false, activity: false, kind: false });
 let active = true,
   generation = 0,
   request: ReturnType<typeof operationRequest> | null = null;
@@ -140,6 +140,7 @@ async function load() {
     defaults(payload.value, value.deduction_rules);
     shown.supplier = !matchedSupplier.value;
     shown.activity = !chosenActivity.value;
+    shown.kind = false;
     ruleOpen.value = !!payload.value.deduction;
   } catch (failure) {
     if (current(revision)) error.value = failure;
@@ -239,12 +240,13 @@ const sourceUrl = computed(
   () =>
     `/api/document/${encodeURIComponent(draft.value?.source.document.document_id || '')}/content`,
 );
-const rateField = taxFields.find((field) => field.path.endsWith('rate_basis_points'))!;
-const visibleTaxes = computed(() =>
-  taxFields.filter(
-    (field) =>
-      field !== rateField &&
-      (!payload.value?.asset || !field.path.endsWith('deductible_irpf_minor')),
+// The document's amounts with the rate beside its IVA, then the reviewer's deductions.
+const taxField = (name: string) =>
+  taxFields.find((field) => field.path === `decision.tax_treatment.${name}`)!;
+const taxFacts = ['taxable_base_minor', 'vat_minor', 'rate_basis_points'].map(taxField);
+const taxDecisions = computed(() =>
+  ['deductible_vat_minor', ...(payload.value?.asset ? [] : ['deductible_irpf_minor'])].map(
+    taxField,
   ),
 );
 const allowedTaxes = computed(() =>
@@ -524,10 +526,13 @@ const remaining = computed<RemainingItem[]>(() => {
     };
   });
   if (payload.value.decision.tax_treatment.rate_basis_points == null)
-    items.push({ id: fieldId(rateField.path), text: t('workflow.remaining.ivaRate') });
+    items.push({
+      id: fieldId('decision.tax_treatment.rate_basis_points'),
+      text: t('workflow.remaining.ivaRate'),
+    });
   const rate = payload.value.facts.currency !== 'EUR' && !payload.value.fx;
   if (rate) items.push({ id: fxTarget.value, text: t('workflow.remaining.rate') });
-  for (const name of proposal.value?.missing ?? [])
+  for (const name of stale.value ? [] : (proposal.value?.missing ?? []))
     if (!(rate && name === 'eur_amount'))
       items.push({
         id:
@@ -738,6 +743,7 @@ const supplierHidden = (party: Counterparty) =>
                 <button
                   type="button"
                   class="text-button"
+                  data-reveals="wf-supplier-search"
                   :aria-label="t('workflow.changeSupplier')"
                   @click="change('supplier', 'wf-supplier-search')"
                 >
@@ -792,6 +798,7 @@ const supplierHidden = (party: Counterparty) =>
                 <button
                   type="button"
                   class="text-button"
+                  data-reveals="wf-facts-business_activity_id"
                   :aria-label="t('workflow.changeActivity')"
                   @click="change('activity', fieldId('facts.business_activity_id'))"
                 >
@@ -845,7 +852,22 @@ const supplierHidden = (party: Counterparty) =>
             </section>
             <section id="wf-taxes" class="wf-step">
               <h2 id="wf-taxes-title" tabindex="-1">{{ t('workflow.steps.taxesTitle') }}</h2>
-              <label
+              <p v-if="!shown.kind" class="wf-chosen">
+                <span>{{ t('workflow.expenseType') }}</span>
+                <strong>{{
+                  t(payload.asset ? 'workflow.equipment' : 'workflow.ordinaryExpense')
+                }}</strong>
+                <button
+                  type="button"
+                  class="text-button"
+                  data-reveals="wf-kind"
+                  :aria-label="t('workflow.changeExpenseType')"
+                  @click="change('kind', 'wf-kind')"
+                >
+                  {{ t('workflow.change') }}
+                </button>
+              </p>
+              <label v-else
                 ><span>{{ t('workflow.expenseType') }}</span
                 ><select
                   id="wf-kind"
@@ -870,9 +892,18 @@ const supplierHidden = (party: Counterparty) =>
                   </option>
                 </select></label
               >
+              <div class="wf-grid wf-grid-facts">
+                <WorkflowField
+                  v-for="field in taxFacts"
+                  :key="field.path"
+                  :field="field"
+                  :model-value="fieldValue(payload, field.path)"
+                  @update:model-value="update(field.path, $event)"
+                />
+              </div>
               <div class="wf-grid">
                 <WorkflowField
-                  v-for="field in visibleTaxes"
+                  v-for="field in taxDecisions"
                   :key="field.path"
                   :field="field"
                   :model-value="fieldValue(payload, field.path)"
@@ -1220,10 +1251,6 @@ const supplierHidden = (party: Counterparty) =>
                       </option>
                     </select></label
                   ><WorkflowField
-                    :field="rateField"
-                    :model-value="fieldValue(payload, rateField.path)"
-                    @update:model-value="update(rateField.path, $event)"
-                  /><WorkflowField
                     v-for="field in visibleTechnical"
                     :key="field.path"
                     :field="field"

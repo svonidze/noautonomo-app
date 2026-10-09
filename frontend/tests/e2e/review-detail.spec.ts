@@ -9,6 +9,7 @@ import {
 } from '../fixtures/review.ts';
 import type { ExpensePayload } from '../../src/features/review/workflow-model.ts';
 import issues from '../../src/locales/ru/issues.json' with { type: 'json' };
+import workflow from '../../src/locales/ru/workflow.json' with { type: 'json' };
 const path = `/review/${ID}?period=2026-Q3`;
 async function detail(page: Page, kind = 'income', posted = () => false) {
   await page.route(`**/api/transactions/${ID}`, (route) =>
@@ -72,6 +73,7 @@ test('native save/preview/confirm preserves units and independent IVA choice, th
     route.fulfill({ json: { follow_up_pending: false } }),
   );
   await page.goto(path);
+  await page.locator('[data-reveals="wf-kind"]').click();
   await page.locator('#wf-kind').selectOption('asset');
   await page.locator('[data-p="asset.method"]').selectOption('linear');
   await page.locator('[data-p="asset.annual_rate_basis_points"]').fill('25.50');
@@ -106,26 +108,32 @@ test('a new reviewer sees what remains, the result in view and reaches the confi
   await native(page);
   const draft = nativeFixture();
   draft.source.issues = [{ issue_code: 'document_classification_review' }];
+  let saved: ExpensePayload | undefined;
   await page.route(`**/api/expense-workflows/${ID}`, (route) => route.fulfill({ json: draft }));
-  await page.route(`**/api/expense-workflows/${ID}/save`, (route) =>
-    route.fulfill({
-      json: { ...draft, payload: route.request().postDataJSON().payload, draft_version: 2 },
-    }),
-  );
+  await page.route(`**/api/expense-workflows/${ID}/save`, (route) => {
+    saved = route.request().postDataJSON().payload;
+    return route.fulfill({ json: { ...draft, payload: saved, draft_version: 2 } });
+  });
+  // Like the server, the preview refuses a draft without an IVA rate.
   await page.route(`**/api/expense-workflows/${ID}/preview`, (route) =>
-    route.fulfill({
-      json: {
-        preview_token: 'synthetic-token',
-        supplier: 'Synthetic supplier',
-        period: '2026-Q3',
-        currency: 'EUR',
-        gross_minor: 12100,
-        deductible_vat_minor: 2100,
-        deductible_irpf_minor: 10000,
-        future_depreciation_minor: 0,
-        schedule: [],
-      },
-    }),
+    saved?.decision.tax_treatment.rate_basis_points !== 2100
+      ? route.fulfill({
+          status: 400,
+          json: { error: 'Explicit rate_basis_points in EUR is required', code: 'expense_invalid' },
+        })
+      : route.fulfill({
+          json: {
+            preview_token: 'synthetic-token',
+            supplier: 'Synthetic supplier',
+            period: '2026-Q3',
+            currency: 'EUR',
+            gross_minor: 12100,
+            deductible_vat_minor: 2100,
+            deductible_irpf_minor: 10000,
+            future_depreciation_minor: 0,
+            schedule: [],
+          },
+        }),
   );
   for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: 800 });
@@ -139,6 +147,14 @@ test('a new reviewer sees what remains, the result in view and reaches the confi
     await expect(question).toHaveAttribute('href', '#wf-manual_review_reason');
     await question.click();
     await expect(page.locator('#wf-manual_review_reason')).toBeFocused();
+    // Intake leaves the IVA rate empty: it is visible beside the invoice IVA and named until typed.
+    const rate = page.locator('[data-p="decision.tax_treatment.rate_basis_points"]');
+    await expect(rate).toBeVisible();
+    const rateItem = remaining.getByRole('link', { name: workflow['workflow.remaining.ivaRate'] });
+    await rateItem.click();
+    await expect(rate).toBeFocused();
+    await rate.fill('21');
+    await expect(rateItem).toHaveCount(0);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBe(true);
@@ -178,6 +194,7 @@ test('a new reviewer sees what remains, the result in view and reaches the confi
     'facts.document_number',
     'manual_review_reason',
     'decision.tax_treatment.tax_code',
+    'decision.tax_treatment.rate_basis_points',
     'decision.business_purpose',
     'wf-save',
   ].map((name) => visited.indexOf(name));
