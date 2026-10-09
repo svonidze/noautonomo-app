@@ -280,7 +280,7 @@ async function saveStatus() {
           <thead>
             <tr>
               <th>{{ t('aeatDocuments.date') }}</th>
-              <th>Modelo</th>
+              <th class="aeat-form-code">Modelo</th>
               <th>{{ t('aeatDocuments.procedure') }}</th>
               <th>{{ t('aeatDocuments.kind') }}</th>
               <th>{{ t('aeatDocuments.status') }}</th>

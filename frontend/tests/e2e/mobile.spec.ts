@@ -116,3 +116,35 @@ test('on a phone a chart opens as its data table and draws only on request', asy
     expect(labels[index].left).toBeGreaterThanOrEqual(labels[index - 1].right);
   expect(await overflows(page)).toBe(false);
 });
+
+test('on a wide screen the AEAT filters stay inside their panel and short headers stay whole', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/aeat-documents');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+  const panel = (await page.locator('.aeat-filter-grid').locator('xpath=..').boundingBox())!;
+  const fields = await page
+    .locator('.aeat-filter-grid :is(input, select)')
+    .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON()));
+  expect(fields).toHaveLength(5);
+  for (const field of fields) {
+    expect(field.left).toBeGreaterThanOrEqual(panel.x + 8);
+    expect(field.right).toBeLessThanOrEqual(panel.x + panel.width - 8);
+  }
+  const lines = (cell: HTMLElement) => {
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+  };
+  await expect(page.locator('.nav-toggle')).toBeHidden();
+  await expect(page.locator('#primary-nav')).toBeVisible();
+  expect(
+    await page.locator('.aeat-documents-table th', { hasText: 'Modelo' }).evaluate(lines),
+  ).toBe(1);
+  // The queue's action column fits its one control on one line.
+  await page.goto('/review?period=2026-Q3');
+  const actions = page.locator('.review-queue-table td.table-actions > *');
+  await expect(actions).toHaveCount(2);
+  for (const control of await actions.all()) expect(await control.evaluate(lines)).toBe(1);
+});

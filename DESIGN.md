@@ -364,8 +364,13 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 - Every chart opens as its data table; the drawing and its legend wait in a
   closed «Показать график» / "Show chart" below the table. The dialog
   expansion is unchanged.
+- Tables and filters stay inside their panels at every width: the AEAT
+  filters are `repeat(auto-fit, minmax(min(180px, 100%), 1fr))` inside the
+  panel padding, «Modelo» never breaks, and the queue's action column is as
+  wide as its one control.
 - `frontend/tests/e2e/mobile.spec.ts` pins the bar height, the menu by
-  keyboard, folded charts and no horizontal scroll on five screens.
+  keyboard, folded charts and no horizontal scroll on five screens, and the
+  AEAT filters and the queue actions at 1440 px.
 
 ### Accessibility tokens
 - Control borders at least 3:1 against the surface; focus ring
