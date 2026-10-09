@@ -174,6 +174,24 @@ button {
   color: #6dd2b8;
 }
 
+/* The section name and «Меню» appear only in the narrow bar (max-width: 760px). */
+.nav-current,
+.nav-toggle {
+  display: none;
+}
+
+.nav-toggle {
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  color: #fff;
+  background: transparent;
+  border: 1px solid #5d6f6a;
+  border-radius: 5px;
+  font-weight: 600;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
@@ -1658,7 +1676,8 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
-.nav-item:focus-visible {
+.nav-item:focus-visible,
+.nav-toggle:focus-visible {
   outline: 3px solid #6dd2b8;
   outline-offset: 2px;
 }
@@ -2115,22 +2134,50 @@ textarea:focus {
 }
 
 @media (max-width: 760px) {
+  /* One bar: the brand mark, the current section and «Меню»; the links open below it. */
   .sidebar {
     position: static;
     width: 100%;
     height: auto;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+    padding: 0 12px;
   }
 
   .brand {
-    height: 60px;
+    height: 56px;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .brand > span:last-child {
+    display: none;
+  }
+
+  .nav-current {
+    display: block;
+    min-width: 0;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
   }
 
   .primary-nav {
-    display: grid;
+    display: none;
+    grid-column: 1 / -1;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     overflow: visible;
-    padding: 7px 8px;
+    padding: 7px 0;
     border-top: 1px solid #34413e;
+  }
+
+  .menu-open .primary-nav {
+    display: grid;
   }
 
   .nav-item {
@@ -2599,15 +2646,6 @@ textarea:focus {
   }
 }
 
-@media (max-width: 760px) {
-  /* Detailed expense rows survive narrow screens and browser zoom without
-     relying on clipped SVG labels or hover-only titles. */
-  .chart-table-primary-on-narrow .chart-host,
-  .chart-table-primary-on-narrow .chart-legend {
-    display: none;
-  }
-}
-
 @media print {
   .chart-expand-button {
     display: none;
@@ -2769,13 +2807,18 @@ textarea:focus {
   min-height: 84px;
 }
 
-.chart-data summary {
+/* On a phone the open table comes first and «Показать график» folds the drawing below it. */
+.chart-data summary,
+.chart-plot > summary {
+  min-height: 24px;
+  padding: 3px 0;
   color: var(--muted);
   font-size: 0.8rem;
   cursor: pointer;
 }
 
-.chart-data[open] summary {
+.chart-data[open] summary,
+.chart-plot[open] > summary {
   margin-bottom: 6px;
 }
 

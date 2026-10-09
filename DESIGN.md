@@ -353,6 +353,20 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   screens the data table is primary and the chart is collapsed. The queue
   aging chart renders from ten queued items.
 
+### Narrow screens
+- At 760 px and below the sidebar folds into one bar, no taller than 112 px
+  at 375 px: the brand mark, the current section and «Меню» / "Menu" (a
+  button with `aria-expanded` and `aria-controls="primary-nav"`). The links
+  open below the bar; Escape, a link or any route change closes them, and
+  closing from inside the bar returns focus to the button. Routes, ids and
+  `data-view` stay as on wide screens; the active link carries
+  `aria-current="page"`.
+- Every chart opens as its data table; the drawing and its legend wait in a
+  closed «Показать график» / "Show chart" below the table. The dialog
+  expansion is unchanged.
+- `frontend/tests/e2e/mobile.spec.ts` pins the bar height, the menu by
+  keyboard, folded charts and no horizontal scroll on five screens.
+
 ### Accessibility tokens
 - Control borders at least 3:1 against the surface; focus ring
   `--accent-dark` 2 px; warning text token at least 4.5:1; disabled primary
@@ -530,7 +544,9 @@ when a band falls under 34px — and the horizontal-bar label column shrinks
 from 150 toward 90 below roughly 500px. Thinning removes labels only; every
 value stays in the data table and in the mark titles. Quarterly charts have
 too few buckets to thin; their buckets use the short period form («III кв. 2026»,
-"Q3 2026") so four quarters fit a half-width chart.
+"Q3 2026") so four quarters fit a half-width chart. A chart narrower than 400
+units (a phone) names the year once, in the quarter column header («Квартал,
+2026»), and reads «III кв.» / "Q3" under each bar and in its table.
 
 Each non-empty chart carries one expand control in its caption. It re-renders
 the same spec in the shared `#chart-dialog` at dialog width — no nested
@@ -548,9 +564,10 @@ assigned". The table is initially expanded, adds the gross total, and shows
 each deductible/non-deductible amount with its share of a positive gross total.
 Shares are unavailable for zero or negative totals, negative components, or a
 component sum that does not equal the gross total. On narrow screens and at
-browser zoom that triggers the same breakpoint, the labelled table replaces
-the dense SVG plot as the primary view. Every table cell retains its column
-label when rows reflow into cards.
+browser zoom that triggers the same breakpoint, the labelled table is the
+primary view and the plot folds behind «Показать график», as for every chart
+(see Narrow screens). Every table cell retains its column label when rows
+reflow into cards.
 
 ### Color and pattern semantics
 

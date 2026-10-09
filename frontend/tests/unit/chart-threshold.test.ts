@@ -61,6 +61,24 @@ test('a chart counts its non-zero plotted values: zeros and gaps do not count', 
   expect(spec([6500, 6500]).buckets).toEqual(['I кв. 2026', 'II кв. 2026']);
 });
 
+test('a phone-width quarter axis names the year once, in the column header', () => {
+  const compact = (locale: 'ru' | 'en', data: Analytics) =>
+    createChartBuilders(locale, { compactQuarters: true }).amortization(data);
+  const year = compact('ru', amortization([1, 2, 3, 4]));
+  expect([year.bucketLabel, year.buckets]).toEqual([
+    'Квартал, 2026',
+    ['I кв.', 'II кв.', 'III кв.', 'IV кв.'],
+  ]);
+  expect(compact('en', amortization([1, 2])).buckets).toEqual(['Q1', 'Q2']);
+  // Quarters of two years keep their years under the bars.
+  const span = amortization([1, 2]);
+  span.datasets.amortization.points[1]!.period_key = '2027-Q1';
+  expect([compact('ru', span).bucketLabel, compact('ru', span).buckets]).toEqual([
+    'Квартал',
+    ['I кв. 2026', 'I кв. 2027'],
+  ]);
+});
+
 const roots: (() => void)[] = [];
 afterEach(() => {
   roots.splice(0).forEach((dispose) => dispose());

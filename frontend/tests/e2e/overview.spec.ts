@@ -422,7 +422,10 @@ test('on a phone the first screen lists tasks and draws no chart until Analytics
     ruDashboard['dashboard.analyticsToggle'],
   );
   await analytics.locator(':scope > summary').click();
-  await expect(page.locator('svg.chart-svg').first()).toBeVisible();
+  // Opened on a phone, each chart is its data table; the drawing waits behind «Показать график».
+  await expect(page.locator('details.chart-data[open]').first()).toBeVisible();
+  await expect(page.locator('details.chart-plot').first()).not.toHaveAttribute('open');
+  await expect(page.locator('svg.chart-svg:visible')).toHaveCount(0);
   await expect(analytics.locator(':scope > summary')).toHaveText(
     ruDashboard['dashboard.analyticsToggleOpen'],
   );

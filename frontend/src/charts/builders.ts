@@ -1,4 +1,4 @@
-import { formatMessage, localeTag, messageIds, type Locale } from '../core/i18n.ts';
+import { formatMessage, localeTag, messageIds, quarterNumber, type Locale } from '../core/i18n.ts';
 import { eur, formatPeriod } from '../core/format.ts';
 import type { Analytics, ChartSpec, TaxPoint } from './types.ts';
 
@@ -17,7 +17,9 @@ export function chartValueCount(spec: ChartSpec): number {
   ).length;
 }
 
-export function createChartBuilders(locale: Locale) {
+/** `compactQuarters`: a chart narrower than four «III кв. 2026» labels names the year once, in the
+ * quarter column header, and keeps «III кв.» under each bar (DESIGN.md "Chart sizing"). */
+export function createChartBuilders(locale: Locale, { compactQuarters = false } = {}) {
   const t = (key: string) => formatMessage(key, {}, locale);
   const intlLocale = () => localeTag(locale);
   const statusLabel = (status: string) => t(`statuses.labels.${status}`);
@@ -49,6 +51,24 @@ export function createChartBuilders(locale: Locale) {
     const parsed = new Date(`${bucket}-01T12:00:00`);
     if (Number.isNaN(parsed.getTime())) return String(bucket);
     return new Intl.DateTimeFormat(intlLocale(), { month: 'short' }).format(parsed);
+  }
+
+  function quarterAxis(spec: ChartSpec, periodKeys: string[]) {
+    const years = new Set(periodKeys.map((key) => /^(\d{4})-Q[1-4]$/.exec(key)?.[1]));
+    const [year] = years;
+    if (compactQuarters && years.size === 1 && year) {
+      spec.bucketLabel = formatMessage('charts.bucket.quarterOfYear', { year }, locale);
+      spec.buckets = periodKeys.map((key) =>
+        formatMessage(
+          'charts.bucket.quarterCompact',
+          { quarter: quarterNumber(Number(key.slice(-1)), locale) },
+          locale,
+        ),
+      );
+    } else {
+      spec.bucketLabel = t('charts.bucket.quarter');
+      spec.buckets = periodKeys.map((key) => formatPeriod(key, locale, { short: true }));
+    }
   }
 
   function chartSpecBase(
@@ -172,8 +192,10 @@ export function createChartBuilders(locale: Locale) {
       'charts.taxDue.aria',
       taxChartEmptyMessage(points, 'charts.taxDue.empty'),
     );
-    spec.bucketLabel = t('charts.bucket.quarter');
-    spec.buckets = points.map((point) => formatPeriod(point.period_key, locale, { short: true }));
+    quarterAxis(
+      spec,
+      points.map((point) => point.period_key),
+    );
     spec.series = [
       {
         key: 'm130',
@@ -205,8 +227,10 @@ export function createChartBuilders(locale: Locale) {
       'charts.iva.aria',
       taxChartEmptyMessage(points, 'charts.taxDue.empty'),
     );
-    spec.bucketLabel = t('charts.bucket.quarter');
-    spec.buckets = points.map((point) => formatPeriod(point.period_key, locale, { short: true }));
+    quarterAxis(
+      spec,
+      points.map((point) => point.period_key),
+    );
     spec.series = [
       {
         key: 'output',
@@ -539,10 +563,12 @@ export function createChartBuilders(locale: Locale) {
       'charts.amortization.aria',
       t('charts.amortization.empty'),
     );
-    spec.bucketLabel = t('charts.bucket.quarter');
     spec.note = t('charts.amortization.note');
     const points = amortization.points || [];
-    spec.buckets = points.map((point) => formatPeriod(point.period_key, locale, { short: true }));
+    quarterAxis(
+      spec,
+      points.map((point) => point.period_key),
+    );
     spec.series = [
       {
         key: 'amortization',

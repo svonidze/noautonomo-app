@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useShell } from './controller.ts';
 import { routeUrl, views } from './routes.ts';
 import { useLocale } from '../vue/locale.ts';
@@ -71,6 +71,18 @@ const lead = computed(() =>
             locale.value,
           ),
 );
+// Narrow screens fold the navigation behind «Меню». Closing it from inside the bar returns focus to
+// the toggle, so the keyboard never lands on a hidden link.
+const menuOpen = ref(false),
+  sidebar = ref<HTMLElement>(),
+  menuToggle = ref<HTMLButtonElement>();
+function closeMenu() {
+  if (!menuOpen.value) return;
+  const inside = sidebar.value?.contains(document.activeElement);
+  menuOpen.value = false;
+  if (inside) menuToggle.value?.focus();
+}
+watch(route, closeMenu);
 const refreshLabel = computed(() =>
   t(
     route.value?.view === 'contact-detail'
@@ -82,23 +94,40 @@ const refreshLabel = computed(() =>
 );
 </script>
 <template>
-  <aside class="sidebar">
+  <aside ref="sidebar" class="sidebar" :class="{ 'menu-open': menuOpen }" @keydown.esc="closeMenu">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">A</span
       ><span
         ><strong>Autónomo</strong><small id="profile-name">{{ profileName }}</small></span
       >
     </div>
-    <nav class="primary-nav" :aria-label="t('nav.aria')">
+    <span v-if="navView" class="nav-current" aria-hidden="true">{{
+      formatMessage(shellMessageKey('nav', navView), {}, locale)
+    }}</span>
+    <button
+      ref="menuToggle"
+      type="button"
+      class="nav-toggle"
+      :aria-expanded="menuOpen"
+      aria-controls="primary-nav"
+      @click="menuOpen = !menuOpen"
+    >
+      <span aria-hidden="true">☰</span> {{ t('nav.menu') }}
+    </button>
+    <nav id="primary-nav" class="primary-nav" :aria-label="t('nav.aria')">
       <a
         v-for="(item, index) in views"
         :key="item"
         class="nav-item"
         :class="{ active: navView === item }"
+        :aria-current="navView === item ? 'page' : undefined"
         :href="routeUrl(item, period, { tab: reviewTab })"
         :data-view="item"
         data-spa
-        @click="followSpaLink($event, navigate)"
+        @click="
+          closeMenu();
+          followSpaLink($event, navigate);
+        "
         ><span aria-hidden="true">{{ icons[index] }}</span
         ><span :data-i18n="shellMessageKey('nav', item)">{{
           formatMessage(shellMessageKey('nav', item))
