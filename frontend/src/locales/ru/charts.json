@@ -33,6 +33,7 @@
   "charts.empty.missingFx": "У части операций нет курса валюты — суммы не рассчитаны",
   "charts.empty.noTransactions": "Нет операций за период",
   "charts.empty.onlyUnreviewed": "Операции есть, но ещё не разобраны",
+  "charts.emptyLine": "{title}. {message}",
   "charts.expand": "Увеличить",
   "charts.expenses.aria": "Расходы по категориям: суммы, которые уменьшают и не уменьшают базу IRPF",
   "charts.expenses.concept": "Категория расхода",

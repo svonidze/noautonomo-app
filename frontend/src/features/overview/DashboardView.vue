@@ -75,11 +75,18 @@ function refreshVisible() {
 }
 const interval = setInterval(refreshVisible, 60000);
 document.addEventListener('visibilitychange', refreshVisible);
+// Analytics is folded on phone widths; the query follows rotation and window resizes.
+const narrowQuery =
+  typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 760px)') : undefined;
+const narrow = ref(!!narrowQuery?.matches);
+const followNarrow = () => (narrow.value = !!narrowQuery?.matches);
+narrowQuery?.addEventListener('change', followNarrow);
 onBeforeUnmount(() => {
   active = false;
   generation++;
   clearInterval(interval);
   document.removeEventListener('visibilitychange', refreshVisible);
+  narrowQuery?.removeEventListener('change', followNarrow);
 });
 const presentation = computed(() => createFinancePresentation(locale.value));
 const future = computed(() => isFuturePeriod(props.context.period));
@@ -300,22 +307,26 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
           </ul>
         </section>
       </div>
-      <section
-        class="charts-panel"
-        id="dashboard-charts"
-        aria-labelledby="dashboard-analytics-title"
-      >
-        <h2 id="dashboard-analytics-title">{{ t('dashboard.analyticsTitle') }}</h2>
-        <ChartHost
-          v-for="chart in charts"
-          :key="chart.kind"
-          :id="chart.id"
-          :kind="chart.kind"
-          :period="context.period"
-          :analytics="analytics"
-          :failed="chartFailure"
-        />
-      </section>
+      <details class="analytics-details" :open="!narrow">
+        <summary>
+          <h2 id="dashboard-analytics-title">{{ t('dashboard.analyticsTitle') }}</h2>
+        </summary>
+        <section
+          class="charts-panel"
+          id="dashboard-charts"
+          aria-labelledby="dashboard-analytics-title"
+        >
+          <ChartHost
+            v-for="chart in charts"
+            :key="chart.kind"
+            :id="chart.id"
+            :kind="chart.kind"
+            :period="context.period"
+            :analytics="analytics"
+            :failed="chartFailure"
+          />
+        </section>
+      </details>
     </template>
   </div>
 </template>

@@ -69,6 +69,10 @@ describe('locale messages and private values', () => {
   ])('period %s reads in %s as %s', (key, locale, expected) => {
     expect(formatPeriod(key, locale)).toBe(expected);
   });
+  test('a chart axis gets the short quarter form', () => {
+    expect(formatPeriod('2026-Q3', 'ru', { short: true })).toBe('III кв. 2026');
+    expect(formatPeriod('2026-Q3', 'en', { short: true })).toBe('Q3 2026');
+  });
 });
 
 function response(status: number, contentType: string, body: string): HttpResponse {

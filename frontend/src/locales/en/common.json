@@ -25,6 +25,7 @@
   "common.nouns.steps.other": "steps",
   "common.openDocument": "Open document",
   "common.quarter": "Q{quarter} {year}",
+  "common.quarterShort": "Q{quarter} {year}",
   "common.refresh": "Refresh",
   "common.reload": "Reload page",
   "common.retry": "Retry",

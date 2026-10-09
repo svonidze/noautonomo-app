@@ -33,6 +33,7 @@
   "charts.empty.missingFx": "Some transactions have no FX rate — amounts are not computed",
   "charts.empty.noTransactions": "No transactions in this period",
   "charts.empty.onlyUnreviewed": "Transactions exist but are not reviewed yet",
+  "charts.emptyLine": "{title}. {message}",
   "charts.expand": "Expand",
   "charts.expenses.aria": "Expenses by category: amounts that reduce and do not reduce the IRPF tax base",
   "charts.expenses.concept": "Expense category",

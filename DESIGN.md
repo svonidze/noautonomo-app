@@ -239,9 +239,9 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   points; dashboard first screen at 375 px shows tasks, not charts.
 - Precedence: where this section disagrees with an earlier section, this
   section states the target state; the earlier text stays in force until the
-  stage that ships the rule rewrites it. Known conflicts: the all-zero chart
-  rule and the reserved height of empty chart slots (rewritten by stages 3–4),
-  and «Документ от» under Content voice (rewritten by stage 1).
+  stage that ships the rule rewrites it. Known conflicts: the reserved height
+  of empty chart slots (rewritten by stages 3–4), and «Документ от» under
+  Content voice (rewritten by stage 1).
 
 ### Page grammar
 - Header: h1 title, one-line purpose, one primary action. Sections start at
@@ -269,11 +269,11 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   in this quarter" from "everything reviewed".
 
 ### Charts
-- A chart renders only when its dataset has at least two non-zero buckets;
-  otherwise the slot shows one line of text. Dashboard charts sit below the
-  task list and quarter figures; on narrow screens the data table is primary
-  and the chart is collapsed. The queue aging chart renders from ten queued
-  items.
+- A chart renders only when its dataset has at least two non-zero values
+  (each series counts per bucket); otherwise the slot shows one line of text.
+  Dashboard charts sit below the task list and quarter figures; on narrow
+  screens the data table is primary and the chart is collapsed. The queue
+  aging chart renders from ten queued items.
 
 ### Accessibility tokens
 - Control borders at least 3:1 against the surface; focus ring
@@ -427,14 +427,14 @@ Additional rules:
 
 | View | Charts |
 |---|---|
-| Dashboard | monthly income vs deductible expenses; quarterly tax cash due; IVA position (27/45/71 + disposition); tax reserve bullet; cumulative business net; cumulative purchases and IRPF deductions immediately after business net |
+| Dashboard (in «Аналитика» after the task list, quarter figures and recent operations; folded on phones) | monthly income vs deductible expenses; quarterly tax cash due; IVA position (27/45/71 + disposition); tax reserve bullet; cumulative business net; cumulative purchases and IRPF deductions immediately after business net |
 | Taxes | year-over-year YTD comparison (decision support, never final Renta) |
 | Expenses | expense structure by AEAT concept (deductible / non-deductible / unclassified) |
 | Review | queue aging by age bucket and status |
 | Contacts | top customers with an "Other" fold |
 | Assets | amortization per quarter (`include_in_books = 1` only) |
 
-From stage 3 of the clarity redesign, rendering is gated by the threshold policy in [Clarity redesign (round 2)](#clarity-redesign-round-2): a chart draws only when its dataset has at least two non-zero buckets; the queue aging chart draws from ten queued items; below the threshold the slot shows one line of text. Dashboard charts sit below the task list and quarter figures.
+From stage 3 of the clarity redesign, rendering is gated by the threshold policy in [Clarity redesign (round 2)](#clarity-redesign-round-2): a chart draws only when its dataset has at least two non-zero values; the queue aging chart draws from ten queued items; below the threshold the slot shows one line of text. Dashboard charts sit below the task list and quarter figures.
 
 ### Chart sizing and expansion
 
@@ -451,7 +451,8 @@ Narrow charts thin their bucket labels deterministically — every Nth label
 when a band falls under 34px — and the horizontal-bar label column shrinks
 from 150 toward 90 below roughly 500px. Thinning removes labels only; every
 value stays in the data table and in the mark titles. Quarterly charts have
-too few buckets to thin.
+too few buckets to thin; their buckets use the short period form («III кв. 2026»,
+"Q3 2026") so four quarters fit a half-width chart.
 
 Each non-empty chart carries one expand control in its caption. It re-renders
 the same spec in the shared `#chart-dialog` at dialog width — no nested
@@ -511,8 +512,9 @@ Distinguish, in this order: analytics fetch failed → "could not load"; some
 transactions lack FX → missing-FX message; only unreviewed rows exist →
 unreviewed message; forms filed without extractable values → filed-without-
 values message; calculation blocked (reserve) → blocked message; otherwise →
-plain no-data message. All-zero data is a real chart with a zero baseline,
-not an empty state.
+plain no-data message. Below the data threshold, all-zero data included, the
+slot shows the chart title and this message as one line instead of a figure;
+the cumulative-purchases slot names missing exchange rates first.
 
 ### Documented deltas
 

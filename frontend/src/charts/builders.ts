@@ -1,6 +1,22 @@
 import { formatMessage, localeTag, messageIds, type Locale } from '../core/i18n.ts';
-import { eur } from '../core/format.ts';
+import { eur, formatPeriod } from '../core/format.ts';
 import type { Analytics, ChartSpec, TaxPoint } from './types.ts';
+
+/** DESIGN.md "Charts": a chart is drawn from at least two non-zero plotted values; below that the
+ * slot shows one line of text. Values past the last bucket are not plotted and do not count. */
+export function hasEnoughData(spec: ChartSpec): boolean {
+  const buckets = spec.buckets?.length ?? 0;
+  const values = [
+    ...(spec.series ?? []).flatMap((series) => series.values.slice(0, buckets)),
+    ...(spec.rows ?? []).flatMap((row) => row.segments.map((segment) => segment.value)),
+    ...(spec.ranges ?? []).map((range) => range.value),
+    spec.measure?.value,
+  ];
+  return (
+    values.filter((value) => typeof value === 'number' && Number.isFinite(value) && value !== 0)
+      .length >= 2
+  );
+}
 
 export function createChartBuilders(locale: Locale) {
   const t = (key: string) => formatMessage(key, {}, locale);
@@ -158,7 +174,7 @@ export function createChartBuilders(locale: Locale) {
       taxChartEmptyMessage(points, 'charts.taxDue.empty'),
     );
     spec.bucketLabel = t('charts.bucket.quarter');
-    spec.buckets = points.map((point) => point.period_key);
+    spec.buckets = points.map((point) => formatPeriod(point.period_key, locale, { short: true }));
     spec.series = [
       {
         key: 'm130',
@@ -191,7 +207,7 @@ export function createChartBuilders(locale: Locale) {
       taxChartEmptyMessage(points, 'charts.taxDue.empty'),
     );
     spec.bucketLabel = t('charts.bucket.quarter');
-    spec.buckets = points.map((point) => point.period_key);
+    spec.buckets = points.map((point) => formatPeriod(point.period_key, locale, { short: true }));
     spec.series = [
       {
         key: 'output',
@@ -296,11 +312,14 @@ export function createChartBuilders(locale: Locale) {
 
   function buildCumulativeExpensesSpec(analytics: Analytics) {
     const expenses = analytics.datasets.cumulative_expenses;
+    // Missing-FX rows stay visible even when the known totals are zero (DESIGN.md, Measures).
     const spec = chartSpecBase(
       'cumulative-expenses',
       'charts.cumulativeExpenses.title',
       'charts.cumulativeExpenses.aria',
-      transactionsEmptyMessage(analytics),
+      expenses.missing_fx_transaction_count > 0
+        ? t('charts.empty.missingFx')
+        : transactionsEmptyMessage(analytics),
     );
     spec.bucketLabel = t('charts.bucket.month');
     spec.buckets = expenses.buckets.map(chartMonthLabel);
@@ -524,7 +543,7 @@ export function createChartBuilders(locale: Locale) {
     spec.bucketLabel = t('charts.bucket.quarter');
     spec.note = t('charts.amortization.note');
     const points = amortization.points || [];
-    spec.buckets = points.map((point) => point.period_key);
+    spec.buckets = points.map((point) => formatPeriod(point.period_key, locale, { short: true }));
     spec.series = [
       {
         key: 'amortization',

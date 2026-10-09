@@ -45,13 +45,18 @@ export function formatDateTime(value: unknown, locale: unknown): string {
     minute: '2-digit',
   }).format(date);
 }
-/** «IV квартал 2026» / "Q4 2026" for a period key; any other shape is returned as is. */
-export function formatPeriod(periodKey: unknown, locale: unknown): string {
+/** «IV квартал 2026» / "Q4 2026" for a period key; any other shape is returned as is. The short
+ * form («IV кв. 2026») keeps four quarters apart on a chart axis. */
+export function formatPeriod(
+  periodKey: unknown,
+  locale: unknown,
+  { short = false }: { short?: boolean } = {},
+): string {
   const key = String(periodKey ?? '');
   const match = /^(\d{4})-Q([1-4])$/.exec(key);
   return match
     ? formatMessage(
-        'common.quarter',
+        short ? 'common.quarterShort' : 'common.quarter',
         { year: match[1], quarter: quarterNumber(Number(match[2]), locale) },
         locale,
       )

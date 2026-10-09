@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import messages from '../../src/locales/en/workflow.json' with { type: 'json' };
 import analyticsFixture from '../fixtures/analytics.json' with { type: 'json' };
 import toolbar from '../../src/locales/ru/toolbar.json' with { type: 'json' };
+import ruCharts from '../../src/locales/ru/charts.json' with { type: 'json' };
+import enCharts from '../../src/locales/en/charts.json' with { type: 'json' };
 import ruDashboard from '../../src/locales/ru/dashboard.json' with { type: 'json' };
 import statuses from '../../src/locales/ru/statuses.json' with { type: 'json' };
 const ASSET = '55555555-5555-4555-8555-555555555555',
@@ -192,7 +194,7 @@ test('undecided returns stay distinct from filing exemptions in both locales', a
     'Декларации без решения — проверьте обязательства',
   );
 });
-test('cumulative purchases follow business net and show missing FX beside zero totals in both locales', async ({
+test('cumulative purchases follow business net; zero totals with missing FX read as one line in both locales', async ({
   page,
 }) => {
   const data = structuredClone(analyticsFixture);
@@ -211,8 +213,14 @@ test('cumulative purchases follow business net and show missing FX beside zero t
   });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/dashboard?period=2026-Q3');
+  const analytics = page.locator('details.analytics-details');
+  await expect(analytics).not.toHaveAttribute('open');
+  await analytics.locator(':scope > summary').click();
   const chart = page.locator('#chart-cumulative-expenses');
-  await expect(chart.locator('.chart-note')).toContainText('В расчет не вошли расходы');
+  await expect(chart.locator('.chart-empty')).toHaveText(
+    `${ruCharts['charts.cumulativeExpenses.title']}. ${ruCharts['charts.empty.missingFx']}`,
+  );
+  await expect(chart.locator('svg, .chart-expand-button')).toHaveCount(0);
   expect(
     await page.evaluate(() => {
       const net = document.querySelector('#chart-cumulative-net')!;
@@ -222,17 +230,11 @@ test('cumulative purchases follow business net and show missing FX beside zero t
   ).toBe(true);
   const before = reads;
   await page.locator('[data-locale="en"]').evaluate((button: HTMLElement) => button.click());
-  await expect(chart.locator('figcaption > span')).toHaveText(
-    'Cumulative purchases and IRPF deductions',
+  await expect(chart.locator('.chart-empty')).toHaveText(
+    `${enCharts['charts.cumulativeExpenses.title']}. ${enCharts['charts.empty.missingFx']}`,
   );
-  await expect(chart.locator('.chart-note')).toContainText(
-    'Expense rows without confirmed EUR conversion are excluded: 1.',
-  );
+  await expect(analytics).toHaveAttribute('open', '');
   expect(reads).toBe(before);
-  await expect(chart.locator('.chart-legend li')).toHaveCount(4);
-  await chart.locator('details.chart-data summary').click();
-  await expect(chart.locator('table')).toBeVisible();
-  await expect(chart.locator('table')).toContainText('IRPF deductions: actual');
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
   ).toBe(true);
@@ -304,9 +306,9 @@ test('the overview starts with what to do now: the reviewed expense waits in a p
     page.locator('.posting-banner, #dashboard-ready-banner, .deadline-strip'),
   ).toHaveCount(0);
   const order = await page
-    .locator('.task-list, .metric-grid, .dashboard-grid, .charts-panel')
+    .locator('.task-list, .metric-grid, .dashboard-grid, .analytics-details')
     .evaluateAll((nodes) => nodes.map((node) => node.className));
-  expect(order).toEqual(['task-list', 'metric-grid', 'dashboard-grid', 'charts-panel']);
+  expect(order).toEqual(['task-list', 'metric-grid', 'dashboard-grid', 'analytics-details']);
 });
 test('a review queue, a blocked row and a due return each link where the work is', async ({
   page,
@@ -393,6 +395,30 @@ test('the calculate row refreshes the quarter and leaves the list once the quart
   const tax = page.locator('.metric').filter({ hasText: ruDashboard['dashboard.taxDue'] });
   await expect(tax.locator('dd strong')).toHaveText([/0,00/, /0,00/]);
   await expect(tax.locator('.calculate-button')).toHaveCount(0);
+});
+test('on a phone the first screen lists tasks and draws no chart until Analytics is opened', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/dashboard?period=2026-Q3');
+  await expect(page.locator('.task-row').first()).toBeVisible();
+  const firstScreen = await page.evaluate(() => {
+    const onScreen = (selector: string) =>
+      [...document.querySelectorAll(selector)].filter((node) => {
+        const box = node.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && box.top < window.innerHeight;
+      }).length;
+    return { tasks: onScreen('.task-row'), charts: onScreen('svg.chart-svg') };
+  });
+  expect(firstScreen.tasks).toBeGreaterThan(0);
+  expect(firstScreen.charts).toBe(0);
+  const analytics = page.locator('details.analytics-details');
+  await expect(analytics).not.toHaveAttribute('open');
+  await analytics.locator(':scope > summary').click();
+  await expect(page.locator('svg.chart-svg').first()).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+  ).toBe(true);
 });
 test('the refresh shortcut is captioned on wide screens and stays hidden where it does not apply', async ({
   page,

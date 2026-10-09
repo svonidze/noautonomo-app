@@ -247,13 +247,13 @@ test('the overview opens with the task list, then three figure cards, without ba
     }),
   );
   const order = [
-    ...root.querySelectorAll('.task-list, .metric-grid, .dashboard-grid, .charts-panel'),
+    ...root.querySelectorAll('.task-list, .metric-grid, .dashboard-grid, .analytics-details'),
   ];
   expect(order.map((node) => node.className)).toEqual([
     'task-list',
     'metric-grid',
     'dashboard-grid',
-    'charts-panel',
+    'analytics-details',
   ]);
   expect(root.querySelector('.task-list h2')!.textContent).toBe(ru['dashboard.tasksTitle']);
   const post = root.querySelector<HTMLAnchorElement>('a.task-row')!;

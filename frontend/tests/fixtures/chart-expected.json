@@ -99,8 +99,8 @@
         "emptyMessage": "Форма подана, но значения не извлечены",
         "bucketLabel": "Квартал",
         "buckets": [
-          "2026-Q1",
-          "2026-Q2"
+          "I кв. 2026",
+          "II кв. 2026"
         ],
         "series": [
           {
@@ -141,7 +141,7 @@
         "emptyMessage": "Квартальные расчёты не сформированы",
         "bucketLabel": "Квартал",
         "buckets": [
-          "2026-Q1"
+          "I кв. 2026"
         ],
         "series": [
           {
@@ -428,8 +428,8 @@
         "bucketLabel": "Квартал",
         "note": "На графике — включённые в книги строки по кварталам года. В таблице — выбранный квартал, с отдельными суммами вне книг. Годовые подтверждения не прибавляются.",
         "buckets": [
-          "2026-Q1",
-          "2026-Q2"
+          "I кв. 2026",
+          "II кв. 2026"
         ],
         "series": [
           {
@@ -613,8 +613,8 @@
         "emptyMessage": "The form was filed but no values were extracted",
         "bucketLabel": "Quarter",
         "buckets": [
-          "2026-Q1",
-          "2026-Q2"
+          "Q1 2026",
+          "Q2 2026"
         ],
         "series": [
           {
@@ -655,7 +655,7 @@
         "emptyMessage": "Quarterly calculations are not available",
         "bucketLabel": "Quarter",
         "buckets": [
-          "2026-Q1"
+          "Q1 2026"
         ],
         "series": [
           {
@@ -942,8 +942,8 @@
         "bucketLabel": "Quarter",
         "note": "The chart shows book-included entries across the year. The table shows the selected quarter, separating entries outside the books. Annual evidence is not added.",
         "buckets": [
-          "2026-Q1",
-          "2026-Q2"
+          "Q1 2026",
+          "Q2 2026"
         ],
         "series": [
           {
