@@ -431,9 +431,15 @@ class LocalAccountingApp:
                 )
             }
         if not periods:
-            # A ledger straight from `db init`: offer the current quarter without creating it; the
-            # first document's intake creates its row.
-            periods = [_missing_period(_quarter_key(date.today()))]
+            # A ledger straight from `db init`: offer the current quarter and the one before it (the
+            # first document may be dated there) without creating them; the first document's intake
+            # creates its row.
+            today = date.today()
+            quarter_start = date(today.year, today.month - (today.month - 1) % 3, 1)
+            periods = [
+                _missing_period(_quarter_key(today)),
+                _missing_period(_quarter_key(quarter_start - timedelta(days=1))),
+            ]
         period_keys = [row["period_key"] for row in periods]
         default_period = _current_or_latest_period(period_keys)
         return {
@@ -1462,13 +1468,7 @@ class LocalAccountingApp:
             raise LocalWebError("Uploaded file is empty")
         if len(content) > MAX_UPLOAD_BYTES:
             raise LocalWebError("Uploaded file exceeds the 30 MB limit")
-        issued_on = fields.get("issued_on", "").strip()
-        if issued_on:
-            parsed_date = date.fromisoformat(issued_on)
-            if _quarter_key(parsed_date) != period:
-                raise LocalWebError(
-                    f"Invoice date belongs to {_quarter_key(parsed_date)}, not {period}"
-                )
+        _require_intake_quarter(fields.get("issued_on", ""), period)
 
         stored_path = _store_upload(
             self.config.inbox_root,
@@ -3546,14 +3546,22 @@ def _validated_intake_fields(value: Mapping[str, Any]) -> dict[str, str]:
     kind = fields.get("kind", "")
     if kind not in UPLOAD_KINDS:
         raise LocalWebError("kind must be expense_invoice or income_invoice")
-    issued_on = fields.get("issued_on", "").strip()
-    if issued_on:
-        parsed_date = date.fromisoformat(issued_on)
-        if _quarter_key(parsed_date) != period:
-            raise LocalWebError(
-                f"Invoice date belongs to {_quarter_key(parsed_date)}, not {period}"
-            )
+    _require_intake_quarter(fields.get("issued_on", ""), period)
     return fields
+
+
+def _require_intake_quarter(issued_on: str, period: str) -> None:
+    """Both intake modes refuse a document dated outside the selected quarter, naming both."""
+    if not issued_on.strip():
+        return
+    document_quarter = _quarter_key(date.fromisoformat(issued_on.strip()))
+    if document_quarter != period:
+        raise LocalWebApiError(
+            HTTPStatus.BAD_REQUEST, "quarter_mismatch",
+            f"Invoice date belongs to {document_quarter}, not {period}",
+            message_code="intake.quarterMismatch",
+            params={"documentQuarter": document_quarter, "selectedQuarter": period},
+        )
 
 
 def _cli_error_detail(stderr: str, stdout: str) -> str:

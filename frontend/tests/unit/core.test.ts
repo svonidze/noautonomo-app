@@ -147,6 +147,25 @@ test('additive error messages retain legacy text when a server key is unknown', 
   expect(errorMessage(error, 'en')).toBe(formatMessage('contacts.invalidName', {}, 'en'));
 });
 
+test('a quarter mismatch names both quarters the way the header names them', async () => {
+  const { errorMessage } = await import('../../src/core/error-message.ts');
+  const error = new ApiError('Invoice date belongs to 2026-Q3, not 2026-Q4');
+  error.messageCode = 'intake.quarterMismatch';
+  error.params = { documentQuarter: '2026-Q3', selectedQuarter: '2026-Q4' };
+  for (const locale of ['ru', 'en'])
+    expect(errorMessage(error, locale)).toBe(
+      formatMessage(
+        'intake.quarterMismatch',
+        {
+          documentQuarter: formatPeriod('2026-Q3', locale),
+          selectedQuarter: formatPeriod('2026-Q4', locale),
+        },
+        locale,
+      ),
+    );
+  expect(errorMessage(error, 'en')).toContain('Choose Q3 2026 in the header');
+});
+
 test('transport and fallback errors keep message codes that re-render in the current locale', async () => {
   const { errorMessage, errorDescriptor } = await import('../../src/core/error-message.ts');
   const call = (options: Parameters<typeof fetchJSON>[1], payload: HttpResponse) =>

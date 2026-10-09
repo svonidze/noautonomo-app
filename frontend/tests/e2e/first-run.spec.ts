@@ -13,9 +13,10 @@ import reta from '../../src/locales/ru/reta.json' with { type: 'json' };
 import taxes from '../../src/locales/ru/taxes.json' with { type: 'json' };
 
 // The empty-ledger project (playwright.config.mts) serves a ledger straight from `db init`: no
-// quarter, no record, no profile. The server offers the current quarter without creating it.
-// The tests share that ledger and run in file order: the read-only ones first, then the two that
-// write to it.
+// quarter, no record, no profile. The server offers the current quarter and the one before it
+// without creating them. The tests share that ledger and run in file order: the read-only ones
+// first, then the two that write to it. The @previous-quarter test runs alone on a second fresh
+// ledger (project empty-ledger-previous): its document would end the offer of the current quarter.
 test.describe.configure({ mode: 'serial' });
 const today = new Date();
 const quarter = `${today.getFullYear()}-Q${Math.floor(today.getMonth() / 3) + 1}`;
@@ -208,3 +209,42 @@ test('the first document opens its quarter and moves the start list on to its re
   await expect(tags.nth(2)).toHaveText(statuses['statuses.steps.canStart']);
   expect(errors).toEqual([]);
 });
+
+test(
+  'a first document dated in the quarter that just ended goes to that quarter',
+  { tag: '@previous-quarter' },
+  async ({ page }) => {
+    const errors = consoleErrors(page);
+    // The last day of the quarter before the current one.
+    const last = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 0);
+    const previous = `${last.getFullYear()}-Q${Math.floor(last.getMonth() / 3) + 1}`;
+    const day = [last.getFullYear(), last.getMonth() + 1, last.getDate()]
+      .map((part) => String(part).padStart(2, '0'))
+      .join('-');
+    await page.goto('/');
+    await expect(page).toHaveURL(`/dashboard?period=${quarter}`);
+    const select = page.locator('#period-select');
+    expect(
+      await select
+        .locator('option')
+        .evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value)),
+    ).toEqual([quarter, previous]);
+    await select.selectOption(previous);
+    await expect(page).toHaveURL(`/dashboard?period=${previous}`);
+    await page.locator('#new-entry-button').click();
+    const form = page.locator('#vue-intake-form');
+    await expect(form.locator('[name="period"]')).toHaveValue(previous);
+    await page.locator('#vue-intake-file').setInputFiles({
+      name: 'synthetic-previous-invoice.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(`Synthetic invoice SYN-PREV-1 dated ${day}. Total EUR 121.00.`),
+    });
+    await form.locator('[name="issued_on"]').fill(day);
+    await form.locator('[name="document_number"]').fill('SYN-PREV-1');
+    await form.locator('[name="counterparty_name"]').fill('Synthetic Supplier');
+    await form.locator('[name="gross"]').fill('121.00');
+    await page.locator('#vue-submit-intake').click();
+    await expect(page).toHaveURL(new RegExp(`/review/[0-9a-f-]{36}\\?period=${previous}$`));
+    expect(errors).toEqual([]);
+  },
+);

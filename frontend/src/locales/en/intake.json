@@ -24,6 +24,7 @@
   "intake.invalidResponse": "Could not confirm the result. Refresh the list before uploading again.",
   "intake.kindAria": "Entry type",
   "intake.processing": "Extracting and recording…",
+  "intake.quarterMismatch": "The document date belongs to {documentQuarter}, but {selectedQuarter} is selected. Choose {documentQuarter} in the header and try again.",
   "intake.selectFile": "Choose a file.",
   "intake.sourceAria": "Document source",
   "intake.sourceGoogleDrive": "Google Drive URL",
