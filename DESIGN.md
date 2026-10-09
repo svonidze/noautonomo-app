@@ -369,9 +369,30 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 
 ### Accessibility tokens
 - Control borders at least 3:1 against the surface; focus ring
-  `--accent-dark` 2 px; warning text token at least 4.5:1; disabled primary
+  `--accent-dark` 2 px; warning text token at least 4.5:1; disabled
   buttons use `cursor: not-allowed`; pointer targets at least 24×24 CSS px
   or spaced per SC 2.5.8.
+- Ratios by the WCAG 2.2 relative-luminance formula, against the surface
+  `#ffffff` / the page `#f4f6f5`:
+
+  | Token | Value | Used for | Ratio |
+  |---|---|---|---|
+  | `--control-border` | `#828d89` | input, select and textarea borders | 3.43 / 3.16 (3.04 on `--surface-muted`) |
+  | `--focus-ring` | `#0b6b59` (= `--accent-dark`) | every focus outline, 2 px solid, offset 2 px | 6.44 / 5.93 |
+  | `--warning-text` | `#8a5110` | warning text (`.fx-card-status.warning`) | 6.43 / 5.93 |
+
+  They replace field borders `#cbd4d0` (1.51:1), the ring `#65bfa8` (2.19:1)
+  and warning text in `--warning` (4.23 / 3.90). The plan's example border
+  `#8a9691` reaches only 2.82:1 on the page colour.
+- The dark sidebar keeps its own ring `#6dd2b8` (8.21:1 on `--sidebar`;
+  `--focus-ring` is 2.32:1 there); the «Меню» button border uses
+  `--sidebar-muted` (6.58:1).
+- `--warning` stays the expense series colour in charts, a graphic at
+  4.23:1 (≥ 3:1), never text. Badge text already passes: pending `#714307`
+  on `--warning-soft` 7.45, attention 7.73, positive 7.19, neutral 7.19.
+- Pointer targets: `.term-help` 26 px; a text action in a table cell and a
+  status «Почему»/«Что сделать» button at least 24 px tall; a link inside a
+  sentence (`.inline-button`) uses the inline exception.
 
 ## Analytics and charts
 
