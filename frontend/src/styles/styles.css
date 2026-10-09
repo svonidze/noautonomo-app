@@ -1880,10 +1880,6 @@ a:focus-visible {
   text-align: right;
 }
 
-.review-workspace-status strong {
-  font-size: 0.95rem;
-}
-
 .review-alert {
   padding: 14px 16px;
   border-radius: 10px;
@@ -1897,6 +1893,10 @@ a:focus-visible {
 
 .review-alert p {
   margin: 6px 0 0;
+}
+
+.review-alert > p:first-child {
+  margin-top: 0;
 }
 
 .review-alert > .secondary-button {
@@ -2325,10 +2325,6 @@ textarea:focus {
   font-size: 0.82rem;
 }
 
-.review-inline-error.fx-needed {
-  padding: 0 2px;
-}
-
 .review-issues-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2430,7 +2426,7 @@ textarea:focus {
 }
 
 .review-reject-panel {
-  margin-bottom: 16px;
+  margin-top: 16px;
   padding: 4px 0;
 }
 
@@ -2841,7 +2837,7 @@ textarea:focus {
 .wf-fields input, .wf-fields select { width: 100%; min-width: 0; padding: 10px; box-sizing: border-box; }
 .wf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .wf-fields .wf-check { display: flex; align-items: start; gap: 8px; }
-.wf-check input { width: auto; margin-top: 4px; }
+.wf-check input { width: auto; min-height: 0; margin-top: 4px; padding: 0; }
 .wf-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .wf-fields details { display: grid; gap: 12px; }
 .wf-message:empty { display: none; }

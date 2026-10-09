@@ -329,12 +329,67 @@ test('an unsupported review or one without a posting projection still reads as i
     document.body.append(root);
     const host = mountView(root, ReviewDetailView, setup);
     await flush();
-    const status = root.querySelector('.review-workspace-status')!;
-    expect(status.querySelector('.badge')!.textContent).toBe(t('statuses.labels.needs_review'));
-    expect(status.querySelector('strong')!.textContent).toBe(t('statuses.labels.needs_review'));
+    // One status block: the server's status cell, its badge the only one on the page.
+    expect([...root.querySelectorAll('.badge')].map((badge) => badge.textContent)).toEqual([
+      t('statuses.labels.needs_review'),
+    ]);
+    expect(root.querySelector('.review-workspace-header .status-context')).not.toBeNull();
     expect(root.textContent).not.toContain('Проверено');
+    expect(root.textContent!.split(t('review.unsupported'))).toHaveLength(2);
     host.dispose();
     root.remove();
   }
+  localStorage.clear();
+});
+
+test('a missing rate waits in «Что осталось» until confirmation, and rejection folds below the main action', async () => {
+  localStorage.clear();
+  const fixture = guidedFixture();
+  fixture.packet.state.transaction = {
+    ...fixture.packet.state.transaction,
+    currency: 'USD',
+    original_currency: 'USD',
+    amount_original_minor: 9900,
+  };
+  fixture.fx_suggestion = {
+    status: 'unavailable',
+    currency: 'USD',
+    transaction_date: '2026-07-02',
+  };
+  const setup = context(async (url: string) =>
+    url.startsWith('/api/transactions/')
+      ? {
+          transaction: {
+            transaction_id: REVIEW_ID,
+            entry_type: 'income',
+            lifecycle_status: 'needs_review',
+          },
+          period: { period_key: '2026-Q3' },
+        }
+      : fixture,
+  );
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, ReviewDetailView, setup);
+  await flush();
+  expect(root.textContent).not.toContain(t('review.fxNeeded'));
+  const link = root.querySelector<HTMLAnchorElement>('.wf-remaining a')!;
+  expect([link.textContent, link.getAttribute('href')]).toEqual([
+    t('workflow.remaining.rate'),
+    '#review-fx-settlement-rate',
+  ]);
+  link.click();
+  expect(document.activeElement?.id).toBe('review-fx-settlement-rate');
+  root.querySelector<HTMLButtonElement>('#review-primary-button')!.click();
+  await flush();
+  expect(root.querySelector('.fx-card [role="alert"]')!.textContent!.trim()).toBe(
+    t('review.fxNeeded'),
+  );
+  const actions = root.querySelector('.review-actions')!;
+  const reject = root.querySelector<HTMLDetailsElement>('.review-reject-panel')!;
+  expect(actions.compareDocumentPosition(reject) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(reject.open).toBe(false);
+  host.dispose();
+  root.remove();
   localStorage.clear();
 });

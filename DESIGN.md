@@ -203,11 +203,12 @@ navigation added by the clarity redesign.
   link. Archive-transfer counts sit under «Технические детали». A row
   without a EUR amount shows «—» and says so; the posting preview sends
   `null` for it, never `0`.
-- The workspace posting-readiness chip (`reviewCategoryBadge`) maps the
-  evaluation categories ready/later/blocked/needs_review onto the
-  status-help tone classes with localized labels; an unexpected category
-  degrades to the neutral tone with the generic status label, never a raw
-  token.
+- The guided review has one status block: the server's status cell (badge
+  and one line) beside the title. Alerts below it say why the fields are
+  locked and never repeat the status label or the same sentence twice. A
+  missing rate is an item in «Что осталось»; «Курс не выбран» appears inline
+  only after a confirmation attempt. The reject panel stays folded below
+  the main action row.
 - When a work item cannot be posted (later or blocked), every decision field
   is disabled and a banner explains why; the reject panel stays usable.
   Confirm and reject show a busy "Submitting" state while a request is in

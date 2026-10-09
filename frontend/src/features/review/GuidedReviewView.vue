@@ -17,7 +17,6 @@ import {
   messageText,
   messageIds,
   localeTag,
-  type MessageId,
   type UiMessage,
 } from '../../core/i18n.ts';
 import { readReviewDraft, writeReviewDraft, removeReviewDraft } from '../../core/drafts.ts';
@@ -26,6 +25,7 @@ import { followSpaLink } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import DecisionField, { type DecisionFieldSpec } from './DecisionField.vue';
 import FxCard from './FxCard.vue';
+import RemainingList from './RemainingList.vue';
 import {
   clone,
   merge,
@@ -158,21 +158,15 @@ const packet = computed(() => item.value!.packet),
   state = computed(() => packet.value.state);
 const evaluation = computed(() => (item.value ? evaluate(item.value) : null));
 const disabled = computed(() => busy.value || !evaluation.value?.canApply);
-// Readiness categories read as the canonical status labels; anything else is the generic label.
-const categoryLabels: Record<string, MessageId> = {
-  ready: 'statuses.labels.ready',
-  later: 'statuses.labels.deferred',
-  blocked: 'statuses.labels.blocked',
-  needs_review: 'statuses.labels.needs_review',
-};
-const categoryLabel = (category: string) =>
-  t(categoryLabels[category] ?? 'statuses.labels.unknown');
-const status = computed(() =>
-  evaluation.value?.category === 'later' && evaluation.value.availableOn
-    ? t('statuses.deferredUntil', {
-        date: formatDateText(evaluation.value.availableOn, locale.value),
-      })
-    : categoryLabel(evaluation.value?.category || ''),
+// A missing rate is named once in «Что осталось»; the inline alert waits for a confirmation attempt.
+const remaining = computed(() =>
+  item.value &&
+  needsFx(state.value.transaction) &&
+  item.value.fx_suggestion &&
+  item.value.fx_suggestion.status !== 'existing' &&
+  !confirmFx(fx.value, item.value.fx_suggestion)
+    ? [{ id: 'review-fx-settlement-rate', text: t('workflow.remaining.rate') }]
+    : [],
 );
 const errorText = computed(() =>
   failure.value?.message
@@ -530,7 +524,6 @@ const retry = () =>
       </button>
     </div>
     <template v-else-if="item && ui && evaluation">
-      <StatusCell :context="item.ui_context" />
       <div class="review-workspace-header">
         <div class="review-workspace-title">
           <h2>
@@ -548,39 +541,27 @@ const retry = () =>
             }}
           </p>
         </div>
-        <div class="review-workspace-status">
-          <span
-            class="badge"
-            :class="`status-${evaluation.category === 'ready' ? 'positive' : evaluation.category === 'blocked' ? 'attention' : evaluation.category === 'unknown' ? 'neutral' : 'pending'}`"
-            >{{ categoryLabel(evaluation.category) }}</span
-          ><strong>{{ status }}</strong>
-        </div>
+        <StatusCell class="review-workspace-status" :context="item.ui_context" />
       </div>
       <div v-if="!evaluation.supported" class="review-alert error" role="alert">
         <strong>{{ t('review.unsupported') }}</strong>
-        <p>
-          {{
-            evaluation.reasonKey
-              ? formatMessage(evaluation.reasonKey, {}, locale)
-              : item.unavailable_reason || t('review.unknownSupport')
-          }}
+        <p v-if="evaluation.reasonKey && evaluation.reasonKey !== 'review.unsupported'">
+          {{ formatMessage(evaluation.reasonKey, {}, locale) }}
         </p>
       </div>
-      <div v-if="evaluation.category === 'later'" class="review-alert warning" role="alert">
-        <strong>{{ t('statuses.labels.deferred') }}</strong>
+      <div
+        v-if="['later', 'blocked'].includes(evaluation.category)"
+        class="review-alert warning"
+        role="alert"
+      >
         <p v-if="evaluation.availableOn">
           {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
         </p>
         <p>{{ t('review.formDisabledHint') }}</p>
       </div>
-      <div
-        v-if="evaluation.supported && evaluation.category === 'blocked'"
-        class="review-alert warning"
-        role="alert"
-      >
-        <strong>{{ t('statuses.labels.blocked') }}</strong>
-        <p>{{ t('review.formDisabledHint') }}</p>
-      </div>
+      <p v-else-if="!evaluation.canApply && evaluation.availableOn" class="review-alert warning">
+        {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
+      </p>
       <div
         v-if="failure && ['general', 'document_valid'].includes(failure.target)"
         class="review-alert error"
@@ -588,9 +569,7 @@ const retry = () =>
       >
         {{ errorText }}
       </div>
-      <p v-if="!evaluation.canApply && evaluation.availableOn" class="review-alert warning">
-        {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
-      </p>
+      <RemainingList :items="remaining" />
       <form id="review-form" class="review-form" @submit.prevent="submit('approve')">
         <section class="panel review-panel">
           <header class="panel-header">
@@ -688,18 +667,6 @@ const retry = () =>
             :error="inline('fx_rate')"
             @change="changeFx"
           />
-          <p
-            v-if="
-              needsFx(state.transaction) &&
-              item.fx_suggestion &&
-              item.fx_suggestion.status !== 'existing' &&
-              !fx
-            "
-            class="review-inline-error fx-needed"
-            role="alert"
-          >
-            {{ t('review.fxNeeded') }}
-          </p>
           <div v-if="issueRows.length" class="review-issues-grid">
             <article
               v-for="row in issueRows"
@@ -774,6 +741,25 @@ const retry = () =>
             <h3>{{ t('review.result') }}</h3>
             <small>{{ t('review.confirmHint') }}</small>
           </header>
+          <div class="review-actions">
+            <button
+              type="button"
+              class="secondary-button"
+              id="review-refresh-button"
+              :disabled="busy"
+              @click="load(true)"
+            >
+              {{ t('common.refresh') }}</button
+            ><button
+              type="submit"
+              class="primary-button"
+              id="review-primary-button"
+              :disabled="disabled"
+              :data-locked="!evaluation.canApply || undefined"
+            >
+              {{ t(busy ? 'review.submitting' : 'review.confirmAction') }}
+            </button>
+          </div>
           <details
             class="review-reject-panel"
             :open="ui.rejectOpen"
@@ -818,25 +804,6 @@ const retry = () =>
               </div>
             </div>
           </details>
-          <div class="review-actions">
-            <button
-              type="button"
-              class="secondary-button"
-              id="review-refresh-button"
-              :disabled="busy"
-              @click="load(true)"
-            >
-              {{ t('common.refresh') }}</button
-            ><button
-              type="submit"
-              class="primary-button"
-              id="review-primary-button"
-              :disabled="disabled"
-              :data-locked="!evaluation.canApply || undefined"
-            >
-              {{ t(busy ? 'review.submitting' : 'review.confirmAction') }}
-            </button>
-          </div>
         </section>
       </form>
     </template>
