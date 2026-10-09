@@ -38,3 +38,22 @@ test('stale refresh markers keep a re-translatable descriptor', async () => {
   );
   postingState.stale.clear();
 });
+
+test('a preview item without a EUR amount stays empty, never zero; a known zero stays zero', () => {
+  // The server's shape for a foreign-currency row without a rate (posting.py).
+  const missing = {
+    transaction_id: 'synthetic-usd',
+    amount_eur: null,
+    effective_amount_eur_minor: null,
+    effective_amount_eur_formula: 'missing_foreign_exchange',
+  };
+  expect(item(missing).amountEur).toBe('');
+  expect(item({ result: missing }).amountEur).toBe('');
+  expect(
+    item({ transaction_id: 'synthetic-zero', amount_eur: '0.00', effective_amount_eur_minor: 0 })
+      .amountEur,
+  ).toBe('0.00');
+  expect(item({ transaction_id: 'synthetic-minor', effective_amount_eur_minor: 0 }).amountEur).toBe(
+    '0',
+  );
+});

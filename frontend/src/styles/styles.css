@@ -951,6 +951,26 @@ tbody tr:hover td {
   white-space: normal;
 }
 
+/* The row the queue's «Провести» opened (`#posting-row-<id>`); beats the hover background. */
+.table-wrap tbody tr.posting-row-target td {
+  background: #e9f6f1;
+}
+
+.table-wrap tbody tr.posting-row-target td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent-dark);
+}
+
+.posting-technical summary {
+  width: fit-content;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.posting-technical .posting-summary-grid {
+  margin-top: 10px;
+}
+
 .tax-page {
   display: grid;
   gap: 18px;

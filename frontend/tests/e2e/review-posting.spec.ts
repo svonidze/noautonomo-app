@@ -181,3 +181,34 @@ test('a blocked approved row in the queue says what blocks it', async ({ page })
   for (const row of await rows.all())
     await expect(row.locator('td.table-actions > *')).toHaveCount(1);
 });
+test('the queue opens posting at its ready row; ready rows come first and a missing EUR amount stays missing', async ({
+  page,
+}) => {
+  const preview = page.waitForResponse((response) =>
+    response.url().includes('/api/review/posting-preview?'),
+  );
+  await page.goto('/review?period=2026-Q3');
+  // The server sends no amount for the USD row, not a zero.
+  const blockedItem = ((await (await preview).json()).blocked as Record<string, unknown>[]).find(
+    (row) => row.description === 'Example USD expense',
+  );
+  expect(blockedItem).toMatchObject({ amount_eur: null, effective_amount_eur_minor: null });
+  const ready = page.locator('#review-tabpanel tbody tr').filter({ hasText: 'Example expense' });
+  await ready.locator('td.table-actions > a').click();
+  await expect(page).toHaveURL(/\/review\?period=2026-Q3&tab=posting#posting-row-[0-9a-f-]{36}$/);
+  const target = page.locator(new URL(page.url()).hash);
+  await expect(target).toHaveClass('posting-row-target');
+  await expect(target).toContainText('Example expense');
+  await expect(target).toBeInViewport();
+  // Ready rows are listed before anything is posted, then the blocked ones.
+  await expect(page.locator('.posting-section-label')).toHaveText([
+    'Проверено, можно провести',
+    'Проверено, проведение заблокировано',
+  ]);
+  const usd = page.locator('#review-tabpanel tbody tr').filter({ hasText: 'Example USD expense' });
+  await expect(usd.locator('td.amount')).toHaveText('—нет суммы в EUR');
+  await expect(page.locator('details.posting-technical > summary')).toHaveText(
+    'Технические детали',
+  );
+  await expect(page.locator('.primary-button:visible')).toHaveText(['Провести']);
+});

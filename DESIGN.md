@@ -193,6 +193,12 @@ navigation added by the clarity redesign.
   blocked rows). An unknown state counts as unknown, never as blocked. The
   aging chart draws from ten queued rows; below that one line names the
   oldest row's age.
+- The posting tab lists the ready rows before anything is posted, then the
+  deferred and blocked ones; the row named by `#posting-row-<id>` is
+  highlighted and scrolled into view (a router navigation does not update
+  `:target`, so the tab marks it). Archive-transfer counts sit under
+  «Технические детали». A row without a EUR amount shows «—» and says so;
+  the posting preview sends `null` for it, never `0`.
 - The workspace posting-readiness chip (`reviewCategoryBadge`) maps the
   evaluation categories ready/later/blocked/needs_review onto the
   status-help tone classes with localized labels; an unexpected category

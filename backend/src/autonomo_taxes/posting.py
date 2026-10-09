@@ -554,7 +554,8 @@ def _effective_amount_eur_fields(
     currency = str(transaction.get("original_currency") or transaction["currency"]).upper()
     if currency == "EUR":
         return int(transaction["amount_minor"]), "amount_minor_when_currency_is_eur"
-    return 0, "missing_foreign_exchange"
+    # Unknown, not zero: the item says so; preview sums still count it as nothing.
+    return None, "missing_foreign_exchange"
 
 
 def _posting_preview_item(
@@ -608,7 +609,11 @@ def _posting_preview_item(
         "document_id": evaluation.document_id,
         "effective_amount_eur_minor": evaluation.effective_amount_eur_minor,
         "effective_amount_eur_formula": evaluation.effective_amount_eur_formula,
-        "amount_eur": _eur_string(int(evaluation.effective_amount_eur_minor or 0)),
+        "amount_eur": (
+            None
+            if evaluation.effective_amount_eur_minor is None
+            else _eur_string(evaluation.effective_amount_eur_minor)
+        ),
         "tax_treatments": list(evaluation.tax_treatments),
         "blocking_issues": list(evaluation.blocking_issues),
         "linked_document_approved": evaluation.linked_document_approved,

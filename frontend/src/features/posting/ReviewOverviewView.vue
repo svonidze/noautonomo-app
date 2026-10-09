@@ -128,6 +128,12 @@ const stats = computed(() => {
     },
     { label: t('statuses.labels.deferred'), count: p.summary.deferredCount },
     { label: t('statuses.labels.blocked'), count: p.summary.blockedCount },
+  ];
+});
+// Moving originals to the archive is a technical side effect of posting: folded under the counts.
+const cleanupStats = computed(() => {
+  const p = data.value!.preview;
+  return [
     { label: t('review.postingCleanup'), count: p.summary.cleanupCount },
     { label: t('review.postingCleanupBlocked'), count: p.summary.cleanupBlockedCount },
   ];
@@ -362,9 +368,18 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
             </div>
             <p class="posting-action-hint">{{ hint }}</p>
             <PostingRows
+              :title="t('statuses.labels.ready')"
+              :rows="data.preview.ready"
+              anchored
+            /><PostingRows
               :title="t('statuses.labels.deferred')"
               :rows="data.preview.deferred"
-            /><PostingRows :title="t('statuses.labels.blocked')" :rows="data.preview.blocked" />
+              anchored
+            /><PostingRows
+              :title="t('statuses.labels.blocked')"
+              :rows="data.preview.blocked"
+              anchored
+            />
             <div v-if="last" class="posting-results">
               <div class="posting-results-header">
                 <h3>{{ t('review.postingResults') }}</h3>
@@ -379,6 +394,15 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
               </div>
               <PostingRows :title="t('review.postingRows')" :rows="last.results" />
             </div>
+            <details class="posting-technical">
+              <summary>{{ t('review.technicalStats') }}</summary>
+              <div class="posting-summary-grid">
+                <div v-for="stat in cleanupStats" :key="stat.label" class="posting-stat">
+                  <span>{{ stat.label }}</span
+                  ><strong>{{ stat.count }}</strong>
+                </div>
+              </div>
+            </details>
           </div>
         </section>
       </div>
