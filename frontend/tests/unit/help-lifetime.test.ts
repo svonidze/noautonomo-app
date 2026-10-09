@@ -68,14 +68,19 @@ for (const locale of ['ru', 'en'] as const)
     expect(help.link(waiting)).toBe(help.word('why'));
     expect(help.content(waiting)).toContain(`<h3>${help.word('related')}</h3>`);
     expect(help.content(waiting)).toContain('data-help-review');
+    // Server-shaped: a deferral is one future_dated blocker, which the reason line names.
     const deferred = {
       domain: 'transaction',
       state: 'deferred',
-      posting: { preview_bucket: 'deferred', posting_deferred_until: '2026-11-02' },
+      posting: {
+        preview_bucket: 'deferred',
+        posting_deferred_until: '2026-11-02',
+        blockers: [{ code: 'future_dated', blocking: true }],
+      },
       facts: { transaction_date: '2026-11-02' },
     };
     const date = formatDateText('2026-11-02', locale);
-    expect(help.summary(deferred)).toContain(date);
+    expect(help.summary(deferred)).toBe(help.text('help.reasons.future_dated.title'));
     expect(help.content(deferred)).toContain(`<dd>${date}</dd>`);
     expect(help.content({ ...deferred, facts: { transaction_date: null } })).toContain(
       `<dd>${help.word('missing')}</dd>`,

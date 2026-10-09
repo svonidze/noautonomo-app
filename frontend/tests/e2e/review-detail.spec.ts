@@ -421,9 +421,15 @@ test('snapshot changes retain only counterparty facts; blocked approval still pe
   fixture.packet.snapshot_hash = 'current-snapshot';
   fixture.packet.state.counterparty = { country_code: 'ZZ' };
   fixture.packet.decision.business_purpose = 'Current source purpose';
-  fixture.ui_context.state = 'deferred';
+  // Server-shaped: a deferral is one future_dated blocker, also inside the status context.
+  const posting = {
+    preview_bucket: 'deferred',
+    posting_deferred_until: '2026-10-01',
+    blockers: [{ code: 'future_dated', blocking: true }],
+  };
+  fixture.ui_context = { ...fixture.ui_context, state: 'deferred', posting };
   fixture.review_allowed = false;
-  fixture.posting_context = { preview_bucket: 'deferred', posting_deferred_until: '2026-10-01' };
+  fixture.posting_context = posting;
   await page.addInitScript(
     ({ id }) =>
       localStorage.setItem(
@@ -458,6 +464,13 @@ test('snapshot changes retain only counterparty facts; blocked approval still pe
     'domestic_output',
   );
   await expect(page.locator('#review-primary-button')).toBeDisabled();
+  await expect(page.locator('.review-workspace-header .status-context')).toContainText(
+    'Будущая дата операции',
+  );
+  await expect(page.locator('.review-alert.warning')).toContainText(
+    'Будущую операцию можно провести только после 01 окт. 2026 г.',
+  );
+  await expect(page.locator('.review-alert.warning')).not.toContainText('г..');
   await page.locator('.review-reject-panel > summary').click();
   await page.locator('#review-reject-button').click();
   expect(posted).toHaveLength(0);

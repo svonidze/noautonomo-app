@@ -556,6 +556,9 @@ const retry = () =>
         class="review-alert warning"
         role="alert"
       >
+        <p v-if="evaluation.availableOn">
+          {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
+        </p>
         <p>{{ t('review.formDisabledHint') }}</p>
       </div>
       <p v-else-if="!evaluation.canApply && evaluation.availableOn" class="review-alert warning">

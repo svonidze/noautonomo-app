@@ -22,7 +22,7 @@
   "review.filterAll": "Все",
   "review.filterLabel": "Показать операции по состоянию",
   "review.formDisabledHint": "Поля решений заблокированы, пока операцию нельзя провести — причина объяснена выше.",
-  "review.future": "Будущую операцию можно провести только после {date}.",
+  "review.future": "Будущую операцию можно провести только после {date}",
   "review.fx": "Курс валюты",
   "review.fxAmount": "Сумма в EUR",
   "review.fxApply": "Применить курс",

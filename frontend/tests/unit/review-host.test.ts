@@ -395,7 +395,7 @@ test('a missing rate waits in «Что осталось» until confirmation, an
   localStorage.clear();
 });
 
-test('a locked item asks for no rate and states its deferral date once, in the status cell', async () => {
+test('a locked item asks for no rate and states its deferral date once, in the alert', async () => {
   localStorage.clear();
   const fixture = guidedFixture();
   fixture.packet.state.transaction = {
@@ -409,8 +409,13 @@ test('a locked item asks for no rate and states its deferral date once, in the s
     currency: 'USD',
     transaction_date: '2026-07-02',
   };
-  // As the server sends it: posting_context is the status context's own posting block.
-  const posting = { preview_bucket: 'deferred', posting_deferred_until: '2026-10-01' };
+  // Server-shaped: a deferral is one future_dated blocker, and posting_context is the status
+  // context's own posting block.
+  const posting = {
+    preview_bucket: 'deferred',
+    posting_deferred_until: '2026-10-01',
+    blockers: [{ code: 'future_dated', blocking: true }],
+  };
   fixture.review_allowed = false;
   fixture.posting_context = posting;
   fixture.ui_context = { ...fixture.ui_context, state: 'deferred', posting };
@@ -431,14 +436,18 @@ test('a locked item asks for no rate and states its deferral date once, in the s
   const host = mountView(root, ReviewDetailView, setup);
   await flush();
   expect(root.querySelector('.wf-remaining')).toBeNull();
-  expect(root.querySelector('.review-alert.warning')!.textContent!.trim()).toBe(
-    t('review.formDisabledHint'),
-  );
+  // The status cell names the blocker; the alert alone gives the date, once and without «г..».
   const date = formatDateText('2026-10-01', 'ru');
+  const alert = root.querySelector('.review-alert.warning')!;
+  expect([...alert.querySelectorAll('p')].map((line) => line.textContent!.trim())).toEqual([
+    t('review.future', { date }),
+    t('review.formDisabledHint'),
+  ]);
+  expect(alert.textContent).not.toContain('..');
   expect(root.textContent!.split(date)).toHaveLength(2);
-  expect(root.querySelector('.review-workspace-header .status-context')!.textContent).toContain(
-    date,
-  );
+  const status = root.querySelector('.review-workspace-header .status-context')!;
+  expect(status.textContent).toContain(t('help.reasons.future_dated.title'));
+  expect(status.textContent).not.toContain(date);
   host.dispose();
   root.remove();
   localStorage.clear();
