@@ -1,5 +1,5 @@
 {
-  "statuses.deferredUntil": "Reviewed, post after {date}",
+  "statuses.deferredUntil": "Reviewed, post from {date}",
   "statuses.filedOn": "Filed {date}",
   "statuses.filingDueBy": "File by {date}",
   "statuses.labels.already_finalized": "already in a filed return",

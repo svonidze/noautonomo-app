@@ -246,7 +246,7 @@ task-list, старый адрес отдает 410. `ui-ux-pro-max` не исп
 | `extracted` | Данные извлечены / извлечено | Данные извлечены, ждет проверки | Extracted, awaiting review |
 | `needs_review` | Требуется проверка / нужна проверка / Нужно проверить решение по счету | Требуется проверка | Review required |
 | `approved` + `ready` | Готово к проведению / Можно провести сейчас / можно провести / готово | Проверено, можно провести | Reviewed, ready to post |
-| `approved` + `deferred` | Проверено · Можно будет провести {date} / Отложено / позже | Проверено, провести после {date} | Reviewed, post after {date} |
+| `approved` + `deferred` | Проверено · Можно будет провести {date} / Отложено / позже | Проверено, провести с {date} | Reviewed, post from {date} |
 | `approved` + `blocked` | Проведение заблокировано / Проверено · Нельзя провести / Блокировки после проверки | Проверено, проведение заблокировано | Reviewed, posting blocked |
 | `posted` | Проведено в учете / проведено | Проведено | Posted |
 | `included_in_snapshot` | в декларации / Есть запись в снимке декларации / filing snapshot | В поданной декларации | In a filed return |

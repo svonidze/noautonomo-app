@@ -1,5 +1,5 @@
 {
-  "statuses.deferredUntil": "Проверено, провести после {date}",
+  "statuses.deferredUntil": "Проверено, провести с {date}",
   "statuses.filedOn": "Подано {date}",
   "statuses.filingDueBy": "Нужно подать до {date}",
   "statuses.labels.already_finalized": "уже в поданной декларации",

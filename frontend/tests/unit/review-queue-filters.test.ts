@@ -237,7 +237,7 @@ test('every queued row offers exactly one next action: a review only where the s
   ]);
   // The deferred row's result names its date.
   expect(root.querySelectorAll('tbody tr')[3].textContent).toContain(
-    'Проверено, провести после 02 нояб. 2026 г.',
+    'Проверено, провести с 02 нояб. 2026 г.',
   );
   // The unknown row's result reads as unknown, not as blocked.
   expect(root.querySelectorAll('tbody tr')[6].textContent).toContain(
