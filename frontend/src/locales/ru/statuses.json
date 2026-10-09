@@ -43,5 +43,8 @@
   "statuses.labels.unknown": "Состояние требует уточнения",
   "statuses.labels.void": "Аннулировано",
   "statuses.labels.waived": "Не подаётся по сохранённому решению",
-  "statuses.labels.warning": "Есть замечание"
+  "statuses.labels.warning": "Есть замечание",
+  "statuses.steps.canStart": "Можно начать",
+  "statuses.steps.done": "Сделано",
+  "statuses.steps.notStarted": "Не начато"
 }

@@ -3,7 +3,14 @@ import { useLocale } from '../../vue/locale.ts';
 import { messageText, type UiMessage } from '../../core/i18n.ts';
 import { followSpaLink } from '../../vue/services.ts';
 import type { DashboardTask } from './tasks.ts';
-defineProps<{ tasks: DashboardTask[]; emptyText: string; note?: string; busy?: boolean }>();
+// `start`: the first-run list «Начало работы»; `busy` marks the calculation rows only.
+defineProps<{
+  tasks: DashboardTask[];
+  emptyText: string;
+  note?: string;
+  busy?: boolean;
+  start?: boolean;
+}>();
 const emit = defineEmits<{
   navigate: [url: string];
   action: [action: NonNullable<DashboardTask['action']>];
@@ -14,7 +21,9 @@ const navigate = (url: string) => emit('navigate', url);
 </script>
 <template>
   <section class="task-list" aria-labelledby="dashboard-tasks-title">
-    <h2 id="dashboard-tasks-title">{{ t('dashboard.tasksTitle') }}</h2>
+    <h2 id="dashboard-tasks-title">
+      {{ t(start ? 'dashboard.start.title' : 'dashboard.tasksTitle') }}
+    </h2>
     <ul v-if="tasks.length">
       <li v-for="task in tasks" :key="task.id">
         <a
@@ -32,14 +41,14 @@ const navigate = (url: string) => emit('navigate', url);
           v-else
           type="button"
           class="task-row"
-          :disabled="busy"
+          :disabled="task.disabled || (busy && task.action === 'calculate')"
           @click="task.action && emit('action', task.action)"
         >
           <span
             ><strong>{{ text(task.title) }}</strong
             ><small>{{ text(task.hint) }}</small></span
           ><span class="badge" :class="`status-${task.tone}`">{{
-            busy ? t('common.calculating') : text(task.tag)
+            busy && task.action === 'calculate' ? t('common.calculating') : text(task.tag)
           }}</span>
         </button>
       </li>

@@ -43,5 +43,8 @@
   "statuses.labels.unknown": "Status needs clarification",
   "statuses.labels.void": "Void",
   "statuses.labels.waived": "Waived by saved decision",
-  "statuses.labels.warning": "A note needs attention"
+  "statuses.labels.warning": "A note needs attention",
+  "statuses.steps.canStart": "Ready to start",
+  "statuses.steps.done": "Done",
+  "statuses.steps.notStarted": "Not started yet"
 }

@@ -54,11 +54,9 @@ const title = computed(() =>
           locale.value,
         ),
 );
-// The server names a missing profile after the brand; the brand line already shows that name.
+// Without a profile the server names the brand, which the line above already shows.
 const profileName = computed(() =>
-  bootstrap.value?.profile_name && bootstrap.value.profile_name !== 'Autónomo'
-    ? bootstrap.value.profile_name
-    : t('brand.subtitle'),
+  bootstrap.value?.profile_configured ? bootstrap.value.profile_name : t('brand.subtitle'),
 );
 const lead = computed(() =>
   route.value?.view === 'contact-detail'

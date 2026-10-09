@@ -89,8 +89,10 @@ export function mountOverview(
     period,
     services: { request, navigate: vi.fn() },
     copyTarget: null,
+    profileConfigured: false,
     settled: vi.fn(),
     refreshCalculation: vi.fn(() => new Promise<void>((resolve) => (release = resolve))),
+    openIntake: vi.fn(),
     copy: vi.fn(),
     notify: vi.fn(),
   };

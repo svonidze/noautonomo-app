@@ -256,6 +256,7 @@ test('a period change remounts the card: one fetch per mount, and a late reply i
     period,
     services: { request, navigate: vi.fn() },
     copyTarget: null,
+    profileConfigured: false,
     settled: vi.fn(),
     refreshCalculation: vi.fn(async () => {}),
     copy: vi.fn(),

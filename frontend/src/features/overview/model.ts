@@ -7,8 +7,12 @@ export interface OverviewContext {
   period: string;
   services: ViewServices;
   copyTarget: string | null;
+  /** The server has a taxpayer profile (`profile_configured` in /api/bootstrap). */
+  profileConfigured: boolean;
   settled(): void;
   refreshCalculation(): Promise<void>;
+  /** Opens the intake dialog; absent while the server does not accept documents. */
+  openIntake?(): void;
   copy(row: TransactionRow): void;
   notify(message: UiMessage | string, error?: boolean): void;
 }
@@ -118,6 +122,8 @@ export interface DashboardData {
   missing_fx_count?: number;
   /** Of those, the approved rows: the missing rate blocks their posting. */
   missing_fx_blocked_count?: number;
+  /** Any quarter has a posted row; until then the overview leads with its first steps. */
+  ledger_has_postings?: boolean;
 }
 export interface AssetRow {
   asset_id: string;

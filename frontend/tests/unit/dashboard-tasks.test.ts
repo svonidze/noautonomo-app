@@ -1,6 +1,11 @@
 import { nextTick } from 'vue';
 import { afterEach, expect, test, vi } from 'vitest';
-import { buildTasks, type DashboardTask } from '../../src/features/overview/tasks.ts';
+import {
+  buildStartTasks,
+  buildTasks,
+  firstRun,
+  type DashboardTask,
+} from '../../src/features/overview/tasks.ts';
 import DashboardView from '../../src/features/overview/DashboardView.vue';
 import { messageText, type Locale } from '../../src/core/i18n.ts';
 import { eur, formatDateText, isFuturePeriod } from '../../src/core/format.ts';
@@ -8,6 +13,7 @@ import { mountOverview } from '../support/mount.ts';
 import type { DashboardData, FormView } from '../../src/features/overview/model.ts';
 import ru from '../../src/locales/ru/dashboard.json' with { type: 'json' };
 import statuses from '../../src/locales/ru/statuses.json' with { type: 'json' };
+import intake from '../../src/locales/ru/intake.json' with { type: 'json' };
 
 // Synthetic payloads only. 9 October 2026 falls in the fourth quarter of 2026.
 const today = new Date('2026-10-09T12:00:00');
@@ -339,4 +345,107 @@ test('a quiet quarter says so and names its calculation date', async () => {
     ru['dashboard.tasksEmpty'],
     `Предварительный расчёт на ${formatDateText('2026-10-08', 'ru')}`,
   ]);
+});
+
+// The first run: a ledger without a posting in any quarter leads with four first steps instead.
+const added = {
+  transaction_id: 'synthetic-row',
+  entry_type: 'expense',
+  lifecycle_status: 'needs_review',
+  transaction_date: '2026-07-02',
+  period_key: '2026-Q3',
+  ui_context: { domain: 'transaction', state: 'needs_review' },
+};
+const start = (
+  data: DashboardData,
+  options: { profileConfigured?: boolean; canAdd?: boolean } = {},
+) =>
+  buildStartTasks({
+    data,
+    period: '2026-Q3',
+    profileConfigured: false,
+    canAdd: true,
+    ...options,
+  });
+const tags = (tasks: DashboardTask[]) => tasks.map((task) => [task.tone, text(task)[2]]);
+const done = ['positive', statuses['statuses.steps.done']],
+  canStart = ['pending', statuses['statuses.steps.canStart']],
+  notStarted = ['neutral', statuses['statuses.steps.notStarted']];
+
+test('only a ledger the server says has never posted gets the start list', () => {
+  expect(firstRun(dashboard({ ledger_has_postings: false }))).toBe(true);
+  expect(firstRun(dashboard({ ledger_has_postings: true }))).toBe(false);
+  // An unknown answer keeps the regular list: unknown is not "never posted".
+  expect(firstRun(dashboard())).toBe(false);
+});
+
+test('a new ledger starts with the profile, a first document, its review and the quarter', () => {
+  const steps = start(dashboard({ ledger_has_postings: false, tax_forms: {} }));
+  expect(ids(steps)).toEqual(['profile', 'document', 'review', 'taxes']);
+  expect(steps.map((task) => task.href)).toEqual([
+    '/settings',
+    undefined,
+    '/review?period=2026-Q3',
+    '/taxes?period=2026-Q3',
+  ]);
+  expect(steps[1]).toMatchObject({ action: 'intake', disabled: false });
+  expect(steps.map((task) => text(task).slice(0, 2))).toEqual(
+    ['profile', 'document', 'review', 'taxes'].map((key) => [
+      ru[`dashboard.start.${key}.title` as keyof typeof ru],
+      ru[`dashboard.start.${key}.hint` as keyof typeof ru],
+    ]),
+  );
+  // Nothing to review yet, and the calculation waits for a posting.
+  expect(tags(steps)).toEqual([canStart, canStart, notStarted, notStarted]);
+});
+
+test('each step is done, can start, or waits for an earlier one', () => {
+  const queued = dashboard({
+    ledger_has_postings: false,
+    posting_summary: { needs_review: 1, ready: 0, later: 0, blocked: 0 },
+    recent_transactions: [added],
+  });
+  expect(tags(start(queued, { profileConfigured: true }))).toEqual([
+    done,
+    done,
+    canStart,
+    notStarted,
+  ]);
+  // A reviewed row waits for posting: the third step is still the one to do.
+  const reviewed = dashboard({
+    ledger_has_postings: false,
+    posting_summary: { needs_review: 0, ready: 1, later: 0, blocked: 0 },
+    recent_transactions: [added],
+  });
+  expect(tags(start(reviewed))).toEqual([canStart, done, canStart, notStarted]);
+  // With intake switched off on the server the document step cannot start and says why.
+  const [, closed] = start(dashboard({ ledger_has_postings: false }), { canAdd: false });
+  expect(closed).toMatchObject({ action: 'intake', disabled: true });
+  expect(tags([closed])).toEqual([notStarted]);
+  expect(text(closed)[1]).toBe(intake['intake.disabledReason']);
+});
+
+test('the overview shows the start list until the first posting, then the regular list', async () => {
+  const { root, context } = await show(dashboard({ ledger_has_postings: false, tax_forms: {} }));
+  expect(root.querySelector('.task-list h2')!.textContent).toBe(ru['dashboard.start.title']);
+  expect(lines(root, '.task-row strong')).toEqual(
+    ['profile', 'document', 'review', 'taxes'].map(
+      (key) => ru[`dashboard.start.${key}.title` as keyof typeof ru],
+    ),
+  );
+  // The document step is the only action row: it opens the intake dialog, not a calculation.
+  const document = root.querySelector<HTMLButtonElement>('button.task-row')!;
+  document.click();
+  expect(context.openIntake).toHaveBeenCalledTimes(1);
+  expect(context.refreshCalculation).not.toHaveBeenCalled();
+  // The tax card's own Calculate busies only calculation rows.
+  root.querySelector<HTMLButtonElement>('.calculate-button')!.click();
+  await nextTick();
+  expect([document.disabled, document.querySelector('.badge')!.textContent]).toEqual([
+    false,
+    statuses['statuses.steps.canStart'],
+  ]);
+  const regular = await show(dashboard({ ledger_has_postings: true, tax_forms: {} }));
+  expect(regular.root.querySelector('.task-list h2')!.textContent).toBe(ru['dashboard.tasksTitle']);
+  expect(lines(regular.root, '.task-row strong')).toEqual([ru['dashboard.task.calculate.title']]);
 });

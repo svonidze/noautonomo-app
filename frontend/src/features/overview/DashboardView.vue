@@ -11,7 +11,7 @@ import type { ChartKind } from '../../charts/builders.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import RecentTransactions from './RecentTransactions.vue';
 import TaskList from './TaskList.vue';
-import { buildTasks } from './tasks.ts';
+import { buildStartTasks, buildTasks, firstRun, type DashboardTask } from './tasks.ts';
 import { createFinancePresentation } from './presentation.ts';
 import type { OverviewContext, DashboardData, ExpenseScope } from './model.ts';
 const props = defineProps<{ context: OverviewContext }>();
@@ -93,16 +93,29 @@ onBeforeUnmount(() => {
 });
 const presentation = computed(() => createFinancePresentation(locale.value));
 const future = computed(() => isFuturePeriod(props.context.period));
+// Until the first posting anywhere in the ledger the four first steps replace the regular list.
+const start = computed(() => !!data.value && firstRun(data.value));
 const tasks = computed(() =>
-  data.value
-    ? buildTasks({
-        data: data.value,
-        period: props.context.period,
-        today: new Date(),
-        locale: locale.value,
-      })
-    : [],
+  !data.value
+    ? []
+    : start.value
+      ? buildStartTasks({
+          data: data.value,
+          period: props.context.period,
+          profileConfigured: props.context.profileConfigured,
+          canAdd: !!props.context.openIntake,
+        })
+      : buildTasks({
+          data: data.value,
+          period: props.context.period,
+          today: new Date(),
+          locale: locale.value,
+        }),
 );
+function act(action: NonNullable<DashboardTask['action']>) {
+  if (action === 'intake') props.context.openIntake?.();
+  else void calculate();
+}
 /** The amount, or its known part and the number of rows without a EUR amount: never a bare dash. */
 const amount = (scope?: ExpenseScope) =>
   scope?.missing_amount_count
@@ -229,8 +242,9 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
             : undefined
         "
         :busy="calculating"
+        :start="start"
         @navigate="context.services.navigate"
-        @action="calculate"
+        @action="act"
       />
       <section class="metric-grid" aria-labelledby="dashboard-figures-title">
         <h2 id="dashboard-figures-title" class="visually-hidden">

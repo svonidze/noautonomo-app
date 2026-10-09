@@ -291,6 +291,19 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   control. An empty ledger shows a four-step start list on the dashboard
   until the first posting; an empty review queue distinguishes "no documents
   in this quarter" from "everything reviewed".
+- The start list («Начало работы» / "Getting started") replaces the task list
+  while `/api/dashboard` reports `ledger_has_postings: false` (no posted or
+  filed row in any quarter; a payload without the field keeps the task list).
+  Its rows: fill in the profile (`/settings`; done when `/api/bootstrap`
+  reports `profile_configured`), add a first document (opens the intake
+  dialog; done once the quarter has a transaction; disabled with the reason
+  when the server does not accept documents), review and post it (`/review`;
+  can start once the quarter's queue has a row) and calculate the quarter
+  (`/taxes`; waits for the first posting, after which the task list offers
+  the calculation). Each row has one tag from `statuses.steps.*`: «Сделано»
+  (positive), «Можно начать» (pending) or «Не начато» (neutral, waiting for
+  an earlier step). The rows are task rows, never primary buttons. The
+  sidebar names the owner only when `profile_configured` is true.
 
 ### Charts
 - A chart renders only when its dataset has at least two non-zero values

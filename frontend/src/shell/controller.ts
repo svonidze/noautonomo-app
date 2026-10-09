@@ -66,6 +66,7 @@ interface Bootstrap {
   periods: Period[];
   default_period: string;
   profile_name: string;
+  profile_configured: boolean;
   intake_enabled: boolean;
 }
 export interface ViewGuards {
@@ -328,7 +329,8 @@ export function useShell() {
         services,
         settled,
         onProfile(name) {
-          if (owns()) bootstrap.value = { ...bootstrap.value!, profile_name: name };
+          if (owns())
+            bootstrap.value = { ...bootstrap.value!, profile_name: name, profile_configured: true };
         },
         onLocale: changeLocale,
         reload() {
@@ -421,10 +423,12 @@ export function useShell() {
         view: next.view,
         period: sourcePeriod,
         copyTarget: target,
+        profileConfigured: data.profile_configured,
         services,
         settled,
         notify,
         refreshCalculation: () => whileBusy(() => calculate(sourcePeriod)),
+        openIntake: data.intake_enabled ? add : undefined,
         copy: (row) => copy(row, sourcePeriod),
       } satisfies OverviewContext);
   }

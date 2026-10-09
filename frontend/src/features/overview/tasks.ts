@@ -3,13 +3,24 @@ import { eur, formatDateText, isFuturePeriod } from '../../core/format.ts';
 import type { DashboardData } from './model.ts';
 
 export interface DashboardTask {
-  id: 'review' | 'post' | 'blocked' | 'calculate' | 'file' | 'issues' | 'fx';
+  id:
+    | 'review'
+    | 'post'
+    | 'blocked'
+    | 'calculate'
+    | 'file'
+    | 'issues'
+    | 'fx'
+    | 'profile'
+    | 'document'
+    | 'taxes';
   title: UiMessage;
   hint: UiMessage;
   tone: 'pending' | 'positive' | 'attention' | 'neutral';
   tag: UiMessage;
   href?: string;
-  action?: 'calculate';
+  action?: 'calculate' | 'intake';
+  disabled?: boolean;
 }
 
 const positive = (value: unknown) => (typeof value === 'number' && value > 0 ? value : 0);
@@ -129,4 +140,51 @@ export function buildTasks({
       href: review(),
     });
   return tasks.slice(0, 5);
+}
+
+/** A ledger the server says has no posting in any quarter: the overview starts with first steps. */
+export const firstRun = (data: DashboardData) => data.ledger_has_postings === false;
+
+const steps = { done: 'positive', canStart: 'pending', notStarted: 'neutral' } as const;
+type Step = keyof typeof steps;
+
+/** «Начало работы»: profile, a first document, its review and posting, the quarter's calculation.
+ * A step is done, can start, or waits for an earlier one; the steps read this quarter's data. */
+export function buildStartTasks({
+  data,
+  period,
+  profileConfigured,
+  canAdd,
+}: {
+  data: DashboardData;
+  period: string;
+  profileConfigured: boolean;
+  /** The server accepts documents; otherwise the intake dialog cannot open. */
+  canAdd: boolean;
+}): DashboardTask[] {
+  const row = (id: 'profile' | 'document' | 'review' | 'taxes', step: Step) => ({
+    id,
+    title: message(`dashboard.start.${id}.title`),
+    hint: message(`dashboard.start.${id}.hint`),
+    tone: steps[step],
+    tag: message(`statuses.steps.${step}`),
+  });
+  const query = new URLSearchParams({ period }),
+    queue = data.posting_summary;
+  const added = data.recent_transactions.length > 0;
+  const queued =
+    positive(queue?.needs_review) +
+    positive(queue?.ready) +
+    positive(queue?.later) +
+    positive(queue?.blocked);
+  const document = row('document', added ? 'done' : canAdd ? 'canStart' : 'notStarted');
+  return [
+    { ...row('profile', profileConfigured ? 'done' : 'canStart'), href: '/settings' },
+    canAdd
+      ? { ...document, action: 'intake', disabled: false }
+      : { ...document, hint: message('intake.disabledReason'), action: 'intake', disabled: true },
+    { ...row('review', queued ? 'canStart' : 'notStarted'), href: `/review?${query}` },
+    // The calculation counts postings: it follows the first one, when the regular list offers it.
+    { ...row('taxes', 'notStarted'), href: `/taxes?${query}` },
+  ];
 }

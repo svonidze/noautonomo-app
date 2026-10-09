@@ -223,6 +223,47 @@ def test_dashboard_counts_every_open_question_and_this_quarters_queue_rows_witho
     assert dashboard["totals"]["actual"]["income_missing_amount_count"] == 0
 
 
+def test_bootstrap_says_whether_a_taxpayer_profile_exists(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    _database(config)
+    app = LocalAccountingApp(config, session_token="test-token")
+
+    # Without a profile the name falls back to the brand; the flag says so instead of the name.
+    assert app.bootstrap()["profile_configured"] is False
+    assert app.bootstrap()["profile_name"] == "Autónomo"
+    with LedgerDB.open(config.database) as db:
+        db.upsert_taxpayer_profile(tax_id="TEST-TAX-ID-001", full_name="Example Taxpayer")
+
+    assert app.bootstrap()["profile_configured"] is True
+    assert app.bootstrap()["profile_name"] == "Example Taxpayer"
+
+
+@pytest.mark.parametrize("posted_status", ["posted", "included_in_snapshot"])
+def test_dashboard_says_whether_any_quarter_has_a_posting(tmp_path: Path, posted_status: str) -> None:
+    config = _config(tmp_path)
+
+    def row(key: str, status: str) -> dict[str, object]:
+        return dict(external_key=key, period_key="2026-Q4", transaction_date="2026-10-02",
+                    booking_date="2026-10-02", entry_type="expense", description="Synthetic row",
+                    amount_minor=12100, amount_eur_minor=12100, direction="debit", lifecycle_status=status)
+
+    with LedgerDB.initialize(config.database) as db:
+        db.ensure_period("2026-Q3")
+        # Rows still in review, or rejected, are not postings.
+        for status in ("received", "needs_review", "approved", "rejected", "duplicate", "void"):
+            db.add_transaction(**row(f"q4-{status}", status))
+    app = LocalAccountingApp(config, session_token="test-token")
+
+    assert app.dashboard("2026-Q3")["ledger_has_postings"] is False
+    assert app.dashboard("2026-Q4")["ledger_has_postings"] is False
+    with LedgerDB.open(config.database) as db:
+        db.add_transaction(**row("q4-posted", posted_status))
+
+    # Ledger-wide: one posting in any quarter ends the first run in every quarter's overview.
+    assert app.dashboard("2026-Q3")["ledger_has_postings"] is True
+    assert app.dashboard("2026-Q4")["ledger_has_postings"] is True
+
+
 @pytest.mark.parametrize(
     ("source", "expected_id"),
     [

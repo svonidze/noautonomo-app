@@ -433,6 +433,7 @@ class LocalAccountingApp:
         default_period = _current_or_latest_period(period_keys)
         return {
             "profile_name": profile["full_name"] if profile else "Autónomo",
+            "profile_configured": profile is not None,
             "periods": periods,
             "default_period": default_period,
             "counts": counts,
@@ -484,6 +485,11 @@ class LocalAccountingApp:
                 """,
                 (period_row["period_id"],),
             ).fetchone()
+            # Any quarter: until the first posting the overview leads with its first-run steps.
+            ledger_has_postings = connection.execute(
+                "SELECT EXISTS(SELECT 1 FROM transactions"
+                " WHERE lifecycle_status IN ('posted', 'included_in_snapshot'))"
+            ).fetchone()[0]
             obligations = self._obligations(
                 connection,
                 period_id=period_row["period_id"],
@@ -524,6 +530,7 @@ class LocalAccountingApp:
             "open_issue_count": open_issue_count,
             "missing_fx_count": missing_fx_count,
             "missing_fx_blocked_count": missing_fx_blocked_count,
+            "ledger_has_postings": bool(ledger_has_postings),
             "obligations": obligations,
             "document_counts": document_counts,
             "tax_preview": _compact_tax_preview(cached),
