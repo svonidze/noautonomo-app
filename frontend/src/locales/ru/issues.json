@@ -15,7 +15,7 @@
   "issues.messages.nonresident_payee_legal_form_review": "Нужно уточнить правовую форму иностранного получателя.",
   "issues.messages.nonresident_professional_irnr_review": "После оплаты требуется отдельная проверка IRNR по иностранному исполнителю.",
   "issues.messages.transaction_tax_review": "Нужно проверить назначение расхода и его учет в IRPF и IVA.",
-  "issues.none": "Открытых вопросов нет",
+  "issues.none": "Открытых вопросов нет: все проверенные документы согласованы. Если в документах найдутся расхождения, вопросы появятся здесь.",
   "issues.serverMessage": "Сообщение сервера",
   "issues.sourceDetails": "Исходные сведения"
 }

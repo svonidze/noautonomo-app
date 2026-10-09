@@ -294,7 +294,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
               </dl>
             </div></template
           >
-          <p v-else>{{ t('common.noRecords') }}</p>
+          <p v-else>{{ t('expense.treatmentEmpty') }}</p>
         </div>
       </section>
     </template>

@@ -11,6 +11,7 @@
   "dashboard.ivaLine": "IVA (Modelo 303)",
   "dashboard.openIssues": "Открытые вопросы",
   "dashboard.partialAmount": "{amount} и {count, plural, one {# операция} few {# операции} many {# операций} other {# операции}} без суммы в EUR",
+  "dashboard.recentEmpty": "Операций в этом квартале ещё нет. Добавьте документ кнопкой «Добавить документ».",
   "dashboard.recentTransactions": "Последние операции",
   "dashboard.reviewedNotPosted": "Проверено, ещё не проведено: {value}",
   "dashboard.snapshotAvailable": "есть сохранённая копия поданной декларации",
@@ -40,7 +41,7 @@
   "dashboard.task.review.hint": "Подтвердите данные каждой операции и её учёт в налогах.",
   "dashboard.task.review.title": "Проверить документы ({count})",
   "dashboard.taxDue": "Налог к уплате",
-  "dashboard.tasksEmpty": "На этот квартал задач нет",
+  "dashboard.tasksEmpty": "На этот квартал задач нет. Задачи появятся, когда вы добавите документ или подойдёт срок подачи.",
   "dashboard.tasksTitle": "Что сделать сейчас",
   "dashboard.valuesUnavailable": "значения недоступны"
 }

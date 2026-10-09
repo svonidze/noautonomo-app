@@ -11,6 +11,7 @@
   "dashboard.ivaLine": "IVA (Modelo 303)",
   "dashboard.openIssues": "Open questions",
   "dashboard.partialAmount": "{amount} plus {count, plural, one {# transaction} other {# transactions}} without a EUR amount",
+  "dashboard.recentEmpty": "No transactions in this quarter yet. Add a document with the “Add document” button.",
   "dashboard.recentTransactions": "Recent transactions",
   "dashboard.reviewedNotPosted": "Reviewed, not posted yet: {value}",
   "dashboard.snapshotAvailable": "saved copy of the filed return available",
@@ -40,7 +41,7 @@
   "dashboard.task.review.hint": "Confirm each transaction's details and its tax treatment.",
   "dashboard.task.review.title": "Review documents ({count})",
   "dashboard.taxDue": "Tax to pay",
-  "dashboard.tasksEmpty": "No tasks for this quarter",
+  "dashboard.tasksEmpty": "No tasks for this quarter. Tasks appear when you add a document or a filing deadline comes up.",
   "dashboard.tasksTitle": "What to do now",
   "dashboard.valuesUnavailable": "values unavailable"
 }

@@ -113,7 +113,7 @@ const minor = (value: number | null | undefined) =>
         <tr v-if="!rows.length">
           <td colspan="7">
             <div class="empty-state">
-              {{ t(query.trim() ? 'transactions.noMatches' : 'transactions.emptyIncome') }}
+              {{ t(query.trim() ? 'transactions.noMatches' : 'transactions.incomeEmpty') }}
             </div>
           </td>
         </tr>

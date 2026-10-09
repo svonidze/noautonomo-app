@@ -5,6 +5,7 @@
   "assets.cost": "Cost",
   "assets.decision": "Accounting status",
   "assets.inService": "In service",
+  "assets.listEmpty": "Equipment appears once you review an expense of the type “Equipment”.",
   "assets.rate": "Rate",
   "assets.schedule": "Schedule",
   "assets.title": "Assets and amortization"

@@ -218,9 +218,12 @@ button {
   min-width: 0;
 }
 
+/* The actions wrap, right-aligned, wherever «Добавить документ» does not fit beside the period. */
 .topbar-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   margin-left: auto;
 }
@@ -2145,11 +2148,6 @@ textarea:focus {
   .topbar {
     align-items: flex-start;
     padding: 12px 14px;
-  }
-
-  .topbar-actions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
   }
 
   .period-control span {

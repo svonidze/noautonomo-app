@@ -468,7 +468,7 @@ test('snapshot changes retain only counterparty facts; blocked approval still pe
     'Будущая дата операции',
   );
   await expect(page.locator('.review-alert.warning')).toContainText(
-    'Будущую операцию можно провести только после 01 окт. 2026 г.',
+    'Будущую операцию можно провести с 01 окт. 2026 г.',
   );
   await expect(page.locator('.review-alert.warning')).not.toContainText('г..');
   await page.locator('.review-reject-panel > summary').click();

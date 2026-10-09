@@ -5,6 +5,7 @@
   "assets.cost": "Стоимость",
   "assets.decision": "Состояние учёта",
   "assets.inService": "Ввод",
+  "assets.listEmpty": "Оборудование появится после проверки расхода с видом «Оборудование».",
   "assets.rate": "Ставка",
   "assets.schedule": "График",
   "assets.title": "Активы и амортизация"

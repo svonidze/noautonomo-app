@@ -1,5 +1,5 @@
 {
-  "common.add": "Add",
+  "common.add": "Add document",
   "common.all": "All",
   "common.back": "Back",
   "common.calculate": "Calculate",
@@ -14,7 +14,6 @@
   "common.loading": "Loading data…",
   "common.no": "No",
   "common.noId": "no ID",
-  "common.noRecords": "No records",
   "common.nouns.operations.few": "transactions",
   "common.nouns.operations.many": "transactions",
   "common.nouns.operations.one": "transaction",

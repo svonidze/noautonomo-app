@@ -15,6 +15,7 @@
   "aeatDocuments.kind.resolution": "Decision",
   "aeatDocuments.kind.response_receipt": "Response receipt",
   "aeatDocuments.kind.submission_receipt": "Submission receipt",
+  "aeatDocuments.listEmpty": "No AEAT documents yet. Add a receipt with the “Add AEAT document” button below.",
   "aeatDocuments.notes": "Notes",
   "aeatDocuments.newCase": "Create a new case",
   "aeatDocuments.occurredAt": "Date and time",

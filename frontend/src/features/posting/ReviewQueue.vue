@@ -8,7 +8,12 @@ import StatusCell from '../../components/StatusCell.vue';
 import StatusHelpButton from '../../components/StatusHelpButton.vue';
 import ChartHost from '../../charts/ChartHost.vue';
 import type { ReviewRow, ReviewOverviewContext } from './model.ts';
-const props = defineProps<{ rows: ReviewRow[]; context: ReviewOverviewContext }>();
+// With documents in the quarter an empty queue means they are all reviewed; without, nothing came in.
+const props = defineProps<{
+  rows: ReviewRow[];
+  context: ReviewOverviewContext;
+  hasDocuments: boolean;
+}>();
 const { locale, t } = useLocale();
 const help = helpAdapter();
 // The queue states the server sends; any other state reads as unknown, never as blocked.
@@ -199,7 +204,15 @@ const oldestDays = computed(() => {
           </tr>
           <tr v-if="!rows.length">
             <td colspan="6">
-              <div class="empty-state">{{ t('review.queueEmpty') }}</div>
+              <div class="empty-state">
+                {{
+                  t(
+                    hasDocuments
+                      ? 'review.queueEmpty.allReviewed'
+                      : 'review.queueEmpty.noDocuments',
+                  )
+                }}
+              </div>
             </td>
           </tr>
         </tbody>

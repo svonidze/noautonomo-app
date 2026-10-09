@@ -566,8 +566,13 @@ function useFx(settlement = false) {
       };
   invalidate();
 }
-const money = (value: number | null | undefined) =>
-  value == null ? '—' : (Number(value) / 100).toFixed(2);
+/** EUR as everywhere else («121,00 €»); a purchase in another currency keeps its code. */
+const money = (value: number | null | undefined, currency = 'EUR') =>
+  value == null
+    ? '—'
+    : currency === 'EUR'
+      ? eur(Number(value) / 100, locale.value)
+      : `${(Number(value) / 100).toFixed(2)} ${currency}`;
 const supplierFields: FieldSpec[] = [
   { path: 'supplier.display_name', label: 'workflow.name' },
   { path: 'supplier.country_code', label: 'workflow.countryEsUs' },
@@ -1305,19 +1310,19 @@ const supplierHidden = (party: Counterparty) =>
           <dl class="review-facts-list">
             <div>
               <dt>{{ t('workflow.purchase') }}</dt>
-              <dd>{{ money(proposed.gross_minor) }} {{ proposed.currency }}</dd>
+              <dd>{{ money(proposed.gross_minor, proposed.currency) }}</dd>
             </div>
             <div>
               <dt>IVA</dt>
-              <dd>{{ money(proposed.deductible_vat_minor) }} EUR</dd>
+              <dd>{{ money(proposed.deductible_vat_minor) }}</dd>
             </div>
             <div>
               <dt>{{ t('workflow.irpfDeductionNow') }}</dt>
-              <dd>{{ money(proposed.deductible_irpf_minor) }} EUR</dd>
+              <dd>{{ money(proposed.deductible_irpf_minor) }}</dd>
             </div>
             <div>
               <dt>{{ t('workflow.laterDepreciation') }}</dt>
-              <dd>{{ money(proposed.future_depreciation_minor) }} EUR</dd>
+              <dd>{{ money(proposed.future_depreciation_minor) }}</dd>
             </div>
             <div v-if="previewRule" id="wf-preview-rule">
               <dt>{{ t('expenseRules.title') }}</dt>

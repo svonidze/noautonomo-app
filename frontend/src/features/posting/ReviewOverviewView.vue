@@ -149,7 +149,7 @@ const hint = computed(() =>
     data.value?.preview.periodStatus !== 'open'
       ? 'review.postingClosedHint'
       : !data.value.preview.ready.length
-        ? 'review.postingNothingReady'
+        ? 'review.postingEmpty'
         : 'review.postingReadyHint',
   ),
 );
@@ -318,7 +318,12 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
         role="tabpanel"
         :aria-labelledby="`review-tab-${selected}`"
       >
-        <ReviewQueue v-if="selected === 'queue'" :rows="data.rows" :context="context" />
+        <ReviewQueue
+          v-if="selected === 'queue'"
+          :rows="data.rows"
+          :context="context"
+          :has-documents="data.documents.length > 0"
+        />
         <ReviewDocuments
           v-else-if="selected === 'documents'"
           :documents="data.documents"

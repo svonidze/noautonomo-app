@@ -304,6 +304,35 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   (positive), «Можно начать» (pending) or «Не начато» (neutral, waiting for
   an earlier step). The rows are task rows, never primary buttons. The
   sidebar names the owner only when `profile_configured` is true.
+- An empty review queue reads «В этом квартале нет документов на проверку»
+  when the quarter has no document and «Все документы квартала проверены»
+  when it has documents and none waits in the queue.
+- `frontend/tests/unit/plain-language.test.ts` checks every RU key matching
+  `/\.(empty|none|noRecords|queueEmpty)\b|Empty$/`: the text uses an action
+  word («Добавьте», «Откройте», «Нажмите», «Проверьте», «Рассчитайте»,
+  «Заполните», «появятся», «появится») or says «нет» and adds a second
+  sentence. Chart empties (`charts.*`) are exempt: below the data threshold a
+  chart prints one line, and the list above it names the next step.
+
+#### Empty states
+
+| Screen | Empty text key | Next step |
+|---|---|---|
+| Overview, first run | start list `dashboard.start.*` | the four steps: profile, first document, review and post it, calculate the quarter |
+| Overview, task list | `dashboard.tasksEmpty`, then `dashboard.calculatedAsOf` | none due now: tasks appear with a document or a filing deadline |
+| Overview, recent operations | `dashboard.recentEmpty` | «Добавить документ» in the header |
+| Overview, analytics | `charts.*.empty`, `charts.empty.*` (one line) | the task or start list above |
+| Income | `transactions.incomeEmpty`; search: `transactions.noMatches` | «Добавить документ»; change the search |
+| Expenses | `expense.empty`; depreciation: `expense.amortizationEmpty`; search: `expense.noMatches`; later pages: `expense.moreRecords` | «Добавить документ»; post the equipment schedule on «Активы»; change the search; «Показать ещё» |
+| Review, queue | `review.queueEmpty.noDocuments` or `review.queueEmpty.allReviewed` | «Добавить документ»; new documents join the queue |
+| Review, posting | `review.postingEmpty` | the «Очередь» tab |
+| Review, documents and issues | `review.documentsEmpty`, `issues.none` | added documents and new issues appear there |
+| Expense card | `expense.treatmentEmpty` | the review of the expense |
+| Assets | `assets.listEmpty`; a quarter without schedule entries: `help.words.none` | review an expense of the type «Оборудование»; open the equipment schedule |
+| Taxes | form card `statuses.labels.calculation_unavailable`; RETA bases: `reta.basesEmpty` | «Рассчитать»; the operator records bases from the TGSS resolution |
+| Counterparties | `contacts.listEmpty`; a counterparty's period: `contacts.operationsEmpty` | add a first document; choose another period |
+| AEAT documents | `aeatDocuments.listEmpty`; filters: `transactions.noMatches` | «Добавить документ AEAT» below the table; change the filters |
+| Settings | `settings.form.empty` | fill in and save the profile |
 
 ### Charts
 - A chart renders only when its dataset has at least two non-zero values

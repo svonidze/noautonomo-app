@@ -405,7 +405,7 @@ defineExpose({
               </tr>
               <tr v-if="!rows.length">
                 <td colspan="7">
-                  <div class="empty-state">{{ t('common.noRecords') }}</div>
+                  <div class="empty-state">{{ t('contacts.listEmpty') }}</div>
                 </td>
               </tr>
             </tbody>
@@ -487,7 +487,7 @@ defineExpose({
           <p v-else-if="operationBusy && !operations.length" role="status">
             {{ t('common.loading') }}
           </p>
-          <p v-else-if="!operations.length">{{ t('contacts.noOperations') }}</p>
+          <p v-else-if="!operations.length">{{ t('contacts.operationsEmpty') }}</p>
           <div class="contact-page-actions">
             <small v-if="total !== null">{{
               t('contacts.shown', { count: operations.length, total })

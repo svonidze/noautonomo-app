@@ -152,7 +152,7 @@
   "help.words.next": "Next actions",
   "help.words.noAction": "No confirmation form is available for this record. Check the sources and pass the result to your accountant or ledger operator.",
   "help.words.noDecision": "No separate decision was saved. This does not prove that earlier deductions were absent.",
-  "help.words.none": "No schedule entries for the selected quarter",
+  "help.words.none": "No schedule entries for this quarter. Open the equipment schedule to see other quarters.",
   "help.words.original": "Original message",
   "help.words.reasons": "What needs attention",
   "help.words.refreshHint": "Recalculate using current data. No return is submitted.",

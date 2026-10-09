@@ -353,7 +353,11 @@ async function saveStatus() {
               </td>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="9" class="empty-state">{{ t('common.noRecords') }}</td>
+              <td colspan="9">
+                <div class="empty-state">
+                  {{ t(data?.rows.length ? 'transactions.noMatches' : 'aeatDocuments.listEmpty') }}
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>

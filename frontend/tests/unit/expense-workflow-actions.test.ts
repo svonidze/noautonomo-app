@@ -5,6 +5,7 @@ import ReviewDetailView from '../../src/features/review/ReviewDetailView.vue';
 import type { ReviewDetailContext } from '../../src/features/review/guided-model.ts';
 import type { JsonOptions } from '../../src/core/http.ts';
 import { REVIEW_ID, nativeFixture } from '../fixtures/review.ts';
+import { eur } from '../../src/core/format.ts';
 import workflow from '../../src/locales/ru/workflow.json' with { type: 'json' };
 import review from '../../src/locales/ru/review.json' with { type: 'json' };
 
@@ -82,6 +83,10 @@ test('the expense review keeps one primary action in every state, says when it i
     workflow['workflow.recalculate'],
   );
   expect(primaries()).toEqual([workflow['workflow.confirmAndPost']]);
+  // The result prints amounts as the rest of the app does («121,00 €»), not "121.00 EUR".
+  expect([...root.querySelectorAll('#wf-preview dd')].map((cell) => cell.textContent)).toEqual(
+    ['121.00', '21.00', '100.00', '0.00'].map((value) => eur(value, 'ru')),
+  );
   // The result takes focus, so the next Tab reaches the confirmation.
   expect(document.activeElement?.id).toBe('wf-preview-title');
   root.querySelector<HTMLButtonElement>('#wf-confirm')!.click();

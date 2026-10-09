@@ -67,7 +67,7 @@ const type = (value: string) => {
           </tr>
           <tr v-if="!rows.length">
             <td colspan="7">
-              <div class="empty-state">{{ t('common.noRecords') }}</div>
+              <div class="empty-state">{{ t('review.documentsEmpty') }}</div>
             </td>
           </tr>
         </tbody>

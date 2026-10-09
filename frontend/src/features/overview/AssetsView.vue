@@ -146,7 +146,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
               </tr>
               <tr v-if="!rows.length">
                 <td colspan="6">
-                  <div class="empty-state">{{ t('common.noRecords') }}</div>
+                  <div class="empty-state">{{ t('assets.listEmpty') }}</div>
                 </td>
               </tr>
             </tbody>

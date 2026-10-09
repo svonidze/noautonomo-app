@@ -1,6 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
 import dashboard from '../../src/locales/ru/dashboard.json' with { type: 'json' };
 import statuses from '../../src/locales/ru/statuses.json' with { type: 'json' };
+import transactions from '../../src/locales/ru/transactions.json' with { type: 'json' };
+import expense from '../../src/locales/ru/expense.json' with { type: 'json' };
+import review from '../../src/locales/ru/review.json' with { type: 'json' };
+import issues from '../../src/locales/ru/issues.json' with { type: 'json' };
+import assets from '../../src/locales/ru/assets.json' with { type: 'json' };
+import contacts from '../../src/locales/ru/contacts.json' with { type: 'json' };
+import aeat from '../../src/locales/ru/aeatDocuments.json' with { type: 'json' };
+import settings from '../../src/locales/ru/settings.json' with { type: 'json' };
+import reta from '../../src/locales/ru/reta.json' with { type: 'json' };
 
 // The empty-ledger project (playwright.config.mts) serves one open quarter with no records and no
 // profile: what a new owner sees on the first run.
@@ -52,6 +61,59 @@ test('a new ledger opens on four first steps, without charts or console errors',
       return box.top < window.innerHeight && !document.querySelector('svg.chart-svg');
     }),
   ).toBe(true);
+  // The narrowest side-by-side layout still fits the header with «Добавить документ».
+  await page.setViewportSize({ width: 761, height: 812 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  expect(errors).toEqual([]);
+});
+
+test('every screen of an empty ledger says what is empty and what to do next', async ({ page }) => {
+  const errors = consoleErrors(page);
+  const screens: [string, string, string[]][] = [
+    [
+      '/dashboard?period=2026-Q3',
+      '.dashboard-grid .empty-state',
+      [dashboard['dashboard.recentEmpty']],
+    ],
+    [
+      '/income?period=2026-Q3',
+      '#transactions-table .empty-state',
+      [transactions['transactions.incomeEmpty']],
+    ],
+    // Purchases come from documents, depreciation from the equipment schedule.
+    [
+      '/expenses?period=2026-Q3',
+      '#expense-results .empty-state',
+      [expense['expense.empty'], expense['expense.amortizationEmpty']],
+    ],
+    [
+      '/review?period=2026-Q3',
+      '.review-queue-table .empty-state',
+      [review['review.queueEmpty.noDocuments']],
+    ],
+    ['/review?period=2026-Q3&tab=posting', '.posting-action-hint', [review['review.postingEmpty']]],
+    [
+      '/review?period=2026-Q3&tab=documents',
+      '#review-tabpanel .empty-state',
+      [review['review.documentsEmpty'], issues['issues.none']],
+    ],
+    [
+      '/assets?period=2026-Q3',
+      '.asset-explanations-table .empty-state',
+      [assets['assets.listEmpty']],
+    ],
+    ['/taxes?period=2026-Q3', 'section.reta-check h3 + p', [reta['reta.basesEmpty']]],
+    ['/contacts', '#contacts-list-wrap .empty-state', [contacts['contacts.listEmpty']]],
+    ['/aeat-documents', '.aeat-documents-table .empty-state', [aeat['aeatDocuments.listEmpty']]],
+    ['/settings', '#settings-profile-picker p', [settings['settings.form.empty']]],
+  ];
+  for (const [route, selector, texts] of screens) {
+    await page.goto(route);
+    await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator(selector), route).toHaveText(texts);
+  }
   expect(errors).toEqual([]);
 });
 

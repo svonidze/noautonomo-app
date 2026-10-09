@@ -1,7 +1,7 @@
 {
   "reta.additional": "Оценка доплаты",
   "reta.baseRange": "Диапазон баз ступени",
-  "reta.basesEmpty": "Базы ещё не записаны.",
+  "reta.basesEmpty": "Баз пока нет. Они появятся здесь, когда оператор запишет их по резолюции TGSS.",
   "reta.basesHint": "Базы здесь только для просмотра. Их записывает оператор по резолюции TGSS.",
   "reta.basesTitle": "Записанные базы",
   "reta.boundarySensitive": "Доход близко к границе ступени: несколько новых записей могут перевести его на соседнюю ступень.",
@@ -43,7 +43,7 @@
   "reta.title": "Проверка ступени RETA за {year}",
   "reta.tramo": "Ступень",
   "reta.tramoValue": "{table, select, reduced {Сокращённая таблица} general {Общая таблица} other {Таблица}}, ступень {tramo}",
-  "reta.window": "Проведённый доход с 1 января по {date}.",
+  "reta.window": "Проведённый доход с 1 января по {date}",
   "reta.workerKind": "{kind, select, individual {Индивидуальный} societario {Участник общества (societario, LGSS ст. 305.2.b или e)} colaborador {Член семьи, помогающий в деятельности (familiar colaborador)} other {Другой}}",
   "reta.workerKindLabel": "Тип работника"
 }

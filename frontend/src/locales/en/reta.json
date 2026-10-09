@@ -1,7 +1,7 @@
 {
   "reta.additional": "Estimated additional payment",
   "reta.baseRange": "Base range of the bracket",
-  "reta.basesEmpty": "No bases recorded yet.",
+  "reta.basesEmpty": "No bases yet. They appear here once the operator records them from the TGSS resolution.",
   "reta.basesHint": "Bases are read-only here. The operator records them from the TGSS resolution.",
   "reta.basesTitle": "Recorded bases",
   "reta.boundarySensitive": "Your income is close to a bracket limit: a few more rows can move it to the next bracket.",

@@ -176,7 +176,7 @@ const sourceUrl = () => `/dashboard?period=${encodeURIComponent(props.period)}`;
         </tr>
         <tr v-if="!rows.length">
           <td colspan="7">
-            <div class="empty-state">{{ t('common.noRecords') }}</div>
+            <div class="empty-state">{{ t('dashboard.recentEmpty') }}</div>
           </td>
         </tr>
       </tbody>

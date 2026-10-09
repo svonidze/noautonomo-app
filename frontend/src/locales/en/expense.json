@@ -1,11 +1,12 @@
 {
   "expense.amortization": "Asset depreciation",
+  "expense.amortizationEmpty": "No depreciation in this quarter. It appears once the equipment schedule is posted on the Assets page.",
   "expense.amount": "Expense amount",
   "expense.assetDocument": "Asset / source document",
   "expense.back": "Back to {title} · {period}",
   "expense.chartSourceNote": "The chart uses source entry amounts. For depreciation this is the original purchase cost, not a new charge; see the section above for the quarterly deduction.",
   "expense.description": "Description",
-  "expense.empty": "No entries in this quarter.",
+  "expense.empty": "No expenses in this quarter yet. Add a document with the “Add document” button.",
   "expense.explanation": "Part of an earlier asset purchase recognized as an expense this quarter. This is not a new purchase or a payment.",
   "expense.forQuarter": "Depreciation for {period}",
   "expense.future": "Recognition date has not arrived: {date}",
@@ -41,6 +42,7 @@
   "expense.sourceAmount": "Document amount: {amount}",
   "expense.sourceDate": "Document date: {date}",
   "expense.title": "Expense details",
+  "expense.treatmentEmpty": "No tax decision yet. It appears once the expense is reviewed.",
   "expense.unmatched": "Asset not matched",
   "expense.unposted": "Not posted",
   "expense.wrongType": "This is not an expense"

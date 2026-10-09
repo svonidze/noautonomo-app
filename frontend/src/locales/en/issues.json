@@ -15,7 +15,7 @@
   "issues.messages.nonresident_payee_legal_form_review": "The foreign payee legal form still needs review.",
   "issues.messages.nonresident_professional_irnr_review": "A separate IRNR review is required after payment to the foreign professional.",
   "issues.messages.transaction_tax_review": "Review the business purpose and the IRPF and VAT treatment.",
-  "issues.none": "No open issues",
+  "issues.none": "No open issues: every reviewed document is consistent. If documents disagree, the issues appear here.",
   "issues.serverMessage": "Server message",
   "issues.sourceDetails": "Source details"
 }

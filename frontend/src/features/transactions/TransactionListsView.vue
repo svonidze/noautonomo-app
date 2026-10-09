@@ -136,10 +136,7 @@ function copy(row: TransactionRow) {
 <template>
   <div>
     <div class="table-toolbar" :class="{ 'expense-toolbar': expense }">
-      <h2>
-        {{ t(expense ? 'titles.expenses' : 'titles.income') }} ·
-        {{ formatPeriod(context.period, locale) }}
-      </h2>
+      <h2>{{ t('transactions.periodTitle', { period: formatPeriod(context.period, locale) }) }}</h2>
       <div class="toolbar-filters">
         <label v-if="expense"
           ><span>{{ t('expense.search') }}</span
@@ -214,7 +211,9 @@ function copy(row: TransactionRow) {
                     ? 'expense.moreRecords'
                     : page.period_counts[kind]
                       ? 'expense.noMatches'
-                      : 'expense.empty',
+                      : kind === 'amortization'
+                        ? 'expense.amortizationEmpty'
+                        : 'expense.empty',
                 )
               }}
             </div>
