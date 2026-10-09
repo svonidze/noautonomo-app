@@ -179,6 +179,16 @@ test('a failed calculation says why and lets the owner try again', async ({ page
   await calculate.click();
   await expect(page.locator('#toast')).toHaveClass(/error/);
   await expect(page.locator('#toast-message')).toHaveText('Synthetic calculation failure');
+  // On the dark toast the close button rings in its own white text, not the page's green.
+  await page.keyboard.press('Tab');
+  const close = page.locator('#toast-close');
+  await close.focus();
+  expect(
+    await close.evaluate((node) => [
+      node.matches(':focus-visible'),
+      getComputedStyle(node).outlineColor,
+    ]),
+  ).toEqual([true, 'rgb(255, 255, 255)']);
   await expect(calculate).toBeEnabled();
   await expect(calculate).toHaveText(common['common.calculate']);
   await calculate.click();

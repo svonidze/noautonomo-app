@@ -135,7 +135,9 @@ test('every screen of an empty ledger says what is empty and what to do next', a
   }
   // The posting module previews the absent quarter itself, timestamp included.
   await page.goto(`/review?period=${quarter}&tab=posting`);
-  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('#app')).toContainText(
+    review['review.postingGeneratedAt'].replace(' {date}', ''),
+  );
   await expect(page.locator('#app')).not.toContainText(review['review.postingGeneratedUnknown']);
   expect(errors).toEqual([]);
 });

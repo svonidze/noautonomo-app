@@ -76,13 +76,46 @@ test('the phone menu opens and closes from the keyboard and closes on a route ch
   await expect(menu).toBeHidden();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(toggle).toBeFocused();
+  // Open, the menu starts with the brand name and the owner; folded, they stay in the
+  // accessibility tree without a visible box.
+  const brand = page.locator('.brand > span:last-child');
+  expect(await brand.evaluate((node) => node.getBoundingClientRect().width)).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('complementary')).toContainText('Autónomo');
   await page.keyboard.press('Enter');
+  const [name, links] = [(await brand.boundingBox())!, (await menu.boundingBox())!];
+  expect(name.height).toBeGreaterThan(20);
+  expect(name.y + name.height).toBeLessThanOrEqual(links.y);
+  await expect(page.locator('#profile-name')).toBeVisible();
   await menu.locator('a[data-view="review"]').click();
   await expect(page).toHaveURL(/\/review\?period=2026-Q3$/);
   await expect(menu).toBeHidden();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('.nav-current')).toHaveText(nav['nav.review']);
+  // A route change from outside the menu closes it too: Back returns to the overview.
+  await toggle.click();
+  await expect(menu).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/dashboard\?period=2026-Q3$/);
+  await expect(menu).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(await overflows(page)).toBe(false);
+});
+
+test('without a section to name, the phone bar keeps «Меню» at its end', async ({ page }) => {
+  await page.setViewportSize(PHONE);
+  await page.goto('/dashboard?period=2026-Q3');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+  await page.evaluate(() => {
+    history.pushState(null, '', '/nowhere');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.locator('.nav-current')).toHaveCount(0);
+  const [bar, toggle] = [
+    (await page.locator('.sidebar').boundingBox())!,
+    (await page.locator('.nav-toggle').boundingBox())!,
+  ];
+  expect(toggle.width).toBeLessThan(120);
+  expect(Math.abs(bar.x + bar.width - 12 - (toggle.x + toggle.width))).toBeLessThanOrEqual(1);
 });
 
 test('on a phone a chart opens as its data table and draws only on request', async ({ page }) => {

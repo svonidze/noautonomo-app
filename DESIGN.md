@@ -342,7 +342,7 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 | Review, posting | `review.postingEmpty` | the «Очередь» tab |
 | Review, documents and issues | `review.documentsEmpty`, `issues.none` | added documents and new issues appear there |
 | Expense card | `expense.treatmentEmpty` | the review of the expense |
-| Assets | `assets.listEmpty`; an asset without schedule entries this quarter reads `assets.noScheduleCell` in its cell | review an expense of the type «Оборудование»; open the equipment schedule |
+| Assets | `assets.listEmpty`; a cell of an asset without schedule entries this quarter reads `assets.noScheduleCell` (a cell label, not an empty state) | review an expense of the type «Оборудование» |
 | Taxes | form card `statuses.labels.calculation_unavailable`; Calculate on a quarter without records: `taxes.periodEmpty`; RETA bases: `reta.basesEmpty` | «Рассчитать»; «Добавить документ» first; the operator records bases from the TGSS resolution |
 | Counterparties | `contacts.listEmpty`; a counterparty's period: `contacts.operationsEmpty` | add a first document; choose another period |
 | AEAT documents | `aeatDocuments.listEmpty`; filters: `transactions.noMatches` | «Добавить документ AEAT» below the table; change the filters |
@@ -358,8 +358,10 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 ### Narrow screens
 - At 760 px and below the sidebar folds into one bar, no taller than 112 px
   at 375 px: the brand mark, the current section and «Меню» / "Menu" (a
-  button with `aria-expanded` and `aria-controls="primary-nav"`). The links
-  open below the bar; Escape, a link or any route change closes them, and
+  button with `aria-expanded` and `aria-controls="primary-nav"`). The brand
+  name, the owner and the links open below the bar; folded, the name and the
+  owner stay visually hidden but readable to screen readers. Escape while
+  focus is inside the bar, a link or any route change closes the menu, and
   closing from inside the bar returns focus to the button. Routes, ids and
   `data-view` stay as on wide screens; the active link carries
   `aria-current="page"`.
@@ -391,9 +393,11 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   They replace field borders `#cbd4d0` (1.51:1), the ring `#65bfa8` (2.19:1)
   and warning text in `--warning` (4.23 / 3.90). The plan's example border
   `#8a9691` reaches only 2.82:1 on the page colour.
-- The dark sidebar keeps its own ring `#6dd2b8` (8.21:1 on `--sidebar`;
-  `--focus-ring` is 2.32:1 there); the «Меню» button border uses
-  `--sidebar-muted` (6.58:1).
+- Two dark surfaces take their own ring: the sidebar keeps `#6dd2b8`
+  (8.21:1 on `--sidebar`; `--focus-ring` is 2.32:1 there), and the toast's
+  close button rings in its own white text (13.45:1 on the toast, 7.91:1 on
+  the error toast; `--focus-ring` is 2.09 / 1.23 there). The «Меню» button
+  border uses `--sidebar-muted` (6.58:1).
 - `--warning` stays the expense series colour in charts, a graphic at
   4.23:1 (≥ 3:1), never text. Badge text already passes: pending `#714307`
   on `--warning-soft` 7.45, attention 7.73, positive 7.19, neutral 7.19.
@@ -572,9 +576,10 @@ when a band falls under 34px — and the horizontal-bar label column shrinks
 from 150 toward 90 below roughly 500px. Thinning removes labels only; every
 value stays in the data table and in the mark titles. Quarterly charts have
 too few buckets to thin; their buckets use the short period form («III кв. 2026»,
-"Q3 2026") so four quarters fit a half-width chart. A chart narrower than 400
-units (a phone) names the year once, in the quarter column header («Квартал,
-2026»), and reads «III кв.» / "Q3" under each bar and in its table.
+"Q3 2026") so four quarters fit a half-width chart. A chart drawn narrower than 400
+units (a phone, or any narrow slot) names the year once, in the quarter
+column header («Квартал, 2026»), and reads «III кв.» / "Q3" under each bar
+and in its table.
 
 Each non-empty chart carries one expand control in its caption. It re-renders
 the same spec in the shared `#chart-dialog` at dialog width — no nested
