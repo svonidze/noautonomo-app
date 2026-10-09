@@ -6,6 +6,7 @@ import type { ReviewDetailContext } from '../../src/features/review/guided-model
 import type { JsonOptions } from '../../src/core/http.ts';
 import { guidedFixture, nativeFixture, REVIEW_ID } from '../fixtures/review.ts';
 import { t } from '../../src/core/i18n.ts';
+import { formatDateText } from '../../src/core/format.ts';
 async function flush() {
   for (let count = 0; count < 8; count++) {
     await Promise.resolve();
@@ -389,6 +390,55 @@ test('a missing rate waits in «Что осталось» until confirmation, an
   const reject = root.querySelector<HTMLDetailsElement>('.review-reject-panel')!;
   expect(actions.compareDocumentPosition(reject) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(reject.open).toBe(false);
+  host.dispose();
+  root.remove();
+  localStorage.clear();
+});
+
+test('a locked item asks for no rate and states its deferral date once, in the status cell', async () => {
+  localStorage.clear();
+  const fixture = guidedFixture();
+  fixture.packet.state.transaction = {
+    ...fixture.packet.state.transaction,
+    currency: 'USD',
+    original_currency: 'USD',
+    amount_original_minor: 9900,
+  };
+  fixture.fx_suggestion = {
+    status: 'unavailable',
+    currency: 'USD',
+    transaction_date: '2026-07-02',
+  };
+  // As the server sends it: posting_context is the status context's own posting block.
+  const posting = { preview_bucket: 'deferred', posting_deferred_until: '2026-10-01' };
+  fixture.review_allowed = false;
+  fixture.posting_context = posting;
+  fixture.ui_context = { ...fixture.ui_context, state: 'deferred', posting };
+  const setup = context(async (url: string) =>
+    url.startsWith('/api/transactions/')
+      ? {
+          transaction: {
+            transaction_id: REVIEW_ID,
+            entry_type: 'income',
+            lifecycle_status: 'approved',
+          },
+          period: { period_key: '2026-Q3' },
+        }
+      : fixture,
+  );
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, ReviewDetailView, setup);
+  await flush();
+  expect(root.querySelector('.wf-remaining')).toBeNull();
+  expect(root.querySelector('.review-alert.warning')!.textContent!.trim()).toBe(
+    t('review.formDisabledHint'),
+  );
+  const date = formatDateText('2026-10-01', 'ru');
+  expect(root.textContent!.split(date)).toHaveLength(2);
+  expect(root.querySelector('.review-workspace-header .status-context')!.textContent).toContain(
+    date,
+  );
   host.dispose();
   root.remove();
   localStorage.clear();

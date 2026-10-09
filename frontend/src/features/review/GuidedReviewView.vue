@@ -158,9 +158,11 @@ const packet = computed(() => item.value!.packet),
   state = computed(() => packet.value.state);
 const evaluation = computed(() => (item.value ? evaluate(item.value) : null));
 const disabled = computed(() => busy.value || !evaluation.value?.canApply);
-// A missing rate is named once in «Что осталось»; the inline alert waits for a confirmation attempt.
+// A missing rate is named once in «Что осталось» while it can be entered; the inline alert waits
+// for a confirmation attempt.
 const remaining = computed(() =>
   item.value &&
+  evaluation.value?.canApply &&
   needsFx(state.value.transaction) &&
   item.value.fx_suggestion &&
   item.value.fx_suggestion.status !== 'existing' &&
@@ -554,9 +556,6 @@ const retry = () =>
         class="review-alert warning"
         role="alert"
       >
-        <p v-if="evaluation.availableOn">
-          {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
-        </p>
         <p>{{ t('review.formDisabledHint') }}</p>
       </div>
       <p v-else-if="!evaluation.canApply && evaluation.availableOn" class="review-alert warning">
