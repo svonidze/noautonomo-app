@@ -95,7 +95,13 @@ export interface ExpenseScope {
 }
 export interface DashboardData {
   totals: {
-    actual: { income_eur: Amount; income_transaction_count: number };
+    actual: {
+      income_eur: Amount;
+      income_transaction_count: number;
+      /** `income_eur` counts rows without a EUR amount as zero; these name them. */
+      income_known_amount_minor?: number;
+      income_missing_amount_count?: number;
+    };
     /** Approved, not yet posted; the known amount leaves out rows without a EUR amount. */
     forecast: {
       transaction_count?: number;

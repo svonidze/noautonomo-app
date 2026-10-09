@@ -1,7 +1,7 @@
 # Design
 
 ## Source of truth
-- Status: Active; refreshed 2026-10-05 (clarity redesign round 2 proposed, see docs/plans/ui-clarity-redesign.md).
+- Status: Active; refreshed 2026-10-10 (clarity redesign round 2 stages 0–7 implemented, stage 8 pending the owner).
 - Surfaces: Expenses, dashboard expense metrics, recent operations, and the analytics charts documented below.
 - Evidence: `local_web.py`, the Vue frontend under `frontend/src` (`features/`,
   `shell/`, `charts/`, `help/`), `web_ui/styles.css`, the accepted
@@ -189,12 +189,12 @@ navigation added by the clarity redesign.
   resets; component state, not the URL). Each queue row offers one next
   action chosen by its server state: «Провести» to the posting tab at
   `#posting-row-<id>` (ready), «Почему» (deferred), and for a row that still
-  needs work (needs review, blocked, unknown) «Открыть проверку» when the
-  server offers its review action, otherwise «Что мешает» («Почему» for an
-  unknown state). A row whose action opens the explanation shows no second
-  link in its status cell. An unknown state counts as unknown, never as
-  blocked. The aging chart draws from ten queued rows; below that one line
-  names the oldest row's age.
+  needs work (needs_review, received, extracted, blocked, unknown)
+  «Открыть проверку» when the server offers its review action, otherwise
+  «Что мешает» («Почему» for an unknown state). A row whose action opens
+  the explanation shows no second link in its status cell. An unknown state
+  counts as unknown, never as blocked. The aging chart draws from ten queued
+  rows; below that one line names the oldest row's age.
 - The posting tab lists the ready rows before anything is posted, then the
   deferred and blocked ones; the row named by `#posting-row-<id>` is
   highlighted and scrolled into view (a router navigation does not update
@@ -232,7 +232,7 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 
 ## Clarity redesign (round 2)
 
-- Status: Draft, proposed 2026-10-05 in docs/plans/ui-clarity-redesign.md.
+- Status: Active (stages 0–7 implemented; stage 8 pending).
 - Screen purpose: an owner without accounting training must see what to do
   now, what each figure means and where to act; an operator keeps dense
   tables, codes and facts on the same screens.
@@ -251,16 +251,17 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   internal services; headings name the current step). Transferable: hierarchy
   and status feedback. Not transferable: GOV.UK typography, colours and the
   one-question flow.
-- Acceptance: every route renders exactly one primary action outside open
-  dialogs; RU catalogs contain no Latin service words outside the allowed
-  term list; every blocking status shows an action or its owner; every empty
+- Acceptance: every route and form state (read-only detail pages have none)
+  renders exactly one primary action outside open dialogs; RU catalogs
+  contain no Latin service words outside the allowed term list; every
+  blocking status shows an action or its owner; every empty
   state names the next step; charts render only with at least two non-zero
   points; dashboard first screen at 375 px shows tasks, not charts.
 - Precedence: where this section disagrees with an earlier section, this
   section states the target state; the earlier text stays in force until the
-  stage that ships the rule rewrites it. Known conflicts: the reserved height
-  of empty chart slots (rewritten by stages 3–4), and «Документ от» under
-  Content voice (rewritten by stage 1).
+  stage that ships the rule rewrites it. Stages 1, 3 and 4 rewrote the older
+  text («Документ от» under Content voice, the reserved height of empty chart
+  slots), so the note now covers only stage 8.
 
 ### Page grammar
 - Header: h1 title, one-line purpose, one primary action. Sections start at
@@ -277,10 +278,10 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   calculation label; see the canonical table in the plan. Synonym keys are
   removed. A status cell is a badge plus at most one line of reason; the
   link to the explanation ends that line only when the record still needs
-  work (needs review, blocked, unknown) and the server offers its review
-  («Что сделать» / "What to do"), or when it has reasons («Почему» /
-  "Why"). On a ready, deferred or finished record a review link is
-  navigation, not a task: the explanation lists it under «Связанные
+  work (needs_review, received, extracted, blocked, unknown) and the server
+  offers its review («Что сделать» / "What to do"), or when it has reasons
+  («Почему» / "Why"). On a ready, deferred or finished record a review link
+  is navigation, not a task: the explanation lists it under «Связанные
   действия» / "Related actions" instead of «Следующие действия».
 - Unknown, zero and not applicable are worded, not dashed, whenever the
   missing piece has a known cause: "Not calculated yet. Calculate",
@@ -306,14 +307,17 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   an earlier step). The rows are task rows, never primary buttons. The
   sidebar names the owner only when `profile_configured` is true.
 - A ledger straight from `db init` has no quarter. `/api/bootstrap` then
-  offers the current calendar quarter (`status: "missing"`; no row is
+  offers the current calendar quarter, the default, and the one before it,
+  where the first document may be dated (`status: "missing"`; no row is
   created), and the read endpoints answer a valid quarter without a row with
   empty data (`period.status: "missing"`, zero counts, empty lists), never
   400/404; malformed keys still fail. The first document's intake creates the
   quarter's row. Calculation needs that row: until then
   `/api/dashboard/refresh` answers 409 `period_missing` with the text
   `taxes.periodEmpty`, and the posting tab reads the quarter as open with
-  nothing to post.
+  nothing to post. Intake refuses a document dated in another quarter than
+  the selected one with 400 `quarter_mismatch` and the text
+  `intake.quarterMismatch`, which names both quarters.
 - An empty review queue reads «В этом квартале нет документов на проверку»
   when the quarter has no document, sends to the documents tab
   (`review.queueEmpty.documentsWaiting`) when documents still wait for
@@ -389,9 +393,12 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   | `--control-border` | `#828d89` | input, select and textarea borders | 3.43 / 3.16 (3.04 on `--surface-muted`) |
   | `--focus-ring` | `#0b6b59` (= `--accent-dark`) | every focus outline, 2 px solid, offset 2 px | 6.44 / 5.93 |
   | `--warning-text` | `#8a5110` | warning text (`.fx-card-status.warning`) | 6.43 / 5.93 |
+  | `--muted-on-soft` | `#5c6663` | small text on the soft fills: queue filter-card labels, FX choice notes | 4.97 `--accent-soft` / 5.29 `--warning-soft` / 4.86 `--danger-soft` / 5.01 `--info-soft` |
 
   They replace field borders `#cbd4d0` (1.51:1), the ring `#65bfa8` (2.19:1)
-  and warning text in `--warning` (4.23 / 3.90). The plan's example border
+  and warning text in `--warning` (4.23 / 3.90); `--muted` `#66706d` stays
+  for small text on the surface and the page but reads 4.19 on
+  `--danger-soft` and 4.28 on `--accent-soft`. The plan's example border
   `#8a9691` reaches only 2.82:1 on the page colour.
 - Two dark surfaces take their own ring: the sidebar keeps `#6dd2b8`
   (8.21:1 on `--sidebar`; `--focus-ring` is 2.32:1 there), and the toast's
@@ -558,7 +565,7 @@ Additional rules:
 | Contacts | top customers with an "Other" fold |
 | Assets | amortization per quarter (`include_in_books = 1` only) |
 
-From stage 3 of the clarity redesign, rendering is gated by the threshold policy in [Clarity redesign (round 2)](#clarity-redesign-round-2): a chart draws only when its dataset has at least two non-zero values; the queue aging chart draws from ten queued items; below the threshold the slot shows one line of text. Dashboard charts sit below the task list and quarter figures.
+Rendering is gated by the threshold policy in [Clarity redesign (round 2)](#clarity-redesign-round-2): a chart draws only when its dataset has at least two non-zero values; the queue aging chart draws from ten queued items; below the threshold the slot shows one line of text. Dashboard charts sit below the task list and quarter figures.
 
 ### Chart sizing and expansion
 

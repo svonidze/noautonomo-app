@@ -252,7 +252,13 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
         </h2>
         <div class="metric accent">
           <span>{{ t('dashboard.incomePosted') }}</span
-          ><strong>{{ eur(data.totals.actual.income_eur, locale) }}</strong
+          ><strong>{{
+            amount({
+              amount_eur: data.totals.actual.income_eur,
+              known_amount_minor: data.totals.actual.income_known_amount_minor,
+              missing_amount_count: data.totals.actual.income_missing_amount_count,
+            })
+          }}</strong
           ><small>{{
             t('common.counts.operations', { count: data.totals.actual.income_transaction_count })
           }}</small>

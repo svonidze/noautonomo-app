@@ -17,6 +17,8 @@
   --warning-text: #8a5110; /* 6.43 / 5.93 */
   --control-border: #828d89; /* 3.43 / 3.16 */
   --focus-ring: #0b6b59; /* 6.44 / 5.93, the same as --accent-dark */
+  /* Small text on the soft fills: accent 4.97, warning 5.29, danger 4.86, info 5.01. */
+  --muted-on-soft: #5c6663;
   --danger: #b94040;
   --danger-soft: #fbe3e3;
   --info: #376da5;
@@ -310,7 +312,7 @@ input {
   padding: 7px 10px;
 }
 
-/* One focus ring everywhere but the dark sidebar; fields show it on mouse focus too. */
+/* One focus ring everywhere but the dark sidebar and the toast; fields show it on mouse focus too. */
 :focus-visible,
 select:focus,
 input:focus,
@@ -1823,7 +1825,7 @@ td .text-button:not(.inline-button),
 }
 
 .review-summary-card span {
-  color: var(--muted);
+  color: var(--muted-on-soft);
   font-size: 0.78rem;
 }
 
@@ -2469,7 +2471,7 @@ textarea {
 }
 
 .fx-choice small {
-  color: var(--muted);
+  color: var(--muted-on-soft);
 }
 
 .fx-choice-note {
