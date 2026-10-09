@@ -2,9 +2,9 @@ import { formatMessage, localeTag, messageIds, type Locale } from '../core/i18n.
 import { eur, formatPeriod } from '../core/format.ts';
 import type { Analytics, ChartSpec, TaxPoint } from './types.ts';
 
-/** DESIGN.md "Charts": a chart is drawn from at least two non-zero plotted values; below that the
- * slot shows one line of text. Values past the last bucket are not plotted and do not count. */
-export function hasEnoughData(spec: ChartSpec): boolean {
+/** Non-zero plotted values (DESIGN.md "Charts"): a chart is drawn from two; with fewer the slot shows
+ * one line, which tells one value apart from none. Values past the last bucket are not plotted. */
+export function chartValueCount(spec: ChartSpec): number {
   const buckets = spec.buckets?.length ?? 0;
   const values = [
     ...(spec.series ?? []).flatMap((series) => series.values.slice(0, buckets)),
@@ -12,10 +12,9 @@ export function hasEnoughData(spec: ChartSpec): boolean {
     ...(spec.ranges ?? []).map((range) => range.value),
     spec.measure?.value,
   ];
-  return (
-    values.filter((value) => typeof value === 'number' && Number.isFinite(value) && value !== 0)
-      .length >= 2
-  );
+  return values.filter(
+    (value) => typeof value === 'number' && Number.isFinite(value) && value !== 0,
+  ).length;
 }
 
 export function createChartBuilders(locale: Locale) {

@@ -284,6 +284,11 @@ test('the overview opens with the task list, then three figure cards, without ba
   ]);
   // No open questions: the panel is not rendered at all.
   expect(lines(root, '.dashboard-grid h2')).toEqual(['Последние операции']);
+  // The section heading stays outside the disclosure; the summary only toggles the charts.
+  const heading = root.querySelector('#dashboard-analytics-title')!;
+  expect([heading.tagName, heading.closest('details')]).toEqual(['H2', null]);
+  expect(heading.nextElementSibling!.className).toBe('analytics-details');
+  expect(lines(root, '.analytics-details > summary')).toEqual(['Показать графики']);
 });
 
 test('a quiet quarter says so and names its calculation date', async () => {

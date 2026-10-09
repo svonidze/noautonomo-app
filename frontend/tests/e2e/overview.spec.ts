@@ -414,6 +414,10 @@ test('on a phone the first screen lists tasks and draws no chart until Analytics
   expect(firstScreen.charts).toBe(0);
   const analytics = page.locator('details.analytics-details');
   await expect(analytics).not.toHaveAttribute('open');
+  // The section keeps its heading while folded; the summary only shows the charts.
+  await expect(
+    page.getByRole('heading', { level: 2, name: ruDashboard['dashboard.analyticsTitle'] }),
+  ).toBeVisible();
   await analytics.locator(':scope > summary').click();
   await expect(page.locator('svg.chart-svg').first()).toBeVisible();
   expect(

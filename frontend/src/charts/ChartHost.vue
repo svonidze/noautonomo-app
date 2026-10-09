@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../vue/locale.ts';
 import { captureFocus, restoreFocus } from '../core/focus.ts';
-import { createChartBuilders, hasEnoughData, type ChartKind } from './builders.ts';
+import { chartValueCount, createChartBuilders, type ChartKind } from './builders.ts';
 import type { Analytics, ChartSpec } from './types.ts';
 import { renderCartesian, renderHorizontalBars, renderBullet } from './renderer.js';
 const props = defineProps<{
@@ -36,7 +36,8 @@ const render = computed(() =>
 const spec = computed(() =>
   source.value ? createChartBuilders(locale.value)[props.kind](source.value) : null,
 );
-const drawable = computed(() => !!spec.value && hasEnoughData(spec.value));
+const values = computed(() => (spec.value ? chartValueCount(spec.value) : 0)),
+  drawable = computed(() => values.value >= 2);
 function paint(container: HTMLElement | undefined, expanded = false) {
   if (!container || !spec.value) return;
   if (!drawable.value) {
@@ -134,7 +135,11 @@ onBeforeUnmount(() => {
       {{ t('charts.loadError') }}
     </div>
     <p v-else-if="spec && !drawable" class="chart-empty">
-      {{ t('charts.emptyLine', { title: spec.title, message: spec.emptyMessage ?? '' }) }}
+      {{
+        values === 1
+          ? t('charts.singleValue', { title: spec.title })
+          : t('charts.emptyLine', { title: spec.title, message: spec.emptyMessage ?? '' })
+      }}
     </p>
     <div ref="host" v-show="!failure && !failed && drawable"></div>
     <Teleport to="body"

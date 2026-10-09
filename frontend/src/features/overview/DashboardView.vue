@@ -307,10 +307,9 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
           </ul>
         </section>
       </div>
+      <h2 id="dashboard-analytics-title">{{ t('dashboard.analyticsTitle') }}</h2>
       <details class="analytics-details" :open="!narrow">
-        <summary>
-          <h2 id="dashboard-analytics-title">{{ t('dashboard.analyticsTitle') }}</h2>
-        </summary>
+        <summary>{{ t('dashboard.analyticsToggle') }}</summary>
         <section
           class="charts-panel"
           id="dashboard-charts"

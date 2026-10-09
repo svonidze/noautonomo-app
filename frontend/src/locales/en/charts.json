@@ -61,6 +61,7 @@
   "charts.reserve.recommended": "Recommended reserve",
   "charts.reserve.required": "Required for taxes",
   "charts.reserve.title": "Tax reserve",
+  "charts.singleValue": "{title}: one value so far, a chart needs at least two",
   "charts.table": "Data as a table",
   "charts.taxDue.aria": "Modelo 130 and Modelo 303 payments by quarter",
   "charts.taxDue.empty": "Quarterly calculations are not available",

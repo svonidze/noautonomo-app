@@ -1,7 +1,7 @@
 import { createApp, nextTick } from 'vue';
 import { afterEach, expect, test, vi } from 'vitest';
 import ChartHost from '../../src/charts/ChartHost.vue';
-import { createChartBuilders, hasEnoughData, type ChartKind } from '../../src/charts/builders.ts';
+import { chartValueCount, createChartBuilders, type ChartKind } from '../../src/charts/builders.ts';
 import type { Analytics, ChartValue } from '../../src/charts/types.ts';
 import fixture from '../fixtures/analytics.json' with { type: 'json' };
 import charts from '../../src/locales/ru/charts.json' with { type: 'json' };
@@ -15,20 +15,49 @@ function amortization(totals: ChartValue[]) {
   return data;
 }
 const spec = (totals: ChartValue[]) => createChartBuilders('ru').amortization(amortization(totals));
+// Quarterly tax due: [Modelo 130, Modelo 303] payable per quarter.
+function taxDue(payables: [ChartValue, ChartValue][]) {
+  const data = structuredClone(fixture) as unknown as Analytics;
+  data.datasets.quarterly_tax_due = {
+    points: payables.map(([m130, m303], index) => {
+      const period_key = `2026-Q${index + 1}`;
+      return {
+        period_key,
+        modelo130: { period_key, payable_minor: m130, source: 'preview' },
+        modelo303: { period_key, payable_minor: m303, source: 'preview' },
+      };
+    }),
+  };
+  return data;
+}
 
-test('a chart is drawn from two non-zero values, never from one, zeros or gaps', () => {
-  expect(hasEnoughData(spec([6500, 0, 0]))).toBe(false);
-  expect(hasEnoughData(spec([6500, 0, 6500]))).toBe(true);
-  expect(hasEnoughData(spec([0, 0, 0]))).toBe(false);
-  expect(hasEnoughData(spec([null, 6500, undefined]))).toBe(false);
-  expect(hasEnoughData(spec([-1200, 6500]))).toBe(true);
+test('a chart counts its non-zero plotted values: zeros and gaps do not count', () => {
+  expect(
+    [
+      [6500, 0, 0],
+      [6500, 0, 6500],
+      [0, 0, 0],
+      [null, 6500, undefined],
+      [-1200, 6500],
+    ].map((totals) => chartValueCount(spec(totals))),
+  ).toEqual([1, 2, 0, 1, 2]);
+  expect(
+    chartValueCount(
+      createChartBuilders('ru').taxDue(
+        taxDue([
+          [26391, 0],
+          [null, null],
+        ]),
+      ),
+    ),
+  ).toBe(1);
   // Two series in one month are two values: income beside a deductible expense is a comparison.
   const business = createChartBuilders('ru').businessResult(fixture as unknown as Analytics);
   for (const series of business.series!) series.values = series.values.map(() => 0);
   business.series![0].values[0] = 10000;
-  expect(hasEnoughData(business)).toBe(false);
+  expect(chartValueCount(business)).toBe(1);
   business.series![3].values[0] = 5000;
-  expect(hasEnoughData(business)).toBe(true);
+  expect(chartValueCount(business)).toBe(2);
   expect(spec([6500, 6500]).buckets).toEqual(['I кв. 2026', 'II кв. 2026']);
 });
 
@@ -63,12 +92,34 @@ async function mount(analytics: Analytics, kind: ChartKind = 'amortization') {
   return root;
 }
 
-test('below the threshold the slot is one line of text without a chart or an expand control', async () => {
-  const root = await mount(amortization([6500, 0, 0]));
-  expect([...root.querySelectorAll('.chart-empty')].map((line) => line.textContent)).toEqual([
+const line = (root: HTMLElement) =>
+  [...root.querySelectorAll('.chart-empty')].map((node) => node.textContent!.trim());
+
+test('without a non-zero value the slot is one line with the chart empty message', async () => {
+  const root = await mount(amortization([0, 0, 0]));
+  expect(line(root)).toEqual([
     `${charts['charts.amortization.title']}. ${charts['charts.amortization.empty']}`,
   ]);
   expect(root.querySelectorAll('svg, figure, .chart-expand-button')).toHaveLength(0);
+});
+
+test('one value is not "no data": the line says a chart needs a second one', async () => {
+  for (const [data, kind] of [
+    [amortization([6500, 0, 0]), 'amortization'],
+    [
+      taxDue([
+        [26391, 0],
+        [null, null],
+      ]),
+      'taxDue',
+    ],
+  ] as const) {
+    const root = await mount(data, kind);
+    expect(line(root), kind).toEqual([
+      `${kind === 'taxDue' ? 'Налоги к оплате по кварталам' : 'Амортизация по кварталам'}: пока одно значение, для графика нужно хотя бы два`,
+    ]);
+    expect(root.querySelectorAll('svg, figure, .chart-expand-button'), kind).toHaveLength(0);
+  }
 });
 
 test('from two non-zero values the chart, its table and its expand control are drawn', async () => {

@@ -2436,19 +2436,16 @@ textarea:focus {
   margin-top: 18px;
 }
 
-.analytics-details {
-  margin-top: 18px;
+#dashboard-analytics-title {
+  margin: 18px 0 4px;
+  font-size: 1rem;
 }
 
 .analytics-details > summary {
   padding: 6px 0;
+  color: var(--accent-dark);
+  font-weight: 600;
   cursor: pointer;
-}
-
-.analytics-details > summary h2 {
-  display: inline;
-  margin: 0;
-  font-size: 1rem;
 }
 
 .chart-empty {
@@ -2457,10 +2454,9 @@ textarea:focus {
   font-size: 0.86rem;
 }
 
-/* Charts below the data threshold collapse to one line each, listed first under the heading. */
+/* A chart below the data threshold is one line across the grid, in its own place. */
 .charts-panel > .chart-slot:has(> .chart-empty) {
   grid-column: 1 / -1;
-  order: -1;
 }
 
 .chart-slot {

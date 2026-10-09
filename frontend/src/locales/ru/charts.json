@@ -61,6 +61,7 @@
   "charts.reserve.recommended": "Рекомендуемый резерв",
   "charts.reserve.required": "Нужно на налоги",
   "charts.reserve.title": "Резерв под налоги",
+  "charts.singleValue": "{title}: пока одно значение, для графика нужно хотя бы два",
   "charts.table": "Данные таблицей",
   "charts.taxDue.aria": "Платежи Modelo 130 и Modelo 303 по кварталам",
   "charts.taxDue.empty": "Квартальные расчёты не сформированы",

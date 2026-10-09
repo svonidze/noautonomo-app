@@ -512,9 +512,10 @@ Distinguish, in this order: analytics fetch failed → "could not load"; some
 transactions lack FX → missing-FX message; only unreviewed rows exist →
 unreviewed message; forms filed without extractable values → filed-without-
 values message; calculation blocked (reserve) → blocked message; otherwise →
-plain no-data message. Below the data threshold, all-zero data included, the
-slot shows the chart title and this message as one line instead of a figure;
-the cumulative-purchases slot names missing exchange rates first.
+plain no-data message. Below the data threshold the slot shows one line instead
+of a figure: without a non-zero value, the chart title and this message (all-zero
+data included; the cumulative-purchases slot names missing exchange rates first);
+with exactly one, that the chart needs a second value (`charts.singleValue`).
 
 ### Documented deltas
 
