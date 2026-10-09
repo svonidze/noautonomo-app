@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
@@ -60,7 +60,11 @@ const supplierSearch = ref(''),
   settlementRate = ref(''),
   settlementReference = ref(''),
   technicalOpen = ref(false),
+  moreOpen = ref(false),
+  ruleOpen = ref(false),
   savedInputs = ref('');
+// A matched supplier or activity reads as text until «Изменить» opens its controls.
+const shown = reactive({ supplier: false, activity: false });
 let active = true,
   generation = 0,
   request: ReturnType<typeof operationRequest> | null = null;
@@ -134,6 +138,9 @@ async function load() {
     // Before browser defaults: the server proposal was calculated without them.
     savedInputs.value = proposalInputs(payload.value);
     defaults(payload.value, value.deduction_rules);
+    shown.supplier = !matchedSupplier.value;
+    shown.activity = !chosenActivity.value;
+    ruleOpen.value = !!payload.value.deduction;
   } catch (failure) {
     if (current(revision)) error.value = failure;
   } finally {
@@ -151,6 +158,7 @@ watch(
     settlementRate.value = '';
     settlementReference.value = '';
     technicalOpen.value = false;
+    moreOpen.value = false;
     void load();
   },
   { immediate: true },
@@ -170,13 +178,73 @@ const previewable = computed(() =>
     draft.value?.source.document.mime_type || '',
   ),
 );
+const matchedSupplier = computed(() =>
+  payload.value?.facts.counterparty_id && !payload.value.supplier
+    ? suppliers.value.find(
+        (party) => party.counterparty_id === payload.value!.facts.counterparty_id,
+      )
+    : undefined,
+);
+const chosenActivity = computed(() =>
+  draft.value?.activities.find(
+    (activity) => activity.business_activity_id === payload.value?.facts.business_activity_id,
+  ),
+);
+async function change(part: keyof typeof shown, id: string) {
+  shown[part] = true;
+  await nextTick();
+  document.getElementById(id)?.focus();
+}
+// The server asks for this reason when an approval is withdrawn or a source fact is corrected, so
+// a first review shows it only after such a correction (or when it already holds text).
+const sourceFacts = [
+  'document_number',
+  'issued_on',
+  'transaction_date',
+  'booking_date',
+  'currency',
+  'gross_minor',
+  'counterparty_id',
+];
+const changeReasonShown = computed(
+  () =>
+    !['received', 'extracted', 'needs_review'].includes(
+      draft.value?.source.transaction?.lifecycle_status || '',
+    ) ||
+    !!payload.value?.change_reason ||
+    sourceFacts.some(
+      (key) =>
+        (payload.value?.facts[key] ?? null) !== (draft.value?.source_values.facts[key] ?? null),
+    ),
+);
+// The currency and the booking date are usually EUR and the transaction date; other values unfold.
+const factField = (path: string) => factsFields.find((field) => field.path === path)!;
+const mainFacts = [
+  'facts.document_number',
+  'facts.gross_minor',
+  'facts.issued_on',
+  'facts.transaction_date',
+].map(factField);
+const moreFacts = ['facts.currency', 'facts.booking_date'].map(factField);
+watch(
+  () =>
+    !!payload.value &&
+    (payload.value.facts.currency !== 'EUR' ||
+      payload.value.facts.booking_date !== payload.value.facts.transaction_date),
+  (unusual) => {
+    if (unusual) moreOpen.value = true;
+  },
+);
 const sourceUrl = computed(
   () =>
     `/api/document/${encodeURIComponent(draft.value?.source.document.document_id || '')}/content`,
 );
+const rateField = taxFields.find((field) => field.path.endsWith('rate_basis_points'))!;
 const visibleTaxes = computed(() =>
   taxFields.filter(
-    (field) => !payload.value?.asset || !field.path.endsWith('deductible_irpf_minor'),
+    (field) =>
+      field !== rateField &&
+      (!payload.value?.asset || !field.path.endsWith('deductible_irpf_minor')),
   ),
 );
 const allowedTaxes = computed(() =>
@@ -455,6 +523,8 @@ const remaining = computed<RemainingItem[]>(() => {
       text: formatMessage(messageIds.includes(key) ? key : 'issues.default', {}, locale.value),
     };
   });
+  if (payload.value.decision.tax_treatment.rate_basis_points == null)
+    items.push({ id: fieldId(rateField.path), text: t('workflow.remaining.ivaRate') });
   const rate = payload.value.facts.currency !== 'EUR' && !payload.value.fx;
   if (rate) items.push({ id: fxTarget.value, text: t('workflow.remaining.rate') });
   for (const name of proposal.value?.missing ?? [])
@@ -624,7 +694,7 @@ const supplierHidden = (party: Counterparty) =>
               </h2>
               <div class="wf-grid">
                 <WorkflowField
-                  v-for="field in factsFields"
+                  v-for="field in mainFacts"
                   :key="field.path"
                   :field="field"
                   :currency="
@@ -636,47 +706,99 @@ const supplierHidden = (party: Counterparty) =>
                   @update:model-value="update(field.path, $event)"
                 />
               </div>
-              <label
-                ><span>{{ t('workflow.findSupplierByNameTaxId') }}</span
-                ><input id="wf-supplier-search" v-model="supplierSearch" type="search"
-              /></label>
-              <label
-                ><span>{{ t('workflow.supplier') }}</span
-                ><select
-                  :id="fieldId('facts.counterparty_id')"
-                  data-p="facts.counterparty_id"
-                  :value="payload.facts.counterparty_id ?? ''"
-                  @input="select('facts.counterparty_id', $event)"
+              <details
+                class="wf-more"
+                :open="moreOpen"
+                @toggle="moreOpen = ($event.target as HTMLDetailsElement).open"
+              >
+                <summary>
+                  {{
+                    t('workflow.moreFacts', {
+                      currency: String(payload.facts.currency || '—'),
+                      date: formatDateText(payload.facts.booking_date, locale),
+                    })
+                  }}
+                </summary>
+                <div class="wf-grid">
+                  <WorkflowField
+                    v-for="field in moreFacts"
+                    :key="field.path"
+                    :field="field"
+                    :model-value="fieldValue(payload, field.path)"
+                    @update:model-value="update(field.path, $event)"
+                  />
+                </div>
+              </details>
+              <p v-if="matchedSupplier && !shown.supplier" class="wf-chosen">
+                <span>{{ t('workflow.supplier') }}</span>
+                <strong
+                  >{{ matchedSupplier.display_name }} ·
+                  {{ matchedSupplier.tax_id || matchedSupplier.vat_id || '—' }}</strong
                 >
-                  <option value=""></option>
-                  <option
-                    v-for="party in suppliers"
-                    :key="party.counterparty_id"
-                    :value="party.counterparty_id"
-                    :hidden="supplierHidden(party)"
+                <button
+                  type="button"
+                  class="text-button"
+                  :aria-label="t('workflow.changeSupplier')"
+                  @click="change('supplier', 'wf-supplier-search')"
+                >
+                  {{ t('workflow.change') }}
+                </button>
+              </p>
+              <template v-else>
+                <label
+                  ><span>{{ t('workflow.findSupplierByNameTaxId') }}</span
+                  ><input id="wf-supplier-search" v-model="supplierSearch" type="search"
+                /></label>
+                <label
+                  ><span>{{ t('workflow.supplier') }}</span
+                  ><select
+                    :id="fieldId('facts.counterparty_id')"
+                    data-p="facts.counterparty_id"
+                    :value="payload.facts.counterparty_id ?? ''"
+                    @input="select('facts.counterparty_id', $event)"
                   >
-                    {{ party.display_name }} · {{ party.tax_id || party.vat_id || '—' }}
-                  </option>
-                </select></label
-              >
-              <button
-                id="wf-new-supplier"
-                class="secondary-button"
-                type="button"
-                @click="newSupplier"
-              >
-                {{ t('workflow.newSupplier') }}
-              </button>
-              <div v-if="payload.supplier" class="wf-grid">
-                <WorkflowField
-                  v-for="field in supplierFields"
-                  :key="field.path"
-                  :field="field"
-                  :model-value="fieldValue(payload, field.path)"
-                  @update:model-value="update(field.path, $event)"
-                />
-              </div>
-              <label
+                    <option value=""></option>
+                    <option
+                      v-for="party in suppliers"
+                      :key="party.counterparty_id"
+                      :value="party.counterparty_id"
+                      :hidden="supplierHidden(party)"
+                    >
+                      {{ party.display_name }} · {{ party.tax_id || party.vat_id || '—' }}
+                    </option>
+                  </select></label
+                >
+                <button
+                  id="wf-new-supplier"
+                  class="secondary-button"
+                  type="button"
+                  @click="newSupplier"
+                >
+                  {{ t('workflow.newSupplier') }}
+                </button>
+                <div v-if="payload.supplier" class="wf-grid">
+                  <WorkflowField
+                    v-for="field in supplierFields"
+                    :key="field.path"
+                    :field="field"
+                    :model-value="fieldValue(payload, field.path)"
+                    @update:model-value="update(field.path, $event)"
+                  />
+                </div>
+              </template>
+              <p v-if="chosenActivity && !shown.activity" class="wf-chosen">
+                <span>{{ t('workflow.businessActivity') }}</span>
+                <strong>{{ chosenActivity.description }}</strong>
+                <button
+                  type="button"
+                  class="text-button"
+                  :aria-label="t('workflow.changeActivity')"
+                  @click="change('activity', fieldId('facts.business_activity_id'))"
+                >
+                  {{ t('workflow.change') }}
+                </button>
+              </p>
+              <label v-else
                 ><span>{{ t('workflow.businessActivity') }}</span
                 ><select
                   :id="fieldId('facts.business_activity_id')"
@@ -715,6 +837,7 @@ const supplierHidden = (party: Counterparty) =>
                 @update:model-value="update('manual_review_reason', $event)"
               />
               <WorkflowField
+                v-if="changeReasonShown"
                 :field="changeReasonField"
                 :model-value="payload.change_reason"
                 @update:model-value="update('change_reason', $event)"
@@ -756,175 +879,189 @@ const supplierHidden = (party: Counterparty) =>
                   @update:model-value="update(field.path, $event)"
                 />
               </div>
-              <section v-if="rules.length" id="wf-rule" class="wf-rule">
-                <h3>{{ t('expenseRules.title') }}</h3>
-                <p>{{ t('expenseRules.intro') }}</p>
-                <label
-                  ><span>{{ t('expenseRules.select') }}</span
-                  ><select
-                    id="wf-rule-select"
-                    :value="payload.deduction?.rule_id ?? ''"
-                    @change="onRule"
-                  >
-                    <option value="">{{ t('expenseRules.noRule') }}</option>
-                    <option v-for="item in rules" :key="item.id" :value="item.id">
-                      {{
-                        item.id === parserRule
-                          ? t('expenseRules.fromParser', { rule: ruleName(item.id) })
-                          : ruleName(item.id)
-                      }}
-                    </option>
-                  </select></label
-                >
-                <div v-if="rule && payload.deduction" class="wf-grid">
-                  <template v-for="name in rule.facts" :key="name">
-                    <WorkflowField
-                      v-if="name === 'area_share'"
-                      :field="{
-                        path: 'decision.tax_treatment.deductible_ratio',
-                        label: 'expenseRules.fact.area_share',
-                        kind: 'ratio',
-                        type: 'number',
-                      }"
-                      :model-value="tax.deductible_ratio"
-                      @update:model-value="
-                        update('decision.tax_treatment.deductible_ratio', $event)
-                      "
-                    />
-                    <label v-else-if="['persons', 'persons_disabled', 'days'].includes(name)"
-                      ><span>{{ ruleText(`expenseRules.fact.${name}`) }}</span
-                      ><input
-                        :id="fieldId(`deduction.facts.${name}`)"
-                        type="number"
-                        min="0"
-                        max="366"
-                        step="1"
-                        :data-p="`deduction.facts.${name}`"
-                        :value="payload.deduction.facts[name] ?? ''"
-                        @input="setCount(name, $event)"
-                    /></label>
-                    <label v-else-if="name === 'evidence_confirmed'" class="wf-check"
-                      ><input
-                        :id="fieldId('deduction.facts.evidence_confirmed')"
-                        type="checkbox"
-                        data-p="deduction.facts.evidence_confirmed"
-                        :checked="payload.deduction.facts.evidence_confirmed === true"
-                        @input="check('deduction.facts.evidence_confirmed', $event)"
-                      /><span>{{ t('expenseRules.fact.evidence_confirmed') }}</span></label
+              <details
+                v-if="rules.length"
+                id="wf-rule"
+                class="wf-rule"
+                :open="ruleOpen"
+                @toggle="ruleOpen = ($event.target as HTMLDetailsElement).open"
+              >
+                <summary>
+                  {{
+                    t('expenseRules.summary', {
+                      rule: rule ? ruleName(rule.id) : t('expenseRules.noRule'),
+                    })
+                  }}
+                </summary>
+                <div class="wf-rule-body">
+                  <p>{{ t('expenseRules.intro') }}</p>
+                  <label
+                    ><span>{{ t('expenseRules.select') }}</span
+                    ><select
+                      id="wf-rule-select"
+                      :value="payload.deduction?.rule_id ?? ''"
+                      @change="onRule"
                     >
-                    <label v-else
-                      ><span>{{ ruleText(`expenseRules.fact.${name}`) }}</span
-                      ><select
-                        :id="fieldId(`deduction.facts.${name}`)"
-                        :data-p="`deduction.facts.${name}`"
-                        :value="
-                          payload.deduction.facts[name] == null
-                            ? ''
-                            : String(payload.deduction.facts[name])
-                        "
-                        @input="select(`deduction.facts.${name}`, $event, true)"
-                      >
-                        <option value=""></option>
-                        <option value="true">{{ t('expenseRules.yes') }}</option>
-                        <option value="false">{{ t('expenseRules.no') }}</option>
-                      </select></label
-                    >
-                  </template>
-                </div>
-                <small v-if="rule?.facts.includes('area_share')">{{
-                  t('expenseRules.areaHint')
-                }}</small>
-                <small v-if="rule?.facts.includes('evidence_confirmed')">{{
-                  t('expenseRules.evidencePrompt')
-                }}</small>
-                <div v-if="rule" id="wf-rule-card" class="wf-rule-card">
-                  <div class="wf-rule-live" aria-live="polite">
-                    <template v-if="proposal">
-                      <p>
-                        <strong>{{ ruleText(`expenseRules.status.${proposal.status}`) }}</strong>
-                        <span
-                          v-if="proposal.risk"
-                          class="badge wf-risk"
-                          :class="riskBadge[proposal.risk]"
-                          >{{ ruleText(`expenseRules.risk.${proposal.risk}`) }}</span
-                        >
-                      </p>
-                      <dl v-if="proposal.irpf_minor != null" class="review-facts-list">
-                        <div>
-                          <dt>{{ t('expenseRules.irpfCeiling') }}</dt>
-                          <dd>{{ eur(proposal.irpf_minor / 100, locale) }}</dd>
-                        </div>
-                        <div>
-                          <dt>{{ t('expenseRules.vatCeiling') }}</dt>
-                          <dd>
-                            {{
-                              proposal.vat_minor == null
-                                ? t('expenseRules.vatManual')
-                                : eur(proposal.vat_minor / 100, locale)
-                            }}
-                          </dd>
-                        </div>
-                      </dl>
-                    </template>
-                    <p v-else>{{ t('expenseRules.saveToCalculate') }}</p>
-                    <p v-if="proposal && stale" class="wf-rule-stale">
-                      {{ t('expenseRules.saveToRecalculate') }}
-                    </p>
-                  </div>
-                  <template v-if="proposal">
-                    <template v-if="proposal.missing.length"
-                      ><p>{{ t('expenseRules.missingTitle') }}</p>
-                      <ul class="wf-rule-missing">
-                        <li v-for="name in proposal.missing" :key="name">
-                          {{ ruleText(`expenseRules.fact.${name}`) }}
-                        </li>
-                      </ul></template
-                    >
-                    <ul class="wf-rule-explanation">
-                      <li v-for="(note, index) in proposal.explanation" :key="index">
+                      <option value="">{{ t('expenseRules.noRule') }}</option>
+                      <option v-for="item in rules" :key="item.id" :value="item.id">
                         {{
-                          ruleText(
-                            `expenseRules.code.${note.code}`,
-                            explanationValues(note.params, locale),
-                          )
+                          item.id === parserRule
+                            ? t('expenseRules.fromParser', { rule: ruleName(item.id) })
+                            : ruleName(item.id)
                         }}
-                      </li>
-                    </ul>
-                    <p class="wf-rule-risk">
-                      {{ ruleText(`expenseRules.riskReason.${proposal.rule_id}`) }}
-                    </p>
-                    <details v-if="proposal.sources?.length">
-                      <summary>{{ t('expenseRules.sources') }}</summary>
-                      <ul>
-                        <li v-for="source in proposal.sources" :key="source.url + source.title">
-                          <a :href="source.url" target="_blank" rel="noreferrer">{{
-                            source.title
-                          }}</a>
-                          ·
-                          {{
-                            t('expenseRules.sourceChecked', {
-                              date: formatDateText(source.checked_on, locale),
-                            })
-                          }}
-                          <template v-if="source.source_kind === 'secondary'">
-                            · {{ t('expenseRules.secondary') }}</template
+                      </option>
+                    </select></label
+                  >
+                  <div v-if="rule && payload.deduction" class="wf-grid">
+                    <template v-for="name in rule.facts" :key="name">
+                      <WorkflowField
+                        v-if="name === 'area_share'"
+                        :field="{
+                          path: 'decision.tax_treatment.deductible_ratio',
+                          label: 'expenseRules.fact.area_share',
+                          kind: 'ratio',
+                          type: 'number',
+                        }"
+                        :model-value="tax.deductible_ratio"
+                        @update:model-value="
+                          update('decision.tax_treatment.deductible_ratio', $event)
+                        "
+                      />
+                      <label v-else-if="['persons', 'persons_disabled', 'days'].includes(name)"
+                        ><span>{{ ruleText(`expenseRules.fact.${name}`) }}</span
+                        ><input
+                          :id="fieldId(`deduction.facts.${name}`)"
+                          type="number"
+                          min="0"
+                          max="366"
+                          step="1"
+                          :data-p="`deduction.facts.${name}`"
+                          :value="payload.deduction.facts[name] ?? ''"
+                          @input="setCount(name, $event)"
+                      /></label>
+                      <label v-else-if="name === 'evidence_confirmed'" class="wf-check"
+                        ><input
+                          :id="fieldId('deduction.facts.evidence_confirmed')"
+                          type="checkbox"
+                          data-p="deduction.facts.evidence_confirmed"
+                          :checked="payload.deduction.facts.evidence_confirmed === true"
+                          @input="check('deduction.facts.evidence_confirmed', $event)"
+                        /><span>{{ t('expenseRules.fact.evidence_confirmed') }}</span></label
+                      >
+                      <label v-else
+                        ><span>{{ ruleText(`expenseRules.fact.${name}`) }}</span
+                        ><select
+                          :id="fieldId(`deduction.facts.${name}`)"
+                          :data-p="`deduction.facts.${name}`"
+                          :value="
+                            payload.deduction.facts[name] == null
+                              ? ''
+                              : String(payload.deduction.facts[name])
+                          "
+                          @input="select(`deduction.facts.${name}`, $event, true)"
+                        >
+                          <option value=""></option>
+                          <option value="true">{{ t('expenseRules.yes') }}</option>
+                          <option value="false">{{ t('expenseRules.no') }}</option>
+                        </select></label
+                      >
+                    </template>
+                  </div>
+                  <small v-if="rule?.facts.includes('area_share')">{{
+                    t('expenseRules.areaHint')
+                  }}</small>
+                  <small v-if="rule?.facts.includes('evidence_confirmed')">{{
+                    t('expenseRules.evidencePrompt')
+                  }}</small>
+                  <div v-if="rule" id="wf-rule-card" class="wf-rule-card">
+                    <div class="wf-rule-live" aria-live="polite">
+                      <template v-if="proposal">
+                        <p>
+                          <strong>{{ ruleText(`expenseRules.status.${proposal.status}`) }}</strong>
+                          <span
+                            v-if="proposal.risk"
+                            class="badge wf-risk"
+                            :class="riskBadge[proposal.risk]"
+                            >{{ ruleText(`expenseRules.risk.${proposal.risk}`) }}</span
                           >
+                        </p>
+                        <dl v-if="proposal.irpf_minor != null" class="review-facts-list">
+                          <div>
+                            <dt>{{ t('expenseRules.irpfCeiling') }}</dt>
+                            <dd>{{ eur(proposal.irpf_minor / 100, locale) }}</dd>
+                          </div>
+                          <div>
+                            <dt>{{ t('expenseRules.vatCeiling') }}</dt>
+                            <dd>
+                              {{
+                                proposal.vat_minor == null
+                                  ? t('expenseRules.vatManual')
+                                  : eur(proposal.vat_minor / 100, locale)
+                              }}
+                            </dd>
+                          </div>
+                        </dl>
+                      </template>
+                      <p v-else>{{ t('expenseRules.saveToCalculate') }}</p>
+                      <p v-if="proposal && stale" class="wf-rule-stale">
+                        {{ t('expenseRules.saveToRecalculate') }}
+                      </p>
+                    </div>
+                    <template v-if="proposal">
+                      <template v-if="proposal.missing.length"
+                        ><p>{{ t('expenseRules.missingTitle') }}</p>
+                        <ul class="wf-rule-missing">
+                          <li v-for="name in proposal.missing" :key="name">
+                            {{ ruleText(`expenseRules.fact.${name}`) }}
+                          </li>
+                        </ul></template
+                      >
+                      <ul class="wf-rule-explanation">
+                        <li v-for="(note, index) in proposal.explanation" :key="index">
+                          {{
+                            ruleText(
+                              `expenseRules.code.${note.code}`,
+                              explanationValues(note.params, locale),
+                            )
+                          }}
                         </li>
                       </ul>
-                    </details>
-                    <p v-if="copyPair" class="wf-rule-pair">{{ copyPair }}</p>
-                    <button
-                      id="wf-rule-copy"
-                      type="button"
-                      class="secondary-button"
-                      :disabled="stale || !proposal.suggested"
-                      @click="copyIntoFields"
-                    >
-                      {{ t('expenseRules.copy') }}
-                    </button>
-                  </template>
+                      <p class="wf-rule-risk">
+                        {{ ruleText(`expenseRules.riskReason.${proposal.rule_id}`) }}
+                      </p>
+                      <details v-if="proposal.sources?.length">
+                        <summary>{{ t('expenseRules.sources') }}</summary>
+                        <ul>
+                          <li v-for="source in proposal.sources" :key="source.url + source.title">
+                            <a :href="source.url" target="_blank" rel="noreferrer">{{
+                              source.title
+                            }}</a>
+                            ·
+                            {{
+                              t('expenseRules.sourceChecked', {
+                                date: formatDateText(source.checked_on, locale),
+                              })
+                            }}
+                            <template v-if="source.source_kind === 'secondary'">
+                              · {{ t('expenseRules.secondary') }}</template
+                            >
+                          </li>
+                        </ul>
+                      </details>
+                      <p v-if="copyPair" class="wf-rule-pair">{{ copyPair }}</p>
+                      <button
+                        id="wf-rule-copy"
+                        type="button"
+                        class="secondary-button"
+                        :disabled="stale || !proposal.suggested"
+                        @click="copyIntoFields"
+                      >
+                        {{ t('expenseRules.copy') }}
+                      </button>
+                    </template>
+                  </div>
                 </div>
-              </section>
+              </details>
               <h3 id="wf-vat-title">{{ t('review.vatInvestment') }}</h3>
               <select
                 :id="fieldId('decision.tax_treatment.vat_investment_good')"
@@ -1083,6 +1220,10 @@ const supplierHidden = (party: Counterparty) =>
                       </option>
                     </select></label
                   ><WorkflowField
+                    :field="rateField"
+                    :model-value="fieldValue(payload, rateField.path)"
+                    @update:model-value="update(rateField.path, $event)"
+                  /><WorkflowField
                     v-for="field in visibleTechnical"
                     :key="field.path"
                     :field="field"

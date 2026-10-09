@@ -112,12 +112,28 @@ export interface FieldSpec {
   label: MessageId;
   kind?: 'text' | 'money' | 'rate' | 'ratio' | 'boolean';
   type?: 'text' | 'date' | 'number';
+  hint?: MessageId;
 }
 export const factsFields: FieldSpec[] = [
   { path: 'facts.document_number', label: 'workflow.documentNumber' },
-  { path: 'facts.issued_on', label: 'workflow.issueDate', type: 'date' },
-  { path: 'facts.transaction_date', label: 'workflow.accountingDate', type: 'date' },
-  { path: 'facts.booking_date', label: 'workflow.bookingDate', type: 'date' },
+  {
+    path: 'facts.issued_on',
+    label: 'workflow.issueDate',
+    type: 'date',
+    hint: 'workflow.hint.issueDate',
+  },
+  {
+    path: 'facts.transaction_date',
+    label: 'workflow.accountingDate',
+    type: 'date',
+    hint: 'workflow.hint.transactionDate',
+  },
+  {
+    path: 'facts.booking_date',
+    label: 'workflow.bookingDate',
+    type: 'date',
+    hint: 'workflow.hint.bookingDate',
+  },
   { path: 'facts.currency', label: 'workflow.originalCurrency' },
   {
     path: 'facts.gross_minor',

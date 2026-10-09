@@ -45,21 +45,28 @@ const preview = computed(() => {
   }).format(value / 100);
   return t('review.irpfPreview', { amount });
 });
+// A hint explains the field without becoming part of its name.
+const id = computed(() => fieldId(props.field.path));
 </script>
 <template>
   <label
-    ><span
+    ><span :id="`${id}-label`"
       >{{ formatMessage(field.label, {}, locale) }}
       <output v-if="field.kind === 'money'" class="review-irpf-preview" data-eur-preview>{{
         preview
       }}</output></span
     ><input
-      :id="fieldId(field.path)"
+      :id="id"
       v-model="raw"
       :data-p="field.path"
       :data-kind="field.kind || 'text'"
       :type="field.type || 'text'"
       :step="field.type === 'number' ? '0.01' : undefined"
+      :aria-labelledby="field.hint ? `${id}-label` : undefined"
+      :aria-describedby="field.hint ? `${id}-hint` : undefined"
       @input="emit('update:modelValue', read())"
-  /></label>
+    /><small v-if="field.hint" :id="`${id}-hint`" class="wf-hint">{{
+      formatMessage(field.hint, {}, locale)
+    }}</small></label
+  >
 </template>

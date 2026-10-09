@@ -64,10 +64,17 @@ export function restoreFocus(host: HTMLElement | null, anchor: FocusAnchor | nul
     (target as HTMLInputElement | HTMLTextAreaElement).setSelectionRange(...anchor.selection);
 }
 
-/** Goes to an in-page target the way a fragment link would, without a router navigation: scrolls it
- * into view and focuses it. */
+/** Goes to an in-page target the way a fragment link would, without a router navigation: opens the
+ * closed <details> around it, scrolls it into view and focuses it. */
 export function focusById(id: string, block: ScrollLogicalPosition = 'center'): void {
   const target = document.getElementById(id);
-  target?.scrollIntoView?.({ block });
-  target?.focus({ preventScroll: true });
+  if (!target) return;
+  for (
+    let details = target.closest('details');
+    details;
+    details = details.parentElement?.closest('details') ?? null
+  )
+    details.open = true;
+  target.scrollIntoView?.({ block });
+  target.focus({ preventScroll: true });
 }

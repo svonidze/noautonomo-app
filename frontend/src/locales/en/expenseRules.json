@@ -1,5 +1,6 @@
 {
   "expenseRules.title": "Deduction rule",
+  "expenseRules.summary": "Deduction rule: {rule}",
   "expenseRules.select": "Rule for this expense",
   "expenseRules.noRule": "No rule — enter manually",
   "expenseRules.fromParser": "{rule} (from document parser)",

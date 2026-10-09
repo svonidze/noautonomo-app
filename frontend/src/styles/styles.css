@@ -2839,7 +2839,7 @@ textarea:focus {
 .wf-fields fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 14px; }
 .wf-fields label { display: grid; gap: 6px; min-width: 0; }
 .wf-fields input, .wf-fields select { width: 100%; min-width: 0; padding: 10px; box-sizing: border-box; }
-.wf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .wf-fields .wf-check { display: flex; align-items: start; gap: 8px; }
 .wf-check input { width: auto; margin-top: 4px; }
 .wf-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
@@ -2869,6 +2869,14 @@ textarea:focus {
 /* A secondary action keeps its own width inside the form grid. */
 .wf-fields button { justify-self: start; }
 .wf-step + .wf-step { padding-top: 18px; border-top: 1px solid var(--line); }
+.wf-hint { color: var(--muted); font-size: .85rem; line-height: 1.4; }
+/* A matched supplier or activity is one line of text with «Изменить». */
+.wf-chosen { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; }
+.wf-chosen > span { color: var(--muted); }
+.wf-chosen strong { overflow-wrap: anywhere; }
+.wf-more > summary, .wf-rule > summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.wf-more[open] > summary, .wf-rule[open] > summary { margin-bottom: 12px; }
+.wf-rule-body { display: grid; gap: 10px; }
 /* Without a previewable original the source is one compact line above the form. */
 .wf-layout-compact { grid-template-columns: minmax(0, 1fr); }
 .wf-layout-compact .wf-source { position: static; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }

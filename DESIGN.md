@@ -590,3 +590,16 @@ service stops or full-root backups. Keep the current palette, components and RU/
   post-commit refresh/cleanup failures offer repair without reposting.
 - Reuse label/focus/error patterns at desktop and 375px width. The original must
   remain accessible if embedding fails. One expense or asset per workflow.
+- The form reads as three in-page steps under a strip of anchors («1 Документ ·
+  2 Налоги · 3 Итог»; no new routes). «Что осталось» above them lists the
+  source's open questions, a missing IVA or EUR rate and the rule's missing
+  facts, each a link that focuses the control settling it. By default at most
+  14 controls show: a matched supplier or activity is text with «Изменить»,
+  the currency and booking date fold while they are EUR and the transaction
+  date, the rule folds until one is chosen, and the IVA rate sits with the
+  additional tax fields. The three dates carry one-line hints; the correction
+  reason appears only for an approved record or a corrected source fact, the
+  cases in which the server asks for it. After «Проверить итог» the result
+  scrolls into view and takes focus, and «Подтвердить и провести» becomes the
+  one primary action. Without a previewable original (PDF, JPEG, PNG) the
+  source is one compact line with «Открыть документ».

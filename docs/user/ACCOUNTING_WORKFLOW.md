@@ -22,27 +22,36 @@ administrative operation; it never appears in the expense form.
 1. Open **Expenses → New entry**, choose the period and upload the original.
    Extraction supplies candidates, not confirmed accounting facts. An existing
    document should be reopened rather than uploaded again to correct its data.
-2. The expense review opens beside the original. Check or edit the number,
-   issue date, transaction date, booking date, currency and gross amount. Select
-   the business activity and enter the business purpose and decision basis.
-3. Search the supplier by name or tax identifier. Select the existing card when
-   its identifier matches. **New supplier** creates a card only at confirmation;
-   a collision with any existing identifier blocks creation. A shop's name does
-   not rename a shared supplier. Use the separate contact correction action if
-   a verified shared name correction is needed.
+2. The expense review opens beside the original in three steps: Document, Taxes
+   and deductions, Result. **Still to do** above them lists the source's open
+   questions and missing facts; each item jumps to its field. Check or edit the
+   number, issue date, transaction date and gross amount; the currency and
+   booking date sit under one folded line while they are EUR and the
+   transaction date. Select the business activity and enter the business
+   purpose and decision basis.
+3. A supplier that already matches shows as one line; **Change** opens the
+   search. Search the supplier by name or tax identifier. Select the existing
+   card when its identifier matches. **New supplier** creates a card only at
+   confirmation; a collision with any existing identifier blocks creation. A
+   shop's name does not rename a shared supplier. Use the separate contact
+   correction action if a verified shared name correction is needed.
 4. Choose **Ordinary expense** or **Equipment**. Confirm the tax classification,
    base, IVA quota and deduction, and the separate IVA current/investment choice.
-   Ordinary expenses also show the current IRPF deduction. Foreign-currency
-   amounts need a confirmed exchange rate and reconciled EUR tax amounts.
-   A **Deduction rule** can cap these amounts; see below.
+   Ordinary expenses also show the current IRPF deduction. The IVA rate sits
+   under **Additional tax decision fields**. Foreign-currency amounts need a
+   confirmed exchange rate and reconciled EUR tax amounts. A **Deduction
+   rule** can cap these amounts; see below.
 5. **Save draft** saves on the server so you can close the browser and resume.
    Unsaved fields are not durable. A saved change to an approved but unposted
-   entry invalidates approval and requires a reason, retained in audit history.
+   entry invalidates approval and requires a reason, retained in audit history;
+   the reason field also appears after a source fact is corrected.
    If another session changed the source, reload and review it explicitly.
-6. **Preview result** validates the current data without posting. Check the exact
-   purchase, IVA deduction, IRPF deduction now and future depreciation. The
-   tax amounts must reconcile to the original's converted gross. Mixed-rate or
-   composite invoices need a separate workflow; do not force them into one row.
+6. **Preview result** validates the current data without posting and moves to
+   the Result step, where **Confirm and post** becomes the main action. Check
+   the exact purchase, IVA deduction, IRPF deduction now and future
+   depreciation. The tax amounts must reconcile to the original's converted
+   gross. Mixed-rate or composite invoices need a separate workflow; do not
+   force them into one row.
 7. **Confirm and post** posts only this expense and the depreciation explicitly
    shown as due. It neither pays an invoice nor submits a return. Repeated
    requests use the saved action result and cannot create another acquisition.
@@ -98,8 +107,8 @@ proposal. Without a rule, you enter the amounts yourself, as before. Intake
 may preselect a rule from the parser category; check it or change it.
 
 In the expense form, **Deduction rule** lists the catalog rules and **No rule —
-enter manually**. A rule preselected by intake is marked "from document
-parser". Fill in the facts the rule asks for and **Save draft**: the proposal
+enter manually**; while no rule is chosen it is one folded line naming that
+choice. A rule preselected by intake is marked "from document parser". Fill in the facts the rule asks for and **Save draft**: the proposal
 card then shows the IRPF and IVA ceilings, how they were calculated, any
 missing facts, the risk and the sources with their check dates. After an
 unsaved change the card asks you to save the draft to recalculate. **Copy into

@@ -1,5 +1,6 @@
 {
   "expenseRules.title": "Правило вычета",
+  "expenseRules.summary": "Правило вычета: {rule}",
   "expenseRules.select": "Правило для этого расхода",
   "expenseRules.noRule": "Без правила — ввести вручную",
   "expenseRules.fromParser": "{rule} (по распознаванию документа)",
