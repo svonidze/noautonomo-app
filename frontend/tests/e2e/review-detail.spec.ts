@@ -8,6 +8,7 @@ import {
   DOCUMENT_ID as DOC,
 } from '../fixtures/review.ts';
 import type { ExpensePayload } from '../../src/features/review/workflow-model.ts';
+import issues from '../../src/locales/ru/issues.json' with { type: 'json' };
 const path = `/review/${ID}?period=2026-Q3`;
 async function detail(page: Page, kind = 'income', posted = () => false) {
   await page.route(`**/api/transactions/${ID}`, (route) =>
@@ -79,7 +80,7 @@ test('native save/preview/confirm preserves units and independent IVA choice, th
     .locator('[data-p="decision.tax_treatment.tax_code"]')
     .selectOption('eu_service_expense');
   await page.locator('#wf-form button[type="submit"]').click();
-  await expect(page.locator('#wf-preview')).toBeVisible();
+  await expect(page.locator('#wf-confirm')).toBeVisible();
   expect(saved?.asset?.annual_rate_basis_points).toBe(2550);
   expect(saved?.decision.tax_treatment.vat_investment_good).toBe(false);
   expect(saved?.decision.tax_treatment.include_modelo130).toBe(false);
@@ -98,6 +99,90 @@ test('native save/preview/confirm preserves units and independent IVA choice, th
   await page.locator('#wf-open-posted').click();
   await expect(page).toHaveURL(new RegExp(`/expenses/${ID}\\?`));
   expect(await page.evaluate(() => history.length)).toBe(before + 1);
+});
+test('a new reviewer sees what remains, the result in view and reaches the confirmation by keyboard', async ({
+  page,
+}) => {
+  await native(page);
+  const draft = nativeFixture();
+  draft.source.issues = [{ issue_code: 'document_classification_review' }];
+  await page.route(`**/api/expense-workflows/${ID}`, (route) => route.fulfill({ json: draft }));
+  await page.route(`**/api/expense-workflows/${ID}/save`, (route) =>
+    route.fulfill({
+      json: { ...draft, payload: route.request().postDataJSON().payload, draft_version: 2 },
+    }),
+  );
+  await page.route(`**/api/expense-workflows/${ID}/preview`, (route) =>
+    route.fulfill({
+      json: {
+        preview_token: 'synthetic-token',
+        supplier: 'Synthetic supplier',
+        period: '2026-Q3',
+        currency: 'EUR',
+        gross_minor: 12100,
+        deductible_vat_minor: 2100,
+        deductible_irpf_minor: 10000,
+        future_depreciation_minor: 0,
+        schedule: [],
+      },
+    }),
+  );
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(path);
+    await expect(page.locator('nav.wf-steps a')).toHaveText(['1 Документ', '2 Налоги', '3 Итог']);
+    const remaining = page.locator('.wf-remaining');
+    await expect(remaining.locator('h3')).toHaveText('Что осталось');
+    const question = remaining.getByRole('link', {
+      name: issues['issues.messages.document_classification_review'],
+    });
+    await expect(question).toHaveAttribute('href', '#wf-manual_review_reason');
+    await question.click();
+    await expect(page.locator('#wf-manual_review_reason')).toBeFocused();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath(`expense-review-${width}.png`),
+      fullPage: true,
+    });
+    const preview = page.locator('#wf-preview');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(preview).not.toBeInViewport();
+    await page.locator('#wf-form button[type="submit"]').click();
+    await expect(preview.locator('#wf-confirm')).toBeVisible();
+    await expect(preview).toBeInViewport();
+    await expect(page.locator('#wf-preview-title')).toBeFocused();
+    await expect(page.locator('nav.wf-steps a').nth(2)).toHaveAttribute('aria-current', 'step');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#wf-confirm')).toBeFocused();
+    await page.screenshot({
+      path: test.info().outputPath(`expense-review-result-${width}.png`),
+      fullPage: true,
+    });
+  }
+  // The whole form is reachable in reading order from the step links to the confirmation.
+  await page.locator('nav.wf-steps a').first().focus();
+  const visited: string[] = [];
+  for (let press = 0; press < 200 && visited.at(-1) !== 'wf-confirm'; press++) {
+    await page.keyboard.press('Tab');
+    visited.push(
+      await page.evaluate(() => {
+        const active = document.activeElement as HTMLElement | null;
+        return active?.dataset.p || active?.id || '';
+      }),
+    );
+  }
+  expect(visited.at(-1)).toBe('wf-confirm');
+  const order = [
+    'facts.document_number',
+    'manual_review_reason',
+    'decision.tax_treatment.tax_code',
+    'decision.business_purpose',
+    'wf-save',
+  ].map((name) => visited.indexOf(name));
+  expect(order.every((position) => position >= 0)).toBe(true);
+  expect(order).toEqual([...order].sort((a, b) => a - b));
 });
 test('native conflict reset is explicit and edits invalidate a posting preview', async ({
   page,
@@ -144,9 +229,9 @@ test('native conflict reset is explicit and edits invalidate a posting preview',
   await page.locator('#wf-reset').click();
   await expect(page.locator('[data-p="facts.document_number"]')).toHaveValue('SYN-CURRENT');
   await page.locator('#wf-form button[type="submit"]').click();
-  await expect(page.locator('#wf-preview')).toBeVisible();
+  await expect(page.locator('#wf-confirm')).toBeVisible();
   await page.locator('[data-p="facts.document_number"]').fill('SYN-EDITED');
-  await expect(page.locator('#wf-preview')).toHaveCount(0);
+  await expect(page.locator('#wf-confirm')).toHaveCount(0);
 });
 test('home supplies rule: parser pre-selection, area fact, saved proposal, copy and preview row', async ({
   page,

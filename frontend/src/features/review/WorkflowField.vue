@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { formatMessage } from '../../core/i18n.ts';
-import type { Scalar, FieldSpec } from './workflow-model.ts';
-const props = defineProps<{ field: FieldSpec; modelValue?: Scalar }>();
+import { formatMessage, localeTag } from '../../core/i18n.ts';
+import { fieldId, type Scalar, type FieldSpec } from './workflow-model.ts';
+const props = defineProps<{ field: FieldSpec; modelValue?: Scalar; currency?: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: Scalar] }>();
-const { locale } = useLocale();
+const { locale, t } = useLocale();
 const display = (value: Scalar | undefined) =>
   value == null
     ? ''
@@ -33,11 +33,28 @@ watch(
     if (value !== read()) raw.value = display(value);
   },
 );
+// An amount is typed in units and stored in minor units; the preview shows what is stored.
+const preview = computed(() => {
+  const value = read();
+  const currency = (props.currency || 'EUR').toUpperCase();
+  if (typeof value !== 'number' || !Number.isFinite(value) || !/^[A-Z]{3}$/.test(currency))
+    return '';
+  const amount = new Intl.NumberFormat(localeTag(locale.value), {
+    style: 'currency',
+    currency,
+  }).format(value / 100);
+  return t('review.irpfPreview', { amount });
+});
 </script>
 <template>
   <label
-    ><span>{{ formatMessage(field.label, {}, locale) }}</span
+    ><span
+      >{{ formatMessage(field.label, {}, locale) }}
+      <output v-if="field.kind === 'money'" class="review-irpf-preview" data-eur-preview>{{
+        preview
+      }}</output></span
     ><input
+      :id="fieldId(field.path)"
       v-model="raw"
       :data-p="field.path"
       :data-kind="field.kind || 'text'"

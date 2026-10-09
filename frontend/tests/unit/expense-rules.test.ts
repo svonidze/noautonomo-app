@@ -126,7 +126,7 @@ test('copy into fields preserves manual IVA and drops an existing preview', asyn
   );
   root.querySelector<HTMLButtonElement>('#wf-rule-copy')!.click();
   await flush();
-  expect(root.querySelector('#wf-preview')).toBeNull();
+  expect(root.querySelector('#wf-confirm')).toBeNull();
   expect(input(root, 'decision.tax_treatment.deductible_irpf_minor').value).toBe('7.5');
   expect(input(root, 'decision.tax_treatment.deductible_vat_minor').value).toBe('6');
   expect(root.querySelector('.wf-message')!.textContent).toContain('Run the preview again');

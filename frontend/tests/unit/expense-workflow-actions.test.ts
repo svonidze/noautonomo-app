@@ -18,7 +18,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-test('the expense review keeps one primary action, says when it is sending and links to the queue', async () => {
+test('the expense review keeps one primary action in every state, says when it is sending and links to the queue', async () => {
   const draft = nativeFixture();
   let release!: (value: unknown) => void;
   const request = vi.fn(async (url: string, options?: JsonOptions) => {
@@ -82,6 +82,8 @@ test('the expense review keeps one primary action, says when it is sending and l
     workflow['workflow.recalculate'],
   );
   expect(primaries()).toEqual([workflow['workflow.confirmAndPost']]);
+  // The result takes focus, so the next Tab reaches the confirmation.
+  expect(document.activeElement?.id).toBe('wf-preview-title');
   root.querySelector<HTMLButtonElement>('#wf-confirm')!.click();
   await flush();
   expect(primaries()).toEqual([review['review.submitting']]);
@@ -90,5 +92,6 @@ test('the expense review keeps one primary action, says when it is sending and l
   expect([...root.querySelectorAll('h2')].map((heading) => heading.textContent!.trim())).toContain(
     workflow['workflow.postedTitle'],
   );
+  expect(primaries()).toEqual([workflow['workflow.openExpense']]);
   host.dispose();
 });
