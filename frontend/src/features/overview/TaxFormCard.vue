@@ -87,6 +87,17 @@ const filing = computed(() =>
       >
         {{ t('taxes.refundRequested') }}: {{ money(summary.refund_requested_minor) }}
       </p>
+      <template v-if="form.display_state === 'unavailable'"
+        ><p>{{ t('help.words.refreshHint') }}</p>
+        <button
+          type="button"
+          class="secondary-button calculate-button"
+          :disabled="refreshing"
+          @click="emit('refresh')"
+        >
+          {{ t(refreshing ? 'common.calculating' : 'common.calculate') }}
+        </button></template
+      >
     </div>
     <dl class="tax-form-facts">
       <div>
@@ -114,17 +125,6 @@ const filing = computed(() =>
         >
       </div>
       <div v-else class="empty-state">{{ presentation.formEmptyState(form) }}</div>
-      <template v-if="form.display_state === 'unavailable'"
-        ><p>{{ t('help.words.refreshHint') }}</p>
-        <button
-          type="button"
-          class="secondary-button"
-          :disabled="refreshing"
-          @click="emit('refresh')"
-        >
-          {{ t('help.words.refresh') }}
-        </button></template
-      >
     </details>
   </section>
 </template>

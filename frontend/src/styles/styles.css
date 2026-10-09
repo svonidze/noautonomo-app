@@ -227,6 +227,10 @@ button {
   text-align: right;
 }
 
+#new-entry-button {
+  white-space: nowrap;
+}
+
 .new-entry small {
   display: block;
   max-width: 28ch;
@@ -994,6 +998,10 @@ tbody tr:hover td {
   color: var(--muted);
 }
 
+.calculate-button {
+  margin-top: 10px;
+}
+
 .tax-form-facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1531,7 +1539,28 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
-.icon-button.busy {
+.refresh-label {
+  display: none;
+}
+
+@media (min-width: 1080px) {
+  #refresh-button:not([hidden]) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    padding: 0 12px;
+  }
+
+  .refresh-label {
+    display: inline;
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+}
+
+.icon-button.busy .refresh-icon {
+  display: inline-block;
   animation: refresh-spin 0.9s linear infinite;
 }
 
@@ -1542,8 +1571,11 @@ a:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .icon-button.busy {
+  .icon-button.busy .refresh-icon {
     animation: none;
+  }
+
+  .icon-button.busy {
     opacity: 0.55;
   }
 }

@@ -2,8 +2,9 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
-import { errorMessage } from '../../core/error-message.ts';
+import { errorDescriptor, errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
+import { message } from '../../core/i18n.ts';
 import ChartHost from '../../charts/ChartHost.vue';
 import type { Analytics } from '../../charts/types.ts';
 import type { ChartKind } from '../../charts/builders.ts';
@@ -18,7 +19,8 @@ const data = shallowRef<DashboardData>(),
   error = shallowRef<unknown>();
 const chartFailure = ref(false),
   loading = ref(true),
-  busy = ref(false);
+  busy = ref(false),
+  calculating = ref(false);
 let active = true,
   generation = 0;
 const current = (revision: number) => active && revision === generation;
@@ -122,6 +124,25 @@ const review = (posting = false) =>
   props.context.services.navigate(
     `/review?${new URLSearchParams({ period: props.context.period, ...(posting ? { tab: 'posting' } : {}) })}`,
   );
+async function calculate() {
+  if (calculating.value) return;
+  const context = props.context,
+    owns = () => active && props.context === context;
+  calculating.value = true;
+  try {
+    await context.refreshCalculation();
+    if (owns()) {
+      context.notify(
+        message('refresh.done', { period: formatPeriod(context.period, locale.value) }),
+      );
+      await load();
+    }
+  } catch (failure) {
+    if (owns()) context.notify(errorDescriptor(failure), true);
+  } finally {
+    if (active) calculating.value = false;
+  }
+}
 const forbidden = () => error.value instanceof ApiError && error.value.code === 'session_forbidden';
 const retry = () => (forbidden() ? window.location.reload() : void load(!!data.value));
 </script>
@@ -215,6 +236,15 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
               data.obligations.find((row) => String(row.obligation_code) === code),
             )
           }}</small>
+          <button
+            v-if="form(code).display_state === 'unavailable'"
+            type="button"
+            class="secondary-button calculate-button"
+            :disabled="calculating"
+            @click="calculate"
+          >
+            {{ t(calculating ? 'common.calculating' : 'common.calculate') }}
+          </button>
         </div>
       </div>
       <button

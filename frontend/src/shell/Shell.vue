@@ -159,7 +159,8 @@ const refreshLabel = computed(() =>
           :disabled="busy || (detail && route?.view !== 'contact-detail' && !resolved)"
           @click="refresh"
         >
-          ↻
+          <span class="refresh-icon" aria-hidden="true">↻</span
+          ><span class="refresh-label">{{ refreshLabel }}</span>
         </button>
         <div
           class="new-entry"

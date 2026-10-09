@@ -2,6 +2,8 @@
   "common.add": "Add",
   "common.all": "All",
   "common.back": "Back",
+  "common.calculate": "Calculate",
+  "common.calculating": "Calculating…",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.code": "Code {code}",

@@ -72,6 +72,13 @@ const p = computed(() => createFinancePresentation(locale.value));
 const headline = computed(() =>
   p.value.taxHeadlineModel(data.value?.period_state, data.value?.tax_summary),
 );
+// No calculation exists yet for a started quarter: the headline cannot name an amount.
+const uncalculated = computed(
+  () =>
+    data.value?.period_state?.phase !== 'future' &&
+    ['attention', 'neutral'].includes(headline.value.tone) &&
+    (['130', '303'] as const).every((code) => form(code).display_state === 'unavailable'),
+);
 const extraDue = computed(
   () =>
     data.value?.obligations.filter(
@@ -117,6 +124,15 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
         <h2>{{ headline.label }}</h2>
         <strong v-if="headline.amount != null">{{ money(headline.amount) }}</strong>
         <p>{{ headline.detail }}</p>
+        <button
+          v-if="uncalculated"
+          type="button"
+          class="secondary-button calculate-button"
+          :disabled="refreshing"
+          @click="refresh"
+        >
+          {{ t(refreshing ? 'common.calculating' : 'common.calculate') }}
+        </button>
       </div>
       <div
         v-if="data.tax_summary && data.period_state?.phase !== 'future'"

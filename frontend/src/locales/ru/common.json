@@ -2,6 +2,8 @@
   "common.add": "Добавить",
   "common.all": "Все",
   "common.back": "Назад",
+  "common.calculate": "Рассчитать",
+  "common.calculating": "Считаем…",
   "common.cancel": "Отмена",
   "common.close": "Закрыть",
   "common.code": "Код {code}",

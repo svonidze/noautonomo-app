@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import messages from '../../src/locales/en/workflow.json' with { type: 'json' };
 import analyticsFixture from '../fixtures/analytics.json' with { type: 'json' };
+import toolbar from '../../src/locales/ru/toolbar.json' with { type: 'json' };
 const ASSET = '55555555-5555-4555-8555-555555555555',
   ENTRY = '66666666-6666-4666-8666-666666666666';
 const asset = {
@@ -264,6 +265,45 @@ test('Vue expanded chart is CSP-safe, uses cached locale data and closes on rout
   await page.locator('a[data-view="income"]').click();
   await expect(page.locator('#vue-chart-businessResult')).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as { csp: string[] }).csp)).toEqual([]);
+});
+test('Calculate on an uncalculated Modelo card refreshes the quarter and says so', async ({
+  page,
+}) => {
+  let reads = 0;
+  await page.route('**/api/dashboard?**', async (route) => {
+    const data = await (await route.fetch()).json();
+    await route.fulfill({ json: { ...data, tax_forms: {} } });
+    reads++;
+  });
+  const posts: unknown[] = [];
+  await page.route('**/api/dashboard/refresh', (route) => {
+    posts.push(route.request().postDataJSON());
+    return route.fulfill({ json: { status: 'refreshed', period: '2026-Q3' } });
+  });
+  await page.goto('/dashboard?period=2026-Q3');
+  const calculate = page.locator('.metric .calculate-button');
+  await expect(calculate).toHaveCount(2);
+  await calculate.first().click();
+  await expect(page.locator('#toast-message')).toHaveText('Расчёт за III квартал 2026 обновлён');
+  expect(posts).toMatchObject([{ period: '2026-Q3' }]);
+  await expect.poll(() => reads).toBe(2);
+  await expect(calculate.first()).toBeEnabled();
+});
+test('the refresh shortcut is captioned on wide screens and stays hidden where it does not apply', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/taxes?period=2026-Q3');
+  const refresh = page.locator('#refresh-button');
+  await expect(refresh.locator('.refresh-label')).toHaveText(toolbar['toolbar.refresh']);
+  await expect(refresh).toHaveAccessibleName(toolbar['toolbar.refresh']);
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await expect(refresh.locator('.refresh-label')).toBeHidden();
+  await expect(refresh).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.locator('a[data-view="settings"]').click();
+  await expect(page.locator('#settings-profile-form')).toBeVisible();
+  await expect(refresh).toBeHidden();
 });
 test('RETA check is its own read-only section after the tax forms, separate from the headline', async ({
   page,

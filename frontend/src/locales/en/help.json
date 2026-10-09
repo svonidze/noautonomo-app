@@ -157,7 +157,6 @@
   "help.words.none": "No schedule entries for the selected quarter",
   "help.words.original": "Original message",
   "help.words.reasons": "What needs attention",
-  "help.words.refresh": "Refresh calculation",
   "help.words.refreshHint": "Recalculate using current data. No return is submitted.",
   "help.words.review": "Open review",
   "help.words.safe": "Viewing explanations does not post transactions or change tax decisions.",
