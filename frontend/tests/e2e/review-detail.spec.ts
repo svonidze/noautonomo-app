@@ -377,3 +377,56 @@ test('snapshot changes retain only counterparty facts; blocked approval still pe
     fx: null,
   });
 });
+test('a blocked approved row in the queue opens its review when the server offers one', async ({
+  page,
+}) => {
+  await native(page);
+  await page.route(`**/api/expense-workflows/${ID}`, (route) =>
+    route.fulfill({ json: nativeFixture() }),
+  );
+  await page.route(/\/api\/transactions\?.*status=review/, (route) =>
+    route.fulfill({
+      json: [
+        {
+          transaction_id: ID,
+          entry_type: 'expense',
+          lifecycle_status: 'approved',
+          transaction_date: '2026-07-03',
+          period_key: '2026-Q3',
+          description: 'Synthetic USD expense',
+          currency: 'USD',
+          amount_original: '99.00',
+          amount_eur: null,
+          ui_context: {
+            domain: 'transaction',
+            subject_id: ID,
+            state: 'blocked',
+            lifecycle_status: 'approved',
+            reasons: [],
+            posting: { preview_bucket: 'blocked', blockers: [{ code: 'fx_missing' }] },
+            actions: [{ kind: 'review', transaction_id: ID, period: '2026-Q3' }],
+          },
+        },
+      ],
+    }),
+  );
+  await page.route('**/api/issues?**', (route) => route.fulfill({ json: [] }));
+  await page.route('**/api/documents?**', (route) => route.fulfill({ json: [] }));
+  await page.route('**/api/review/posting-preview?**', (route) =>
+    route.fulfill({
+      json: { period: '2026-Q3', period_status: 'open', ready: [], deferred: [], blocked: [] },
+    }),
+  );
+  await page.goto('/review?period=2026-Q3');
+  const row = page
+    .locator('#review-tabpanel tbody tr')
+    .filter({ hasText: 'Synthetic USD expense' });
+  await expect(row).toContainText('Проверено, проведение заблокировано');
+  const action = row.locator('td.table-actions > *');
+  await expect(action).toHaveCount(1);
+  await expect(action).toHaveText('Открыть проверку');
+  await expect(action).toHaveClass('secondary-button compact-button');
+  await action.click();
+  await expect(page).toHaveURL(new RegExp(`/review/${ID}\\?period=2026-Q3$`));
+  await expect(page.locator('#wf-form')).toBeVisible();
+});

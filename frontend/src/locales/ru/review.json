@@ -19,6 +19,8 @@
   "review.errorGeneral": "Не удалось применить решение. Проверьте подсвеченные поля.",
   "review.facts": "Факты",
   "review.factsTitle": "Факты счёта",
+  "review.filterAll": "Все",
+  "review.filterLabel": "Показать операции по состоянию",
   "review.formDisabledHint": "Поля решений заблокированы, пока операцию нельзя провести — причина объяснена выше.",
   "review.future": "Будущую операцию можно провести только после {date}.",
   "review.fx": "Курс валюты",
@@ -43,6 +45,7 @@
   "review.issueAutoResolveHint": "Закроется автоматически: подтверждены ответы {labels}.",
   "review.issueOpen": "Открытый вопрос",
   "review.issueResolved": "Вопрос будет закрыт",
+  "review.oldestInQueue": "Самая старая операция в очереди: {days, plural, one {# день} few {# дня} many {# дней} other {# дня}}",
   "review.openIssues": "Открытые вопросы",
   "review.openWorkspace": "Открыть проверку",
   "review.outcomeApprove": "Подтвердить",
@@ -54,6 +57,7 @@
   "review.postInterrupted": "Проведение прервано",
   "review.postNone": "Новых проводок нет",
   "review.postPartial": "Проведение завершено частично",
+  "review.postRow": "Провести",
   "review.postSuccess": "Проведено: {count}",
   "review.postingAmount": "Сумма к проведению",
   "review.postingCleanup": "Перенос оригиналов в архив",
@@ -104,6 +108,7 @@
   "review.vatInvestment": "Классификация покупки для IVA",
   "review.vatInvestmentHint": "Амортизация для IRPF не определяет классификацию IVA. Выберите отдельно на основании покупки.",
   "review.vatUnknown": "Классификация IVA не проверена",
+  "review.whatBlocks": "Что мешает",
   "review.workspaceBack": "К списку операций",
   "review.workspaceTitle": "Проверка счета"
 }

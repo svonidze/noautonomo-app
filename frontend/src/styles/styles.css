@@ -340,6 +340,14 @@ button:focus-visible {
   border-color: #cbd4d0;
 }
 
+/* A link styled as a button keeps the button's box, not the link underline. */
+a.primary-button,
+a.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .content {
   width: min(1480px, 100%);
   margin: 0 auto;
@@ -1725,15 +1733,25 @@ a:focus-visible {
 
 .review-summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 10px;
+  padding: 15px;
 }
 
+/* The summary cards are filter toggles: pressed reads from the border, not only the colour. */
 .review-summary-card {
-  padding: 16px;
+  padding: 10px 12px;
+  color: var(--text);
+  text-align: left;
   background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: 10px;
+  cursor: pointer;
+}
+
+.review-summary-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .review-summary-card strong,
@@ -1747,8 +1765,8 @@ a:focus-visible {
 }
 
 .review-summary-card strong {
-  margin-top: 6px;
-  font-size: 1.5rem;
+  margin-top: 4px;
+  font-size: 1.25rem;
 }
 
 .review-summary-card.ready {
@@ -1756,12 +1774,12 @@ a:focus-visible {
   border-color: #b8ddd0;
 }
 
-.review-summary-card.needs-review {
+.review-summary-card.needs_review {
   background: #eef3fb;
   border-color: #c6d4e8;
 }
 
-.review-summary-card.later {
+.review-summary-card.deferred {
   background: var(--warning-soft);
   border-color: #eed39f;
 }
@@ -1771,8 +1789,28 @@ a:focus-visible {
   border-color: #e9b5b5;
 }
 
+/* After the tone colours, so a pressed card always shows the dark border. */
+.review-summary-card[aria-pressed="true"] {
+  border-color: var(--accent-dark);
+  box-shadow: inset 0 0 0 1px var(--accent-dark);
+}
+
 .table-actions {
   white-space: nowrap;
+}
+
+/* One action per queue row: the column is as wide as that one control. */
+.table-wrap .review-queue-table .table-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.review-queue-age {
+  margin: 0;
+  padding: 10px 15px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.83rem;
 }
 
 .compact-button {
@@ -2037,10 +2075,6 @@ textarea:focus {
   }
 
   .tax-hero {
-    grid-template-columns: 1fr;
-  }
-
-  .review-summary-grid {
     grid-template-columns: 1fr;
   }
 

@@ -164,5 +164,6 @@
   "help.words.sourceNote": "A schedule or book entry does not establish that a return was filed.",
   "help.words.sources": "Related documents",
   "help.words.technical": "Source details",
-  "help.words.valueProposal": "Proposed deduction; not proof of tax recognition"
+  "help.words.valueProposal": "Proposed deduction; not proof of tax recognition",
+  "help.words.why": "Why"
 }

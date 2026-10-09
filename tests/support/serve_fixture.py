@@ -37,6 +37,13 @@ def main() -> None:
             db.add_detailed_tax_treatment(transaction_id=expense["transaction_id"], treatment_type="expense",
                 tax_code="G03", taxable_base_minor=10000, vat_minor=2100, deductible_irpf_minor=10000,
                 deductible_vat_minor=2100, include_modelo130=True, include_modelo303=True)
+            # Reviewed, but in USD without a EUR amount: posting stays blocked until a rate is recorded.
+            foreign = db.add_transaction(external_key="web-expense-usd", period_key="2026-Q3",
+                transaction_date="2026-07-03", booking_date="2026-07-03", entry_type="expense",
+                description="Example USD expense", amount_minor=9900, currency="USD",
+                original_currency="USD", amount_eur_minor=None, direction="debit", lifecycle_status="approved")
+            db.add_detailed_tax_treatment(transaction_id=foreign["transaction_id"], treatment_type="expense",
+                tax_code="non_eu_service_expense")
             receipt = config.archive_root / "aeat" / "2032" / "submission_receipt" / "synthetic.pdf"
             receipt.parent.mkdir(parents=True)
             receipt.write_bytes(b"%PDF-synthetic browser receipt")

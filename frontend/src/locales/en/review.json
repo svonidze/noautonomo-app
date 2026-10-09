@@ -19,6 +19,8 @@
   "review.errorGeneral": "The decision could not be applied. Check the highlighted fields.",
   "review.facts": "Facts",
   "review.factsTitle": "Invoice facts",
+  "review.filterAll": "All",
+  "review.filterLabel": "Show transactions by status",
   "review.formDisabledHint": "Decision fields are locked while this transaction cannot be posted — the reason is explained above.",
   "review.future": "This future-dated transaction can only be posted on or after {date}.",
   "review.fx": "FX rate",
@@ -43,6 +45,7 @@
   "review.issueAutoResolveHint": "Will close automatically: {labels} are confirmed.",
   "review.issueOpen": "Open issue",
   "review.issueResolved": "Issue will be resolved",
+  "review.oldestInQueue": "Oldest transaction in the queue: {days, plural, one {# day} other {# days}}",
   "review.openIssues": "Open issues",
   "review.openWorkspace": "Open review",
   "review.outcomeApprove": "Approve",
@@ -54,6 +57,7 @@
   "review.postInterrupted": "Posting was interrupted",
   "review.postNone": "No new postings were applied",
   "review.postPartial": "Posting finished partially",
+  "review.postRow": "Post",
   "review.postSuccess": "Posted: {count}",
   "review.postingAmount": "Ready amount",
   "review.postingCleanup": "Moving originals to the archive",
@@ -104,6 +108,7 @@
   "review.vatInvestment": "IVA purchase classification",
   "review.vatInvestmentHint": "IRPF depreciation does not determine IVA classification. Review the purchase separately.",
   "review.vatUnknown": "IVA classification not reviewed",
+  "review.whatBlocks": "What blocks it",
   "review.workspaceBack": "Back to transactions",
   "review.workspaceTitle": "Invoice review"
 }

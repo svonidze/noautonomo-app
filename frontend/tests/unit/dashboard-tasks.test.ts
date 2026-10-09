@@ -166,6 +166,35 @@ test('open questions and missing exchange rates link to the review screen', () =
   expect(build(dashboard({ missing_fx_count: 0 }))).toEqual([]);
 });
 
+test('a blocked row without a rate is counted once: in the blocked row, not again as a rate row', () => {
+  const queue = { needs_review: 0, ready: 0, later: 0, blocked: 1 };
+  const [blocked, ...rest] = build(
+    dashboard({ posting_summary: queue, missing_fx_count: 1, missing_fx_blocked_count: 1 }),
+  );
+  expect(rest).toEqual([]);
+  expect(blocked.id).toBe('blocked');
+  expect(text(blocked)[1]).toBe(
+    'Операции проверены, но провести их пока нельзя: причина указана в очереди. Из них без курса: 1.',
+  );
+  expect(text(blocked, 'en')[1]).toBe(
+    'These transactions are reviewed but cannot be posted yet; the queue names the reason. Without an exchange rate: 1.',
+  );
+  // Rows still in review keep their own rate row, counted without the blocked ones.
+  const tasks = build(
+    dashboard({ posting_summary: queue, missing_fx_count: 3, missing_fx_blocked_count: 1 }),
+  );
+  expect(ids(tasks)).toEqual(['blocked', 'fx']);
+  expect(text(tasks[1])[0]).toBe('Указать курс для 2 операций');
+  // Without a blocked row nothing is folded: the rate row counts every row.
+  expect(
+    build(dashboard({ missing_fx_count: 2, missing_fx_blocked_count: 2 })).map(
+      (task) => text(task)[0],
+    ),
+  ).toEqual(['Указать курс для 2 операций']);
+  const [plain] = build(dashboard({ posting_summary: queue, missing_fx_count: 0 }));
+  expect(text(plain)[1]).toBe(ru['dashboard.task.blocked.hint']);
+});
+
 test('at most five rows stay, in priority order', () => {
   const tasks = build(
     dashboard({

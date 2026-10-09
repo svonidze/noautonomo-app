@@ -116,6 +116,8 @@ export interface DashboardData {
   open_issue_count?: number;
   /** Review-queue rows of this quarter without a EUR amount. */
   missing_fx_count?: number;
+  /** Of those, the approved rows: the missing rate blocks their posting. */
+  missing_fx_blocked_count?: number;
 }
 export interface AssetRow {
   asset_id: string;

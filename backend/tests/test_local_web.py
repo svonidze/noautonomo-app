@@ -205,6 +205,8 @@ def test_dashboard_counts_every_open_question_and_this_quarters_queue_rows_witho
     assert dashboard["open_issue_count"] == 7
     # This quarter's queue only, received rows included: not posted rows, other quarters or EUR rows.
     assert dashboard["missing_fx_count"] == 4
+    # Of those, the approved expense and income: a missing rate blocks their posting.
+    assert dashboard["missing_fx_blocked_count"] == 2
     # Reviewed, unposted income: the known part beside the rows without a EUR amount.
     forecast = dashboard["totals"]["forecast"]
     assert forecast["income_transaction_count"] == 2

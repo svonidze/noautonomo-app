@@ -60,11 +60,17 @@ export function buildTasks({
       href: review('posting'),
     });
   const blocked = positive(queue?.blocked);
+  // An approved row without a rate is blocked by it: the blocked row counts it once and names the
+  // missing rate in its hint, so the rate row below keeps only the rows still in review.
+  const blockedWithoutRate = blocked ? positive(data.missing_fx_blocked_count) : 0;
+  let blockedHint: UiMessage = message('dashboard.task.blocked.hint');
+  if (blockedWithoutRate)
+    blockedHint = message('dashboard.task.blocked.hintFx', { count: blockedWithoutRate });
   if (blocked)
     tasks.push({
       id: 'blocked',
       title: message('dashboard.task.blocked.title', { count: blocked }),
-      hint: message('dashboard.task.blocked.hint'),
+      hint: blockedHint,
       tone: 'attention',
       tag: message('statuses.labels.blocked'),
       href: review(),
@@ -112,8 +118,8 @@ export function buildTasks({
     });
   // The quarter's own count: the analytics quality count spans two years and would send the row
   // to a queue that has no such transaction.
-  const missingRates = positive(data.missing_fx_count);
-  if (missingRates)
+  const missingRates = positive(data.missing_fx_count) - blockedWithoutRate;
+  if (missingRates > 0)
     tasks.push({
       id: 'fx',
       title: message('dashboard.task.fx.title', { count: missingRates }),

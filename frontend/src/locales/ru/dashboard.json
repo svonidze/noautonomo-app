@@ -15,6 +15,7 @@
   "dashboard.reviewedNotPosted": "Проверено, ещё не проведено: {value}",
   "dashboard.snapshotAvailable": "есть сохранённая копия поданной декларации",
   "dashboard.task.blocked.hint": "Операции проверены, но провести их пока нельзя: причина указана в очереди.",
+  "dashboard.task.blocked.hintFx": "Операции проверены, но провести их пока нельзя: причина указана в очереди. Из них без курса: {count}.",
   "dashboard.task.blocked.title": "Выяснить, что мешает провести операции ({count})",
   "dashboard.task.calculate.hint": "Расчёт по текущим данным; декларация не отправляется.",
   "dashboard.task.calculate.title": "Рассчитать налоги за квартал",

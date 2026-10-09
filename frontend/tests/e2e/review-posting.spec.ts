@@ -161,3 +161,23 @@ test('closed or mismatched posting periods cannot open confirmation and tab keys
   await expect(page.locator('.review-shell [role="alert"]')).toBeVisible();
   await expect(page.locator('[data-posting-action="open-confirm"]')).toHaveCount(0);
 });
+test('a blocked approved row in the queue says what blocks it', async ({ page }) => {
+  // The shared fixture's USD expense is reviewed but has no EUR amount; the server offers no review.
+  await page.goto('/review?period=2026-Q3');
+  const rows = page.locator('#review-tabpanel tbody tr');
+  const blocked = rows.filter({ hasText: 'Example USD expense' });
+  await expect(blocked).toContainText('Проверено, проведение заблокировано');
+  const action = blocked.locator('td.table-actions > *');
+  await expect(action).toHaveCount(1);
+  await expect(action).toHaveText('Что мешает');
+  await action.click();
+  const help = page.locator('#status-help-dialog');
+  await expect(help).toBeVisible();
+  await expect(help).toContainText('Не хватает суммы в евро');
+  await page.locator('#status-help-close').click();
+  await expect(help).not.toBeVisible();
+  await expect(action).toBeFocused();
+  // Every other row has its one action too.
+  for (const row of await rows.all())
+    await expect(row.locator('td.table-actions > *')).toHaveCount(1);
+});

@@ -1,0 +1,210 @@
+import { createApp, h, nextTick } from 'vue';
+import { afterEach, expect, test, vi } from 'vitest';
+import ReviewQueue from '../../src/features/posting/ReviewQueue.vue';
+import type { ReviewOverviewContext, ReviewRow } from '../../src/features/posting/model.ts';
+import ru from '../../src/locales/ru/review.json' with { type: 'json' };
+import statuses from '../../src/locales/ru/statuses.json' with { type: 'json' };
+import help from '../../src/locales/ru/help.json' with { type: 'json' };
+
+// Synthetic queue rows only; 9 October 2026 is "today".
+const id = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+function row(index: number, state: string | undefined, extra: Partial<ReviewRow> = {}): ReviewRow {
+  return {
+    transaction_id: id(index),
+    entry_type: 'expense',
+    lifecycle_status: state === 'needs_review' ? 'needs_review' : 'approved',
+    transaction_date: `2026-09-${String(10 + index).padStart(2, '0')}`,
+    period_key: '2026-Q3',
+    description: `Synthetic row ${index}`,
+    amount_eur: '10.00',
+    ui_context: { domain: 'transaction', ...(state ? { state } : {}), reasons: [] } as never,
+    ...extra,
+  };
+}
+const review = (index: number) => [
+  { kind: 'review', transaction_id: id(index), period: '2026-Q3' },
+];
+const rows = [
+  row(1, 'needs_review'),
+  row(2, 'needs_review'),
+  row(3, 'ready'),
+  row(4, 'deferred'),
+  row(5, 'blocked'),
+  row(6, 'blocked', {
+    ui_context: { domain: 'transaction', state: 'blocked', actions: review(6) } as never,
+  }),
+  row(7, undefined),
+];
+const mounted: (() => void)[] = [];
+afterEach(() => {
+  mounted.splice(0).forEach((unmount) => unmount());
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+function show(items: ReviewRow[]) {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-09T12:00:00'));
+  // jsdom has neither; the aging chart's host needs both once it renders.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.open = false;
+    },
+  });
+  const request = vi.fn(() => new Promise<never>(() => {}));
+  const context = {
+    period: '2026-Q3',
+    tab: 'queue',
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    selectTab: vi.fn(),
+    refreshCalculation: vi.fn(),
+    notify: vi.fn(),
+  } satisfies ReviewOverviewContext;
+  const root = document.createElement('div');
+  document.body.append(root);
+  const app = createApp({ render: () => h(ReviewQueue, { rows: items, context }) });
+  app.mount(root);
+  mounted.push(() => {
+    app.unmount();
+    root.remove();
+  });
+  return { root, request };
+}
+const cards = (root: HTMLElement) => [
+  ...root.querySelectorAll<HTMLButtonElement>('[role="group"] > button'),
+];
+const card = (root: HTMLElement, label: string) =>
+  cards(root).find((button) => button.querySelector('span')!.textContent === label)!;
+const listed = (root: HTMLElement) =>
+  [...root.querySelectorAll('tbody tr')].map((tr) => tr.querySelector('strong')!.textContent);
+
+test('the summary cards are toggle buttons that filter the queue; «Все» resets', async () => {
+  const { root } = show(rows);
+  expect(root.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe(
+    ru['review.filterLabel'],
+  );
+  expect(
+    cards(root).map((button) => [
+      button.querySelector('span')!.textContent,
+      button.querySelector('strong')!.textContent,
+      button.getAttribute('aria-pressed'),
+    ]),
+  ).toEqual([
+    [ru['review.filterAll'], '7', 'true'],
+    [statuses['statuses.labels.needs_review'], '2', 'false'],
+    [statuses['statuses.labels.ready'], '1', 'false'],
+    [statuses['statuses.labels.deferred'], '1', 'false'],
+    [statuses['statuses.labels.blocked'], '2', 'false'],
+    // A missing state is its own neutral card, never counted as blocked.
+    [statuses['statuses.labels.unknown'], '1', 'false'],
+  ]);
+  expect(listed(root)).toHaveLength(7);
+
+  card(root, statuses['statuses.labels.blocked']).click();
+  await nextTick();
+  expect(card(root, statuses['statuses.labels.blocked']).getAttribute('aria-pressed')).toBe('true');
+  expect(card(root, ru['review.filterAll']).getAttribute('aria-pressed')).toBe('false');
+  expect(listed(root)).toEqual(['Synthetic row 5', 'Synthetic row 6']);
+
+  card(root, statuses['statuses.labels.needs_review']).click();
+  await nextTick();
+  expect(listed(root)).toEqual([
+    'Synthetic row 1',
+    'Synthetic row 2',
+    'Synthetic row 5',
+    'Synthetic row 6',
+  ]);
+
+  card(root, statuses['statuses.labels.blocked']).click();
+  await nextTick();
+  expect(listed(root)).toEqual(['Synthetic row 1', 'Synthetic row 2']);
+
+  card(root, ru['review.filterAll']).click();
+  await nextTick();
+  expect(listed(root)).toHaveLength(7);
+  expect(cards(root).map((button) => button.getAttribute('aria-pressed'))).toEqual([
+    'true',
+    'false',
+    'false',
+    'false',
+    'false',
+    'false',
+  ]);
+});
+
+test('a state without rows cannot be chosen and the unknown card appears only when needed', () => {
+  const { root } = show(rows.slice(0, 3));
+  expect(cards(root).map((button) => [button.textContent, button.disabled])).toEqual([
+    [`${ru['review.filterAll']}3`, false],
+    [`${statuses['statuses.labels.needs_review']}2`, false],
+    [`${statuses['statuses.labels.ready']}1`, false],
+    [`${statuses['statuses.labels.deferred']}0`, true],
+    [`${statuses['statuses.labels.blocked']}0`, true],
+  ]);
+});
+
+test('every queued row offers exactly one next action chosen by its state', () => {
+  const { root } = show(rows);
+  const actions = [...root.querySelectorAll('tbody tr')].map((tr) => {
+    const controls = [...tr.querySelectorAll('td.table-actions > *')];
+    expect(controls).toHaveLength(1);
+    const [control] = controls as HTMLElement[];
+    return [
+      control.tagName,
+      control.className,
+      control.textContent!.trim(),
+      control.getAttribute('href'),
+    ];
+  });
+  const open = (index: number) => `/review/${id(index)}?period=2026-Q3`;
+  expect(actions).toEqual([
+    ['A', 'secondary-button compact-button', ru['review.openWorkspace'], open(1)],
+    ['A', 'secondary-button compact-button', ru['review.openWorkspace'], open(2)],
+    [
+      'A',
+      'secondary-button compact-button',
+      ru['review.postRow'],
+      `/review?period=2026-Q3&tab=posting#posting-row-${id(3)}`,
+    ],
+    ['BUTTON', 'text-button status-details-button', help['help.words.why'], null],
+    ['BUTTON', 'text-button status-details-button', ru['review.whatBlocks'], null],
+    // The server offers a review for this blocked row, so the row opens it directly.
+    ['A', 'secondary-button compact-button', ru['review.openWorkspace'], open(6)],
+    ['BUTTON', 'text-button status-details-button', help['help.words.why'], null],
+  ]);
+  for (const button of root.querySelectorAll<HTMLElement>('td.table-actions button'))
+    expect(button.dataset.statusHelp).toBeTruthy();
+  // The unknown row's result reads as unknown, not as blocked.
+  expect(root.querySelectorAll('tbody tr')[6].textContent).toContain(
+    statuses['statuses.labels.unknown'],
+  );
+});
+
+test('fewer than ten queued rows name the oldest one instead of drawing the aging chart', () => {
+  const { root, request } = show(rows);
+  expect(root.querySelector('#chart-review-aging')).toBeNull();
+  // The oldest row is dated 11 September: 28 days before 9 October.
+  expect(root.querySelector('.review-queue-age')!.textContent).toBe(
+    'Самая старая операция в очереди: 28 дней',
+  );
+  expect(request).not.toHaveBeenCalled();
+});
+
+test('ten queued rows draw the aging chart; an empty queue says nothing about age', () => {
+  const many = Array.from({ length: 10 }, (_, index) => row(index + 1, 'needs_review'));
+  const { root, request } = show(many);
+  expect(root.querySelector('#chart-review-aging')).toBeTruthy();
+  expect(root.querySelector('.review-queue-age')).toBeNull();
+  expect(request).toHaveBeenCalledWith('/api/analytics?period=2026-Q3');
+  const empty = show([]);
+  expect(empty.root.querySelector('.review-queue-age')).toBeNull();
+  expect(empty.root.querySelector('#chart-review-aging')).toBeNull();
+});

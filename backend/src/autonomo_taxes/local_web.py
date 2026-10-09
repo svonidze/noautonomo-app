@@ -471,16 +471,17 @@ class LocalAccountingApp:
                 (period_row["period_id"],),
             ).fetchone()[0]
             # Review-queue rows of this quarter without a EUR amount (the analytics quality count
-            # covers two years and every status, so it cannot drive a task for this quarter).
-            missing_fx_count = connection.execute(
+            # covers two years and every status, so it cannot drive a task for this quarter), and
+            # the approved ones among them, whose posting the missing rate blocks.
+            missing_fx_count, missing_fx_blocked_count = connection.execute(
                 """
-                SELECT COUNT(*) FROM transactions
+                SELECT COUNT(*), COALESCE(SUM(lifecycle_status = 'approved'), 0) FROM transactions
                 WHERE period_id = ?
                   AND lifecycle_status IN ('received', 'extracted', 'needs_review', 'approved')
                   AND amount_eur_minor IS NULL AND UPPER(COALESCE(currency, '')) <> 'EUR'
                 """,
                 (period_row["period_id"],),
-            ).fetchone()[0]
+            ).fetchone()
             obligations = self._obligations(
                 connection,
                 period_id=period_row["period_id"],
@@ -520,6 +521,7 @@ class LocalAccountingApp:
             "open_issues": open_issues,
             "open_issue_count": open_issue_count,
             "missing_fx_count": missing_fx_count,
+            "missing_fx_blocked_count": missing_fx_blocked_count,
             "obligations": obligations,
             "document_counts": document_counts,
             "tax_preview": _compact_tax_preview(cached),
