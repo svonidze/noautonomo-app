@@ -27,5 +27,6 @@
   "dashboard.ytdExpenses": "Expenses",
   "dashboard.ytdFullYear": "Renta rules, full year",
   "dashboard.ytdIncome": "Gross",
-  "dashboard.ytdNet": "Net"
+  "dashboard.ytdNet": "Net",
+  "dashboard.ytdUnavailable": "Yearly figures unavailable: some transactions have missing or conflicting tax data."
 }

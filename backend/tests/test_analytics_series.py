@@ -3,10 +3,12 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from autonomo_taxes.analytics_series import AnalyticsQuery, build_analytics
 from autonomo_taxes.ledger_db import LedgerDB
 from autonomo_taxes.ledger_db import open as open_ledger_db
-from autonomo_taxes.tax_engine import calculate_modelo130_rows
+from autonomo_taxes.tax_engine import CalculationBlocked, calculate_modelo130_rows
 from autonomo_taxes.tax_row_loader import load_tax_rows
 
 AS_OF = date(2026, 8, 31)
@@ -1014,6 +1016,74 @@ def test_ytd_renta_uses_the_exact_as_of_date_independent_of_selected_quarter(tmp
     ]["ytd_comparison"]["current_year"]
     assert current["renta_income_minor"] == 100_000
     assert current["renta_net_minor"] == 95_000
+
+
+@pytest.mark.parametrize(
+    ("day", "status", "blocked"),
+    [
+        ("2026-08-20", "posted", True),
+        ("2026-08-21", "posted", False),
+        ("2026-09-01", "posted", False),
+        ("2025-08-20", "posted", False),
+        ("2026-08-20", "approved", False),
+    ],
+)
+def test_ytd_renta_reports_conflicts_only_in_its_accounting_window(
+    tmp_path: Path, day: str, status: str, blocked: bool,
+) -> None:
+    db_path = tmp_path / "autonomo.sqlite"
+    as_of = date(2026, 8, 20)
+    with LedgerDB.initialize(db_path) as db:
+        _add_included_income(db, "valid-income", 100_000)
+        expense = _add_transaction(
+            db, external_key="conflicting-expense",
+            period_key=f"{day[:4]}-Q{(int(day[5:7]) + 2) // 3}",
+            transaction_date=day, booking_date=day, lifecycle_status=status,
+            entry_type="expense", direction="debit",
+            amount_minor=10_000, amount_eur_minor=10_000,
+        )
+        for treatment_type, deductible in (("expense", 10_000), ("accounting", 20_000)):
+            db.add_detailed_tax_treatment(
+                transaction_id=expense["transaction_id"], treatment_type=treatment_type,
+                tax_code="G03", deductible_irpf_minor=deductible, include_modelo130=True,
+            )
+        if blocked:
+            with pytest.raises(CalculationBlocked, match="Conflicting deductible_irpf_minor"):
+                load_tax_rows(db, 2026, through=as_of)
+        else:
+            assert len(load_tax_rows(db, 2026, through=as_of)) == 1
+
+    analytics = _build(db_path, as_of=as_of)
+    current = analytics["datasets"]["ytd_comparison"]["current_year"]
+    assert analytics["quality"]["conflicting_treatment_count"] == 1
+    assert current["renta_status"] == ("blocked" if blocked else "ok")
+    for key in ("renta_income_minor", "difficult_expense_minor", "renta_expense_minor", "renta_net_minor"):
+        if blocked:
+            assert current[key] is None
+    if not blocked:
+        assert current["renta_net_minor"] == 95_000
+    assert current["taxable_income_minor"] == 100_000
+    assert current["net_minor"] == 100_000
+    if day.startswith("2025"):
+        assert analytics["datasets"]["ytd_comparison"]["previous_year"]["renta_status"] == "blocked"
+
+
+def test_ytd_renta_reports_a_missing_eur_amount_instead_of_partial_totals(tmp_path: Path) -> None:
+    db_path = tmp_path / "autonomo.sqlite"
+    with LedgerDB.initialize(db_path) as db:
+        _add_included_income(db, "valid-income", 100_000)
+        foreign = _add_transaction(
+            db, external_key="foreign-income-without-fx", currency="USD", amount_eur_minor=None,
+        )
+        db.add_detailed_tax_treatment(
+            transaction_id=foreign["transaction_id"], treatment_type="income",
+            tax_code="domestic_service_income", taxable_base_minor=10_000,
+            include_modelo130=True,
+        )
+    current = _build(db_path)["datasets"]["ytd_comparison"]["current_year"]
+    assert current["renta_status"] == "blocked"
+    assert current["renta_income_minor"] is None
+    assert current["renta_net_minor"] is None
 
 
 def test_ytd_comparison_excludes_future_posted_within_the_as_of_month(

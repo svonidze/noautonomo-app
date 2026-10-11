@@ -177,7 +177,12 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
             t('common.counts.operations', { count: data.totals.actual.income_transaction_count })
           }}</small>
         </div>
-        <div v-if="ytd" id="dashboard-year-to-date" class="metric accent">
+        <div
+          v-if="ytd"
+          id="dashboard-year-to-date"
+          class="metric"
+          :class="ytd.unavailable ? 'warning' : 'accent'"
+        >
           <span>{{ t('dashboard.yearToDate', { year: ytd.year }) }}</span>
           <dl class="metric-rows">
             <div>
@@ -195,6 +200,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
               </dd>
             </div>
           </dl>
+          <small v-if="ytd.unavailable" role="status">{{ t('dashboard.ytdUnavailable') }}</small>
           <small>{{
             ytd.fullYear
               ? t('dashboard.ytdFullYear')

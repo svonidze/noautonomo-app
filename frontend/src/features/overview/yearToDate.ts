@@ -7,6 +7,7 @@ export interface YearToDate {
   net: number | null;
   fullYear: boolean;
   asOf: string | null;
+  unavailable: boolean;
 }
 
 const euros = (minor: ChartValue) => (minor === null || minor === undefined ? null : minor / 100);
@@ -17,12 +18,14 @@ export function yearToDate(analytics: Analytics | undefined): YearToDate | undef
   const current = analytics?.datasets.ytd_comparison?.current_year;
   if (!current) return undefined;
   const asOf = analytics?.scope?.as_of ?? null;
+  const unavailable = current.renta_status === 'blocked';
   return {
     year: current.year,
-    income: euros(current.renta_income_minor),
-    expenses: euros(current.renta_expense_minor),
-    net: euros(current.renta_net_minor),
+    income: unavailable ? null : euros(current.renta_income_minor),
+    expenses: unavailable ? null : euros(current.renta_expense_minor),
+    net: unavailable ? null : euros(current.renta_net_minor),
     fullYear: asOf !== null && Number(asOf.slice(0, 4)) > current.year,
     asOf,
+    unavailable,
   };
 }

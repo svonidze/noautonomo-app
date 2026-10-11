@@ -620,8 +620,9 @@ def _renta_totals(
     *,
     year: int,
     through: date | None,
-) -> dict[str, int | None]:
+) -> dict[str, int | str | None]:
     empty = {
+        "renta_status": "empty",
         "renta_income_minor": None,
         "difficult_expense_minor": None,
         "renta_expense_minor": None,
@@ -634,7 +635,7 @@ def _renta_totals(
             LedgerDB(connection), year, allow_authoritative_history=True, through=through
         )
     except CalculationBlocked:
-        return empty
+        return {**empty, "renta_status": "blocked"}
     if not rows:
         return empty
     rule = difficult_expense_rule_for_year(year)
@@ -643,6 +644,7 @@ def _renta_totals(
         difficult_expenses_cap=rule.annual_cap_eur,
     ).values
     return {
+        "renta_status": "ok",
         "renta_income_minor": _decimal_to_minor(values["business_income"]),
         "difficult_expense_minor": _decimal_to_minor(values["difficult_expenses"]),
         "renta_expense_minor": _decimal_to_minor(

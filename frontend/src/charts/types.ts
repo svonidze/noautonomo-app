@@ -114,6 +114,7 @@ interface YearSummary {
   taxable_income_minor: ChartValue;
   deductible_expense_minor: ChartValue;
   net_minor: ChartValue;
+  renta_status?: 'ok' | 'empty' | 'blocked';
   renta_income_minor?: ChartValue;
   difficult_expense_minor?: ChartValue;
   renta_expense_minor?: ChartValue;

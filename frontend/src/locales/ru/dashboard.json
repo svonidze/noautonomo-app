@@ -27,5 +27,6 @@
   "dashboard.ytdExpenses": "Расходы",
   "dashboard.ytdFullYear": "по правилам Renta, весь год",
   "dashboard.ytdIncome": "Брутто",
-  "dashboard.ytdNet": "Нетто"
+  "dashboard.ytdNet": "Нетто",
+  "dashboard.ytdUnavailable": "Годовые суммы недоступны: в операциях есть неполные или противоречивые налоговые данные."
 }
