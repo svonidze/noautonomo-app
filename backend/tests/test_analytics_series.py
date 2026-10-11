@@ -938,6 +938,84 @@ def test_ytd_renta_allowance_is_zero_for_a_loss(tmp_path: Path) -> None:
     assert current["renta_net_minor"] == -50000
 
 
+def test_ytd_renta_includes_filed_history_without_including_ordinary_approved_rows(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "autonomo.sqlite"
+    with LedgerDB.initialize(db_path) as db:
+        batch = db.add_import_batch(
+            source_name="xolo_source_book_rows", source_hash="synthetic-ytd-book"
+        )
+        document = db.upsert_document(
+            external_key="synthetic-ytd-history-invoice",
+            import_batch_id=batch["import_batch_id"],
+            document_type="ingresos_book",
+            document_number="SYN-YTD-1",
+            issued_on="2025-03-15",
+            period_key="2025-Q1",
+            lifecycle_status="approved",
+            source_hash="synthetic-ytd-document",
+        )
+        db.add_document_source(
+            document_id=document["document_id"],
+            import_batch_id=batch["import_batch_id"],
+            source_book_line_id="synthetic-ytd-row",
+            source_file="Synthetic_book_2025.xlsx",
+            source_row_number="7",
+            source_hash="synthetic-ytd-source",
+        )
+        for key, document_id, amount in (
+            ("history-income", document["document_id"], 900_000),
+            ("ordinary-approved-income", None, 5_000_000),
+        ):
+            income = _add_transaction(
+                db, external_key=key, period_key="2025-Q1",
+                transaction_date="2025-03-15", booking_date="2025-03-15",
+                amount_minor=amount, amount_eur_minor=amount,
+                lifecycle_status="approved", document_id=document_id,
+            )
+            db.add_detailed_tax_treatment(
+                transaction_id=income["transaction_id"], treatment_type="income",
+                tax_code="domestic_service_income", taxable_base_minor=amount,
+                include_modelo130=True,
+            )
+        db.create_filing_snapshot(
+            "2025-Q1", status="baseline", filed_on="2025-04-20", payload={"form": "130"}
+        )
+        expense = _add_transaction(
+            db, external_key="posted-history-year-expense", period_key="2025-Q2",
+            transaction_date="2025-05-01", booking_date="2025-05-01",
+            entry_type="expense", direction="debit",
+            amount_minor=100_000, amount_eur_minor=100_000,
+        )
+        db.add_detailed_tax_treatment(
+            transaction_id=expense["transaction_id"], treatment_type="expense", tax_code="G03",
+            deductible_irpf_minor=100_000, include_modelo130=True,
+        )
+
+    current = _build(db_path, period_key="2025-Q4")["datasets"]["ytd_comparison"]["current_year"]
+    assert current["renta_income_minor"] == 900_000
+    assert current["renta_expense_minor"] == 140_000
+    assert current["renta_net_minor"] == 760_000
+    assert current["taxable_income_minor"] == 0
+    assert current["deductible_expense_minor"] == 100_000
+    assert current["net_minor"] == -100_000
+    previous = _build(db_path)["datasets"]["ytd_comparison"]["previous_year"]
+    assert previous["renta_net_minor"] == 760_000
+
+
+def test_ytd_renta_uses_the_exact_as_of_date_independent_of_selected_quarter(tmp_path: Path) -> None:
+    db_path = tmp_path / "autonomo.sqlite"
+    with LedgerDB.initialize(db_path) as db:
+        _add_included_income(db, "income-in-window", 100_000, day="2026-08-20")
+        _add_included_income(db, "income-after-as-of", 200_000, day="2026-08-21")
+    current = _build(db_path, period_key="2026-Q1", as_of=date(2026, 8, 20))[
+        "datasets"
+    ]["ytd_comparison"]["current_year"]
+    assert current["renta_income_minor"] == 100_000
+    assert current["renta_net_minor"] == 95_000
+
+
 def test_ytd_comparison_excludes_future_posted_within_the_as_of_month(
     tmp_path: Path,
 ) -> None:
