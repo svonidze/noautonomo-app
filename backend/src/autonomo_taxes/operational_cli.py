@@ -6068,6 +6068,7 @@ def _approved_forecast_rows(db: LedgerDB, period_key: str) -> list[dict[str, Any
             raw["transaction_id"],
             {
                 "transaction_id": raw["transaction_id"],
+                "entry_type": raw["entry_type"],
                 "transaction_date": raw["transaction_date"],
                 "description": raw["description"],
                 "counterparty_name": raw.get("counterparty_name") or "",

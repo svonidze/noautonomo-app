@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from autonomo_taxes.current_quarter import (
     add_xolo_comparison,
     build_current_quarter_dashboard,
@@ -66,6 +68,7 @@ def test_q3_dashboard_separates_posted_and_approved_and_uses_official_130_rule(t
     details = [
         {
             "transaction_id": row.transaction_id,
+            "entry_type": row.kind,
             "transaction_date": row.tax_date.isoformat(),
             "description": row.transaction_id,
             "counterparty_name": row.transaction_id,
@@ -214,6 +217,7 @@ def test_dashboard_separates_future_approved_forecasts_from_overdue_rows() -> No
     approved_rows = [
         {
             "transaction_id": "future-amortization",
+            "entry_type": "expense",
             "transaction_date": "2026-09-30",
             "description": "Scheduled Q3 amortization",
             "tax_code": "historical_g03",
@@ -222,6 +226,8 @@ def test_dashboard_separates_future_approved_forecasts_from_overdue_rows() -> No
         },
         {
             "transaction_id": "overdue-expense",
+            "entry_type": "expense",
+            "document_id": "expense-document",
             "transaction_date": "2026-07-10",
             "description": "Reviewed expense waiting for posting",
             "tax_code": "domestic_input",
@@ -229,6 +235,8 @@ def test_dashboard_separates_future_approved_forecasts_from_overdue_rows() -> No
         },
         {
             "transaction_id": "missing-date",
+            "entry_type": "expense",
+            "document_id": "expense-document",
             "description": "Malformed reviewed row",
             "tax_code": "domestic_input",
             "document_type": "expense_invoice",
@@ -459,3 +467,39 @@ def test_xolo_comparison_exposes_omitted_allowance_and_prior_quarter(tmp_path) -
     assert dashboard["xolo_forecast"]["difference_projected_minus_xolo"]["05"] == Decimal("2639.12")
     assert dashboard["xolo_forecast"]["difference_projected_minus_xolo"]["19"] == Decimal("-2958.88")
     assert "prior filed quarters" in dashboard["warnings"][0]
+
+
+@pytest.mark.parametrize(
+    ("entry_type", "document_id", "document_type", "tax_code", "asset_id", "expected"),
+    [
+        ("income", "invoice", "income_invoice", "outside_scope", "", None),
+        ("income", "", "income_invoice", "outside_scope", "", "income_invoice_missing"),
+        ("income", "invoice", "expense_invoice", "outside_scope", "", "income_invoice_missing"),
+        ("expense", "invoice", "expense_invoice", "domestic_input", "", None),
+        ("expense", "", "expense_invoice", "domestic_input", "", "supplier_invoice_missing"),
+        ("expense", "invoice", "income_invoice", "domestic_input", "", "supplier_invoice_missing"),
+        ("expense", "book", "gastos_book", "historical_g03", "asset", None),
+        ("expense", "book", "gastos_book", "historical_g03", "", "amortization_asset_link_missing"),
+        ("income", "book", "income_invoice", "historical_g03", "asset", "transaction_review"),
+        (None, "invoice", "income_invoice", "outside_scope", "", "transaction_review"),
+        ("other", "invoice", "income_invoice", "outside_scope", "", "transaction_review"),
+    ],
+)
+def test_approved_forecast_requires_evidence_for_its_transaction_type(
+    entry_type, document_id, document_type, tax_code, asset_id, expected
+) -> None:
+    dashboard = build_current_quarter_dashboard(
+        actual_rows=[], projected_rows=[], period_key="2028-Q2", as_of=date(2028, 7, 2),
+        difficult_expenses_rate=Decimal("0.05"),
+        previous_positive_casilla_07=Decimal("0"), previous_negative_carry=Decimal("0"),
+        previous_vat_compensation=Decimal("0"), obligations=[], period_validation={"blocking_issues": [], "unresolved_obligations": []},
+        approved_current_rows=[{
+            "transaction_id": "synthetic-reviewed-entry", "transaction_date": "2028-05-04",
+            "description": "Synthetic reviewed entry", "entry_type": entry_type,
+            "document_id": document_id, "document_type": document_type,
+            "tax_code": tax_code, "asset_id": asset_id,
+        }],
+    )
+    kinds = {row["kind"] for row in dashboard["blocking_items"]}
+    assert kinds == {"approved_not_posted"} | ({expected} if expected else set())
+    assert dashboard["filing_ready"] is False
