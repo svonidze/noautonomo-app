@@ -20,6 +20,7 @@ DATA_BLOCKER_KINDS = {
     "invalid_amount",
     "out_of_period",
     "supplier_invoice_missing",
+    "income_invoice_missing",
     "amortization_asset_link_missing",
     "calendar_deadline_mismatch",
     "confirmed_deadline_missing",

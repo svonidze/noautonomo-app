@@ -374,7 +374,20 @@ def _blocking_items(
         blockers.append(
             item
         )
-        if row.get("tax_code") == "historical_g03" and not row.get("asset_id"):
+        entry_type = row.get("entry_type")
+        historical_amortization = row.get("tax_code") == "historical_g03"
+        if entry_type not in {"income", "expense"} or (
+            historical_amortization and entry_type != "expense"
+        ):
+            blockers.append(
+                {
+                    "kind": "transaction_review",
+                    "reference": row["transaction_id"],
+                    "detail": "Unsupported transaction type or amortization classification",
+                }
+            )
+            continue
+        if historical_amortization and not row.get("asset_id"):
             blockers.append(
                 {
                     "kind": "amortization_asset_link_missing",
@@ -382,10 +395,17 @@ def _blocking_items(
                     "detail": row["description"],
                 }
             )
-        if row.get("tax_code") != "historical_g03" and row.get("document_type") != "expense_invoice":
+        expected_document = "income_invoice" if entry_type == "income" else "expense_invoice"
+        if not historical_amortization and (
+            not row.get("document_id") or row.get("document_type") != expected_document
+        ):
             blockers.append(
                 {
-                    "kind": "supplier_invoice_missing",
+                    "kind": (
+                        "income_invoice_missing"
+                        if entry_type == "income"
+                        else "supplier_invoice_missing"
+                    ),
                     "reference": row["transaction_id"],
                     "detail": row["description"],
                 }

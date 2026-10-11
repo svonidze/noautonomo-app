@@ -305,3 +305,49 @@ def test_period_prepare_cli_builds_real_manual_filing_bundle(
     )
     assert (output / "tax-actions.ics").is_file()
     assert (output / "books" / "filing-package-manifest.json").is_file()
+
+
+def test_preparation_preserves_typed_income_evidence_and_posting_gates(tmp_path) -> None:
+    from autonomo_taxes.operational_cli import _build_period_preparation_context
+    from autonomo_taxes.shadow_close import build_shadow_close_report
+
+    with initialize(tmp_path / "typed-income.sqlite") as db:
+        document = db.upsert_document(
+            document_type="income_invoice", document_number="SYNTHETIC-REVIEW-1",
+            issued_on="2028-05-04", period_key="2028-Q2", currency="EUR",
+            total_minor=12500, lifecycle_status="approved", source_hash="synthetic-income-source",
+        )
+        tx = db.add_transaction(
+            period_key="2028-Q2", transaction_date="2028-05-04", booking_date="2028-05-04",
+            entry_type="income", description="Synthetic service income", amount_minor=12500,
+            document_id=document["document_id"], lifecycle_status="approved",
+        )
+        db.add_detailed_tax_treatment(
+            transaction_id=tx["transaction_id"], treatment_type="income", tax_code="outside_scope",
+            taxable_base_minor=12500, include_modelo130=True,
+        )
+        for document_type in ("income_invoice", "other"):
+            if document_type == "other":
+                db.upsert_document(
+                    document_id=document["document_id"], document_type=document_type,
+                    document_number="SYNTHETIC-REVIEW-1", issued_on="2028-05-04",
+                    period_key="2028-Q2", currency="EUR", total_minor=12500,
+                    lifecycle_status="approved", source_hash="synthetic-income-source",
+                    expected_row_version=document["row_version"],
+                )
+            period, dashboard, report = _build_period_preparation_context(
+                db, period_key="2028-Q2", as_of=date(2028, 7, 2),
+                available_eur=Decimal("500"), cash_buffer_eur=None,
+            )
+            assert dashboard["forecast_rows"][0]["entry_type"] == "income"
+            assert report["filing_ready"] is False
+            assert report["workflow_items"][0]["kind"] == "approved_not_posted"
+            evidence_blockers = {row["kind"] for row in report["data_blockers"]}
+            assert ("income_invoice_missing" in evidence_blockers) == (document_type == "other")
+            assert "supplier_invoice_missing" not in evidence_blockers
+            shadow = build_shadow_close_report(
+                period=period, as_of=date(2028, 7, 2), dashboard=dashboard,
+                aeat_projection={}, payment_state={}, offboarding_verification=None,
+                invoice_channel_assessment=None,
+            )
+            assert ("income_invoice_missing" in json.dumps(shadow["gates"]["accounting_data"])) == (document_type == "other")
