@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import intake from '../../src/locales/ru/intake.json' with { type: 'json' };
+import routes from '../../src/locales/ru/routes.json' with { type: 'json' };
+import common from '../../src/locales/ru/common.json' with { type: 'json' };
 
 test('real backend serves routes, scripts and guarded history under CSP', async ({ page }) => {
   const errors: string[] = [];
@@ -126,6 +128,71 @@ test('every screen states its purpose and offers exactly one primary action', as
     });
   }
   expect(seen).toEqual(routes.map((route) => ({ route, primaries: 1, lead: true })));
+});
+
+test('an unknown address inside the app offers one way back, not the add button too', async ({
+  page,
+}) => {
+  await page.goto('/dashboard?period=2026-Q3');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+  // Only the router can reach an unknown path: the server answers 404 for a typed one.
+  await page.evaluate(() => {
+    history.pushState(null, '', '/nowhere');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.locator('#app')).toContainText(routes['routes.unknownTitle']);
+  await expect(page.locator('.new-entry')).toBeHidden();
+  await expect(page.locator('.primary-button:visible')).toHaveText([
+    routes['routes.backToDashboard'],
+  ]);
+});
+
+test('opening the AEAT upload hands the primary action to saving and closing takes it back', async ({
+  page,
+}) => {
+  await page.goto('/aeat-documents');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+  const upload = page.locator('.aeat-upload-panel'),
+    summary = upload.locator(':scope > summary');
+  await expect(summary).toHaveClass(/primary-button/);
+  await summary.click();
+  await expect(upload).toHaveAttribute('open', '');
+  await expect(summary).not.toHaveClass(/primary-button/);
+  const primary = page.locator('.primary-button:visible');
+  await expect(primary).toHaveCount(1);
+  await expect(primary).toHaveAttribute('type', 'submit');
+  // Saving waits for a preview of the chosen PDF.
+  await expect(primary).toBeDisabled();
+  await summary.click();
+  await expect(summary).toHaveClass(/primary-button/);
+  await expect(page.locator('.primary-button:visible')).toHaveCount(1);
+});
+
+test('a failed calculation says why and lets the owner try again', async ({ page }) => {
+  let calls = 0;
+  await page.route('**/api/dashboard/refresh', (route) => {
+    calls++;
+    return route.fulfill({ status: 503, json: { error: 'Synthetic calculation failure' } });
+  });
+  await page.goto('/dashboard?period=2026-Q3');
+  const calculate = page.locator('.metric .calculate-button').first();
+  await calculate.click();
+  await expect(page.locator('#toast')).toHaveClass(/error/);
+  await expect(page.locator('#toast-message')).toHaveText('Synthetic calculation failure');
+  // On the dark toast the close button rings in its own white text, not the page's green.
+  await page.keyboard.press('Tab');
+  const close = page.locator('#toast-close');
+  await close.focus();
+  expect(
+    await close.evaluate((node) => [
+      node.matches(':focus-visible'),
+      getComputedStyle(node).outlineColor,
+    ]),
+  ).toEqual([true, 'rgb(255, 255, 255)']);
+  await expect(calculate).toBeEnabled();
+  await expect(calculate).toHaveText(common['common.calculate']);
+  await calculate.click();
+  await expect.poll(() => calls).toBe(2);
 });
 
 test('a disabled add button says why in visible text', async ({ page }) => {

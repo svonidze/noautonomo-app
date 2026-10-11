@@ -95,6 +95,21 @@ def test_operations_keep_source_document_availability_and_zero_amount(tmp_path):
     assert original.read_text(encoding="utf-8") == "Synthetic source document"
 
 
+def test_counterparty_operations_read_a_quarter_without_a_row_as_empty(tmp_path):
+    config = _config(tmp_path)
+    with LedgerDB.initialize(config.database) as db:
+        party = db.upsert_counterparty(display_name="Synthetic")
+        db.add_transaction(
+            period_key="2026-Q3", transaction_date="2026-07-01", booking_date="2026-07-01",
+            entry_type="income", description="Synthetic other quarter", amount_minor=100,
+            counterparty_id=party["counterparty_id"],
+        )
+    page = LocalAccountingApp(config).counterparty_transactions(party["counterparty_id"], period_key="2026-Q4")
+    # Another quarter's operations never leak into a quarter that has no row yet.
+    assert (page["period"], page["rows"], page["matching_count"]) == ("2026-Q4", [], 0)
+    assert page["has_more"] is False and page["next_offset"] == 0
+
+
 @pytest.mark.parametrize("arguments", [
     {"offset": -1}, {"offset": True}, {"limit": 0}, {"limit": 101}, {"limit": True},
     {"period_key": "2026-Q5"},

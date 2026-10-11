@@ -339,7 +339,7 @@ defineExpose({
       </details>
     </div>
     <template v-else-if="!context.contactId">
-      <section class="panel">
+      <section class="panel" aria-labelledby="page-title">
         <div class="table-wrap" id="contacts-list-wrap">
           <table>
             <thead>

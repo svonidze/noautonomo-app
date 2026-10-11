@@ -427,6 +427,11 @@ test('each step is done, can start, or waits for an earlier one', () => {
   expect(closed).toMatchObject({ action: 'intake', disabled: true });
   expect(tags([closed])).toEqual([notStarted]);
   expect(text(closed)[1]).toBe(intake['intake.disabledReason']);
+  // Once a document is in, the done step keeps its own hint.
+  const [, kept] = start(documentOnly, { canAdd: false });
+  expect(kept).toMatchObject({ action: 'intake', disabled: true });
+  expect(tags([kept])).toEqual([done]);
+  expect(text(kept)[1]).toBe(ru['dashboard.start.document.hint']);
 });
 
 test('the overview shows the start list until the first posting, then the regular list', async () => {

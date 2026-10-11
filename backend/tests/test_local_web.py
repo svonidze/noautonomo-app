@@ -2,7 +2,7 @@ from __future__ import annotations
 from autonomo_test_support.local_web import _config
 
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 import errno
 import hashlib
 from http.client import HTTPConnection
@@ -272,19 +272,64 @@ def _fresh_app(tmp_path: Path) -> LocalAccountingApp:
     return LocalAccountingApp(config, session_token="test-token")
 
 
-def test_bootstrap_offers_the_current_quarter_of_a_ledger_without_quarters(tmp_path: Path) -> None:
+def test_bootstrap_offers_the_current_and_previous_quarters_of_a_ledger_without_quarters(
+    tmp_path: Path,
+) -> None:
     app = _fresh_app(tmp_path)
     today = date.today()
 
     bootstrap = app.bootstrap()
 
-    [quarter] = bootstrap["periods"]
+    # The first document may be dated in the quarter that just ended: both are offered.
+    [quarter, previous] = bootstrap["periods"]
     assert bootstrap["default_period"] == quarter["period_key"] == local_web._quarter_key(today)
-    assert quarter["status"] == "missing"
+    assert quarter["status"] == previous["status"] == "missing"
     assert quarter["starts_on"] <= today.isoformat() <= quarter["ends_on"]
+    assert previous["ends_on"] == (date.fromisoformat(quarter["starts_on"]) - timedelta(days=1)).isoformat()
     # Offered, not created: reading never writes a quarter.
     with LedgerDB.open(app.config.database, read_only=True) as db:
         assert db.connection.execute("SELECT COUNT(*) FROM periods").fetchone()[0] == 0
+
+
+def test_bootstrap_always_offers_the_current_quarter_beside_the_quarters_with_rows(
+    tmp_path: Path,
+) -> None:
+    app = _fresh_app(tmp_path)
+    current = local_web._quarter_key(date.today())
+    [_, previous] = [row["period_key"] for row in app.bootstrap()["periods"]]
+    with LedgerDB.open(app.config.database) as db:
+        db.ensure_period(previous)
+
+    bootstrap = app.bootstrap()
+
+    # Offered, not created: the quarter with a row stays the default.
+    assert [(row["period_key"], row["status"]) for row in bootstrap["periods"]] == [
+        (current, "missing"), (previous, "open")]
+    assert bootstrap["default_period"] == previous
+    with LedgerDB.open(app.config.database, read_only=True) as db:
+        assert db.connection.execute("SELECT COUNT(*) FROM periods").fetchone()[0] == 1
+    with LedgerDB.open(app.config.database) as db:
+        db.ensure_period(current)
+    bootstrap = app.bootstrap()
+    assert [row["status"] for row in bootstrap["periods"]] == ["open", "open"]
+    assert bootstrap["default_period"] == current
+
+
+def test_intake_names_both_quarters_when_the_document_date_is_in_another(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+    fields = {"period": "2026-Q4", "kind": "expense_invoice", "issued_on": "2026-09-30"}
+
+    for intake in (
+        lambda: app.ingest_upload(fields=fields, filename="synthetic.txt", content=b"Synthetic"),
+        lambda: app.ingest_google_drive_url(
+            fields=fields, drive_url=f"{DRIVE_URL}/file/d/abcDef_012-345678/view"),
+    ):
+        with pytest.raises(LocalWebApiError) as refused:
+            intake()
+        assert (refused.value.status, refused.value.code) == (400, "quarter_mismatch")
+        assert refused.value.message_code == "intake.quarterMismatch"
+        assert refused.value.params == {"documentQuarter": "2026-Q3", "selectedQuarter": "2026-Q4"}
+    assert not app.config.inbox_root.exists() or not any(app.config.inbox_root.rglob("*.txt"))
 
 
 def test_dashboard_reads_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
@@ -330,12 +375,19 @@ def test_issues_read_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
 
 
 def test_posting_preview_reads_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
-    preview = _fresh_app(tmp_path).posting_preview("2026-Q4")
+    app = _fresh_app(tmp_path)
+    preview = app.posting_preview("2026-Q4")
 
-    assert (preview["period"], preview["period_status"]) == ("2026-Q4", "missing")
+    assert (preview["period"], preview["period_status"], preview["reason_code"]) == ("2026-Q4", "missing", None)
     assert preview["ready"] == preview["deferred"] == preview["blocked"] == preview["items"] == []
     assert preview["summary"]["ready_count"] == preview["summary"]["approved_count"] == 0
     assert preview["summary"]["ready_total_eur"] == "0.00"
+    # The posting module builds it, timestamps included, so the tab never reads "no timestamp".
+    assert preview["as_of"] == date.today().isoformat() and preview["generated_at"]
+    assert preview["cleanup_roots"] == {"inbox_root": str(app.config.inbox_root),
+                                        "archive_root": str(app.config.archive_root)}
+    with pytest.raises(LocalWebError, match="YYYY-QN"):
+        app.posting_preview("2026")
 
 
 def test_assets_read_a_quarter_without_a_row(tmp_path: Path) -> None:

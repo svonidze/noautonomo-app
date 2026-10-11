@@ -39,7 +39,6 @@ export interface ChartSpec {
   note?: string;
   tableLabel?: string;
   tableInitiallyOpen?: boolean;
-  tablePrimaryOnNarrow?: boolean;
   totalLabel?: string;
   totalValueLabel?: string;
   shareUnavailableLabel?: string;

@@ -206,7 +206,7 @@ async function saveStatus() {
 
 <template>
   <div class="section-stack aeat-documents-page">
-    <section class="panel">
+    <section class="panel" aria-labelledby="page-title">
       <header class="panel-header">
         <p>{{ t('aeatDocuments.intro') }}</p>
         <small>{{ rows.length }}</small>
@@ -280,7 +280,7 @@ async function saveStatus() {
           <thead>
             <tr>
               <th>{{ t('aeatDocuments.date') }}</th>
-              <th>Modelo</th>
+              <th class="aeat-form-code">Modelo</th>
               <th>{{ t('aeatDocuments.procedure') }}</th>
               <th>{{ t('aeatDocuments.kind') }}</th>
               <th>{{ t('aeatDocuments.status') }}</th>

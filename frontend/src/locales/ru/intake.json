@@ -24,6 +24,7 @@
   "intake.invalidResponse": "Не удалось подтвердить результат. Обновите список перед повторной загрузкой.",
   "intake.kindAria": "Тип записи",
   "intake.processing": "Извлечение и запись…",
+  "intake.quarterMismatch": "Дата документа попадает в {documentQuarter}, а выбран {selectedQuarter}. Выберите {documentQuarter} в шапке и повторите.",
   "intake.selectFile": "Выберите файл.",
   "intake.sourceAria": "Источник документа",
   "intake.sourceGoogleDrive": "Google Drive URL",

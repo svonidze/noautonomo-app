@@ -115,3 +115,21 @@ test('reviewed income names its amount, keeps a known part beside rows without E
   expect(await line({ income_transaction_count: 2 })).toEqual(reviewed('2 операции'));
   expect(await line({})).toEqual([]);
 });
+
+test('posted income keeps its known part beside rows without a EUR amount', async () => {
+  const posted = async (actual: DashboardData['totals']['actual']) =>
+    (
+      await card(dashboard({ totals: { actual, forecast: {} } }), 'Доходы, проведено')
+    ).querySelector('strong')!.textContent;
+  expect(
+    await posted({
+      income_eur: '500.00',
+      income_transaction_count: 3,
+      income_known_amount_minor: 50000,
+      income_missing_amount_count: 1,
+    }),
+  ).toBe(`${eur('500.00', 'ru')} и 1 операция без суммы в EUR`);
+  expect(await posted({ income_eur: '500.00', income_transaction_count: 2 })).toBe(
+    eur('500.00', 'ru'),
+  );
+});
