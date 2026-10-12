@@ -2946,6 +2946,83 @@ def test_native_final_snapshot_drives_previous_positive_and_negative_carry(
     assert result["values"]["15"] == "50.00"
 
 
+def test_filed_snapshot_timestamp_tie_uses_latest_extraction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("autonomo_taxes.ledger_db._utc_now", lambda: "2026-10-12T12:00:00")
+    with initialize(tmp_path / "ledger.sqlite") as db:
+        db.ensure_period("2026-Q2")
+        old_values = {"compensation_carryforward": "0.00"}
+        new_values = {"compensation_carryforward": "584.00"}
+        for schema, values in (("modelo303_v4", old_values), ("modelo303_v5", new_values)):
+            db.create_filing_snapshot(
+                "2026-Q2", status="baseline", filed_on="2026-07-20",
+                snapshot_hash=schema, source_hash="same-pdf-source",
+                payload={"form": "303", "value_extraction_schema": schema, "filed_values": values},
+            )
+        rows_before = [tuple(row) for row in db.connection.execute(
+            "SELECT * FROM filing_snapshots ORDER BY rowid"
+        )]
+        assert len(rows_before) == 2
+        assert db.connection.execute(
+            "SELECT COUNT(DISTINCT created_at) FROM filing_snapshots"
+        ).fetchone()[0] == 1
+
+        baseline = operational_cli._filed_baseline(db, "2026-Q2", "303")
+        candidates = operational_cli._filed_value_candidates(db, "2026-Q2", "303")
+        carry = operational_cli._previous_filed_vat_compensation(db, 2026, 3)
+        assert {
+            "schema": baseline["value_extraction_schema"],
+            "baseline": baseline["filed_values"],
+            "candidates": candidates,
+            "carry": carry,
+        } == {
+            "schema": "modelo303_v5",
+            "baseline": new_values,
+            "candidates": [new_values, old_values],
+            "carry": Decimal("584.00"),
+        }
+        assert [tuple(row) for row in db.connection.execute(
+            "SELECT * FROM filing_snapshots ORDER BY rowid"
+        )] == rows_before
+
+
+@pytest.mark.parametrize(
+    ("first_status", "first_filed_on", "second_status", "second_filed_on"),
+    [
+        ("final", "2026-07-19", "baseline", "2026-07-20"),
+        ("baseline", "2026-07-20", "baseline", "2026-07-19"),
+    ],
+    ids=["status-before-recency", "filed-on-before-rowid"],
+)
+def test_filed_snapshot_precedence_wins_over_latest_rowid(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    first_status: str,
+    first_filed_on: str,
+    second_status: str,
+    second_filed_on: str,
+) -> None:
+    monkeypatch.setattr("autonomo_taxes.ledger_db._utc_now", lambda: "2026-10-12T12:00:00")
+    with initialize(tmp_path / "ledger.sqlite") as db:
+        db.ensure_period("2026-Q2")
+        db.close_period("2026-Q2", expected_row_version=1)
+        first_values = {"compensation_carryforward": "584.00"}
+        second_values = {"compensation_carryforward": "0.00"}
+        for status, filed_on, snapshot_hash, values in (
+            (first_status, first_filed_on, "preferred", first_values),
+            (second_status, second_filed_on, "latest-row", second_values),
+        ):
+            db.create_filing_snapshot(
+                "2026-Q2", status=status, filed_on=filed_on, snapshot_hash=snapshot_hash,
+                payload={"form": "303", "filed_values": values},
+            )
+        assert operational_cli._filed_baseline(db, "2026-Q2", "303")["snapshot_hash"] == "preferred"
+        assert operational_cli._filed_value_candidates(db, "2026-Q2", "303") == [first_values, second_values]
+        assert operational_cli._previous_filed_vat_compensation(db, 2026, 3) == Decimal("584.00")
+
+
 def test_native_final_modelo303_snapshot_drives_vat_compensation(
     tmp_path: Path,
     capsys,
