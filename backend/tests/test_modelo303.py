@@ -473,6 +473,60 @@ def test_casilla_totals_do_not_replace_a_sequence_with_unexplained_amounts(tmp_p
     assert parsed.extraction_status == "unexpected_monetary_sequence_len_10"
 
 
+@pytest.mark.parametrize("amount", ["210,00", "400,00", "0,00", "21,00"])
+@pytest.mark.parametrize("labelled", [False, True], ids=["unassigned", "unsupported-box"])
+def test_casilla_totals_reject_unassigned_amounts_equal_to_known_values(tmp_path, amount, labelled):
+    from dataclasses import replace
+
+    from autonomo_taxes.filing_evidence import extract_filing_evidence
+    from autonomo_taxes.filing_receipts import verify_filing_receipt
+    from autonomo_taxes.modelo303 import _crosscheck_status
+    from autonomo_taxes.money import parse_amount
+
+    path = tmp_path / "MOD 303 1T 2026 synthetic.pdf"
+    extra = [(amount, 105, 610, 9, 1)]
+    if labelled:
+        extra.insert(0, ("59", 60, 610, 1, 6.5))
+    _modelo303_receipt(path, _RC_BOXES, _RC_SETTLEMENT, amount_size=1, amount_scale=9, extra=extra)
+    evidence = replace(
+        extract_filing_evidence(path),
+        filed_on="2026-04-15T12:00:00",
+        submission_reference="synthetic-reference",
+        justificante_number="3030000000000",
+        verification_code="SYNTHETICCSV",
+    )
+    status = evidence.payload["extraction_status"]
+    expected_status = "unexpected_monetary_sequence_len_9" if amount == "21,00" else "unexpected_monetary_sequence_len_10"
+    assert status == expected_status
+    assert _crosscheck_status(status, Decimal("0.00"), Decimal("0.00")) == "needs_manual_review"
+
+    calculated = {key: Decimal("0.00") for key in REVERSE_CHARGE_BOXES}
+    calculated.update({key: parse_amount(raw) for key, raw in {**_RC_BOXES, **_RC_SETTLEMENT}.items()})
+    calculated.update({"59": Decimal("0.00"), "compensation_carryforward": Decimal("584.00")})
+    with pytest.raises(ValueError, match=expected_status):
+        verify_filing_receipt(
+            evidence, {"form": "303", "period": "2026-Q1", "values": calculated},
+            expected_form="303", expected_period="2026-Q1", calculation_sha256="0" * 64,
+        )
+
+
+@pytest.mark.parametrize(("amount_size", "amount_scale"), [(1, 9), (9, 1)], ids=["sede", "provider"])
+def test_casilla_totals_allow_rates_only_in_their_positioned_fields(tmp_path, amount_size, amount_scale):
+    from autonomo_taxes.modelo303 import extract_modelo303_values
+
+    path = tmp_path / "receipt-303-with-rate.pdf"
+    extra = [("08", 180, 718, 1, 6.5), ("21,00", 225, 718, amount_size, amount_scale),
+             ("09", 300, 718, 1, 6.5)]
+    _modelo303_receipt(path, _RC_BOXES, _RC_SETTLEMENT, amount_size=amount_size,
+                       amount_scale=amount_scale, extra=extra)
+    parsed = extract_modelo303_values(path)
+
+    assert parsed.extraction_status == "positioned_casillas"
+    assert len(parsed.monetary_sequence) == 9
+    assert parsed.output_vat == Decimal("210.00")
+    assert parsed.compensation_carryforward == Decimal("584.00")
+
+
 @pytest.mark.parametrize(
     "broken",
     [
