@@ -21,5 +21,12 @@
   "dashboard.upcomingFiling": "Upcoming filing",
   "dashboard.valuesUnavailable": "values unavailable",
   "dashboard.waitingForPeriodOne": "{count} awaiting period close",
-  "dashboard.waitingForPeriodOther": "{count} awaiting period close"
+  "dashboard.waitingForPeriodOther": "{count} awaiting period close",
+  "dashboard.yearToDate": "Year to date · {year}",
+  "dashboard.ytdAsOf": "Renta rules, as of {date}",
+  "dashboard.ytdExpenses": "Expenses",
+  "dashboard.ytdFullYear": "Renta rules, full year",
+  "dashboard.ytdIncome": "Gross",
+  "dashboard.ytdNet": "Net",
+  "dashboard.ytdUnavailable": "Yearly figures unavailable: some transactions have missing or conflicting tax data."
 }

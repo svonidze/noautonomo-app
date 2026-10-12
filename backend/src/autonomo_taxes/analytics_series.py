@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from calendar import monthrange
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -8,7 +9,11 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from .cash_check import build_cash_check
+from .ledger_db import LedgerDB
+from .tax_engine import CalculationBlocked, calculate_modelo100_business_support
 from .tax_result_view import TAX_FORM_KEYS
+from .tax_row_loader import load_tax_rows
+from .tax_rules import difficult_expense_rule_for_year
 
 ACTUAL_STATUSES = ("posted", "included_in_snapshot")
 APPROVED_STATUSES = ("approved",)
@@ -67,7 +72,7 @@ def build_analytics(
         "quarterly_tax_due": _quarterly_tax_due(year_forms),
         "iva_position": _iva_position(year_forms),
         "reserve_bullet": _reserve_bullet(query.period_key, year_forms),
-        "ytd_comparison": _ytd_comparison(transactions, query=query),
+        "ytd_comparison": _ytd_comparison(connection, transactions, query=query),
         "expense_structure": _expense_structure(
             transactions, query=query, through=through, quality=quality
         ),
@@ -610,7 +615,47 @@ def _reserve_bullet(
     }
 
 
+def _renta_totals(
+    connection: sqlite3.Connection,
+    *,
+    year: int,
+    through: date | None,
+) -> dict[str, int | str | None]:
+    empty = {
+        "renta_status": "empty",
+        "renta_income_minor": None,
+        "difficult_expense_minor": None,
+        "renta_expense_minor": None,
+        "renta_net_minor": None,
+    }
+    if through is None:
+        return empty
+    try:
+        rows = load_tax_rows(
+            LedgerDB(connection), year, allow_authoritative_history=True, through=through
+        )
+    except CalculationBlocked:
+        return {**empty, "renta_status": "blocked"}
+    if not rows:
+        return empty
+    rule = difficult_expense_rule_for_year(year)
+    values = calculate_modelo100_business_support(
+        rows, year=year, difficult_expenses_rate=rule.rate,
+        difficult_expenses_cap=rule.annual_cap_eur,
+    ).values
+    return {
+        "renta_status": "ok",
+        "renta_income_minor": _decimal_to_minor(values["business_income"]),
+        "difficult_expense_minor": _decimal_to_minor(values["difficult_expenses"]),
+        "renta_expense_minor": _decimal_to_minor(
+            values["business_expenses_before_difficult"] + values["difficult_expenses"]
+        ),
+        "renta_net_minor": _decimal_to_minor(values["business_net_income"]),
+    }
+
+
 def _ytd_comparison(
+    connection: sqlite3.Connection,
     transactions: list[dict[str, Any]],
     *,
     query: AnalyticsQuery,
@@ -658,11 +703,26 @@ def _ytd_comparison(
         "deductible_expense_minor": None,
         "net_minor": None,
     }
+
+    def summary(year: int) -> dict[str, Any]:
+        through = (
+            date(year, through_month, monthrange(year, through_month)[1])
+            if through_month else None
+        )
+        if through is not None and year == query.year:
+            through = min(through, query.as_of)
+        return {
+            "year": year,
+            **(totals(year) or empty),
+            **_renta_totals(connection, year=year, through=through),
+        }
+
     return {
         "measure": "net_before_difficult_expenses",
+        "renta_measure": "net_after_difficult_expenses",
         "through_month": through_month,
-        "current_year": {"year": query.year, **(totals(query.year) or empty)},
-        "previous_year": {"year": query.year - 1, **(totals(query.year - 1) or empty)},
+        "current_year": summary(query.year),
+        "previous_year": summary(query.year - 1),
     }
 
 

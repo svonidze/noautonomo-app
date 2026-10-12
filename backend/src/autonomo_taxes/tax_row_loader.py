@@ -15,6 +15,7 @@ def load_tax_rows(
     mode: str = "production",
     allow_authoritative_history: bool = False,
     include_approved_periods: Collection[str] = (),
+    through: date | None = None,
 ) -> list[TaxRow]:
     approved_periods = set(include_approved_periods)
     authoritative_ids = (
@@ -27,6 +28,10 @@ def load_tax_rows(
     )
     grouped: dict[str, dict[str, Any]] = {}
     for raw in database.list_tax_rows(year=year):
+        if through is not None and not (
+            date(year, 1, 1) <= date.fromisoformat(raw["transaction_date"]) <= through
+        ):
+            continue
         if raw["entry_type"] == "verify_history_adjustment" and mode != "verify_history":
             continue
         if mode == "production" and raw["lifecycle_status"] not in {
