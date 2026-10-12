@@ -61,7 +61,7 @@ def test_missing_core_return_stays_unresolved_next_to_a_reviewed_one(tmp_path: P
     assert summary["forms"]["303"]["calculation_source"] == "not_required"
 
 
-@pytest.mark.parametrize("schema", ["modelo303_v4", "modelo303_v5"])
+@pytest.mark.parametrize("schema", ["modelo303_v4", "modelo303_v5", "modelo303_v6"])
 def test_modelo303_schema_keeps_blanks_and_evidence_priority(
     tmp_path: Path, schema: str,
 ) -> None:

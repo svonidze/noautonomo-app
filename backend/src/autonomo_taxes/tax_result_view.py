@@ -119,7 +119,7 @@ def _modelo303_extraction_rank(row: Mapping[str, Any]) -> int:
     filed_values = payload.get("filed_values")
     if receipt.get("status") == "matched" and isinstance(values, Mapping):
         return 4
-    if schema in {"modelo303_v4", "modelo303_v5"} and isinstance(filed_values, Mapping):
+    if schema in {"modelo303_v4", "modelo303_v5", "modelo303_v6"} and isinstance(filed_values, Mapping):
         return 3
     if isinstance(values, Mapping):
         return 2
@@ -137,7 +137,7 @@ def _extract_modelo303_values(payload: Mapping[str, Any]) -> dict[str, str]:
     filed_values = payload.get("filed_values")
     if receipt.get("status") == "matched" and isinstance(values, Mapping):
         return coerce_money_values(values)
-    if schema in {"modelo303_v4", "modelo303_v5"} and isinstance(filed_values, Mapping):
+    if schema in {"modelo303_v4", "modelo303_v5", "modelo303_v6"} and isinstance(filed_values, Mapping):
         return coerce_money_values(
             filed_values,
             blank_keys=payload.get("blank_casillas") or (),

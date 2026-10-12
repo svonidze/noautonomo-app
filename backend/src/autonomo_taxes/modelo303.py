@@ -54,6 +54,7 @@ _DEDUCTIBLE_VAT_BOXES = ("29", "31", "33", "35", "37", "39")
 # Tipo % columns in the AEAT form, including the transitional rate rows:
 # https://sede.agenciatributaria.gob.es/static_files/Sede/Biblioteca/Manual/Practicos/IVA/IVA_2025/Imagenes/Cap_9_303_es_es.pdf
 _RATE_BOXES = ("151", "166", "02", "154", "05", "08", "157", "169", "17", "20", "23")
+_ZERO_OUTPUT_QUOTA_BASES = {"152": "150", "03": "01", "06": "04", "09": "07"}
 
 
 @dataclass(frozen=True)
@@ -422,6 +423,8 @@ def _sequence_is_explained(
     if structural is None:
         return False
     boxes = dict(structural.casillas)
+    # These output rows are unsupported unless their base and printed cuota are zero.
+    boxes.update({quota: Decimal("0.00") for quota, base in _ZERO_OUTPUT_QUOTA_BASES.items() if boxes.get(base) == 0})
     owners: dict[PositionedFragment, set[str]] = {}
     for label_fragment in fragments:
         label, _x, _y, size = label_fragment

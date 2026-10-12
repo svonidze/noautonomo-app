@@ -527,6 +527,52 @@ def test_casilla_totals_allow_rates_only_in_their_positioned_fields(tmp_path, am
     assert parsed.compensation_carryforward == Decimal("584.00")
 
 
+@pytest.mark.parametrize(("amount_size", "amount_scale"), [(1, 9), (9, 1)], ids=["sede", "provider"])
+@pytest.mark.parametrize(("base", "rate", "quota", "row_y"), [
+    ("150", "151", "152", 790), ("01", "02", "03", 766),
+    ("04", "05", "06", 742), ("07", "08", "09", 718),
+])
+def test_casilla_totals_accept_printed_zero_output_cuotas(
+    tmp_path, amount_size, amount_scale, base, rate, quota, row_y,
+):
+    from autonomo_taxes.modelo303 import extract_modelo303_values
+
+    path = tmp_path / "receipt-303-zero-cuota.pdf"
+    extra = [(rate, 180, row_y, 1, 6.5), (quota, 300, row_y, 1, 6.5),
+             ("0,00", 345, row_y, amount_size, amount_scale)]
+    _modelo303_receipt(path, {**_RC_BOXES, base: "0,00"}, _RC_SETTLEMENT,
+                       amount_size=amount_size, amount_scale=amount_scale, extra=extra)
+    parsed = extract_modelo303_values(path)
+
+    assert parsed.extraction_status == "positioned_casillas"
+    assert (parsed.output_base, parsed.output_vat) == (Decimal("1000.00"), Decimal("210.00"))
+    assert (parsed.deductible_base, parsed.deductible_vat) == (Decimal("1400.00"), Decimal("294.00"))
+    assert parsed.result == Decimal("-84.00")
+    assert parsed.compensation_carryforward == Decimal("584.00")
+    assert parsed.monetary_sequence.count(Decimal("0.00")) == 2
+
+
+@pytest.mark.parametrize("amount", ["21,00", "210,00", "-21,00"])
+def test_casilla_totals_reject_nonzero_cuota_for_zero_base(tmp_path, amount):
+    from autonomo_taxes.modelo303 import extract_modelo303_values
+
+    path = tmp_path / "receipt-303-nonzero-cuota.pdf"
+    extra = [("03", 300, 766, 1, 6.5), (amount, 345, 766, 1, 9)]
+    _modelo303_receipt(path, _RC_BOXES, _RC_SETTLEMENT, amount_size=1, amount_scale=9, extra=extra)
+
+    assert extract_modelo303_values(path).extraction_status.startswith("unexpected_monetary_sequence_len_")
+
+
+def test_zero_cuota_requires_its_base_to_be_extracted_and_zero():
+    from autonomo_taxes.modelo303 import _sequence_is_explained
+
+    amount = ("0,00", Decimal(345), Decimal(766), Decimal(9))
+    label = ("03", Decimal(300), Decimal(766), Decimal("6.5"))
+    for boxes in ({"01": Decimal("0.00")}, {"01": Decimal("100.00")}, {}):
+        evidence = Modelo303CasillaEvidence(tuple(boxes.items()), (), (), "casillas_extracted")
+        assert _sequence_is_explained([amount], evidence, [label, amount]) is (boxes.get("01") == 0)
+
+
 @pytest.mark.parametrize(
     "broken",
     [

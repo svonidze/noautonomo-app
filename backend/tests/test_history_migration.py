@@ -1809,8 +1809,9 @@ def test_refresh_filing_inventory_adds_modelo390_schema_once(
         assert db.connection.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 0
 
 
-def test_refresh_sede_modelo303_preserves_v4_and_adds_corrected_v5_once(
-    tmp_path: Path,
+@pytest.mark.parametrize("old_schema", ["modelo303_v4", "modelo303_v5"])
+def test_refresh_sede_modelo303_preserves_old_schema_and_adds_corrected_v6_once(
+    tmp_path: Path, old_schema: str,
 ) -> None:
     import hashlib
 
@@ -1820,7 +1821,9 @@ def test_refresh_sede_modelo303_preserves_v4_and_adds_corrected_v5_once(
 
     local_pdf = tmp_path / "MOD 303 2T 2026 Example Taxpayer.pdf"
     _modelo303_receipt(
-        local_pdf, _RC_BOXES, _RC_SETTLEMENT, amount_size=1, amount_scale=9,
+        local_pdf, {**_RC_BOXES, "01": "0,00"}, _RC_SETTLEMENT, amount_size=1, amount_scale=9,
+        extra=[("02", 180, 766, 1, 6.5), ("4,00", 225, 766, 1, 9),
+               ("03", 300, 766, 1, 6.5), ("0,00", 345, 766, 1, 9)],
     )
     source_hash = hashlib.sha256(local_pdf.read_bytes()).hexdigest().upper()
     inventory = tmp_path / "document_index.csv"
@@ -1838,7 +1841,7 @@ def test_refresh_sede_modelo303_preserves_v4_and_adds_corrected_v5_once(
     old_payload = {
         "form": "303",
         "period": "2026-Q2",
-        "value_extraction_schema": "modelo303_v4",
+        "value_extraction_schema": old_schema,
         "filed_values": {key: "0.00" for key in (
             "output_base", "output_vat", "deductible_base", "deductible_vat",
             "result", "27", "45", "64", "110", "87", "69", "71", "72",
@@ -1864,7 +1867,8 @@ def test_refresh_sede_modelo303_preserves_v4_and_adds_corrected_v5_once(
         assert snapshots[0]["snapshot_hash"] == source_hash
         assert {row["source_hash"] for row in snapshots} == {source_hash}
         corrected = json.loads(snapshots[1]["payload_json"])
-        assert corrected["value_extraction_schema"] == "modelo303_v5"
+        assert corrected["value_extraction_schema"] == "modelo303_v6"
+        assert corrected["extraction_status"] == "positioned_casillas"
         expected = {
             "output_base": "1000.00", "output_vat": "210.00",
             "deductible_base": "1400.00", "deductible_vat": "294.00",
@@ -1881,7 +1885,7 @@ def test_refresh_sede_modelo303_preserves_v4_and_adds_corrected_v5_once(
         annual = _best_modelo303_evidence(db, "2026-Q2")
         assert selected["snapshot_hash"] == snapshots[1]["snapshot_hash"]
         assert annual["snapshot_hash"] == snapshots[1]["snapshot_hash"]
-        assert annual["source_type"] == "modelo303_v5_extraction"
+        assert annual["source_type"] == "modelo303_v6_extraction"
         for key, value in expected.items():
             assert selected["values"][key] == value
             assert annual["values"][key] == value
