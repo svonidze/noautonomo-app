@@ -384,9 +384,9 @@ def _best_modelo303_evidence(
             source_type = "matched_filing_receipt"
             selected_values = dict(values)
             explicit_keys = set(selected_values)
-        elif schema == "modelo303_v4" and isinstance(filed_values, dict):
+        elif schema in {"modelo303_v4", "modelo303_v5", "modelo303_v6"} and isinstance(filed_values, dict):
             rank = 3
-            source_type = "modelo303_v4_extraction"
+            source_type = f"{schema}_extraction"
             selected_values = dict(filed_values)
             explicit_keys = set(selected_values)
             for key in payload.get("blank_casillas") or ():

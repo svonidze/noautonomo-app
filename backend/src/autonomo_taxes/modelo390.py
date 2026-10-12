@@ -9,6 +9,7 @@ from typing import Iterable, Sequence
 from pypdf import PdfReader
 
 from .money import cents, parse_amount
+from .pdf_text import effective_font_size
 
 
 FILED_CASILLAS = (
@@ -53,6 +54,10 @@ _POSITION_TOLERANCE = Decimal("90")
 
 PositionedFragment = tuple[str, Decimal, Decimal, Decimal]
 
+# Fragment sizes are rendered heights (see effective_font_size): casilla labels
+# print at 7-8pt and amounts at 9pt on provider and Sede-downloaded receipts.
+_MAX_LABEL_FONT_SIZE = Decimal(8)
+
 
 @dataclass(frozen=True)
 class Modelo390Values:
@@ -74,7 +79,7 @@ def extract_modelo390_values(path: Path) -> Modelo390Values:
     for page in reader.pages:
         fragments: list[PositionedFragment] = []
 
-        def visitor(fragment: str, _cm, tm, _font_dict, font_size: float) -> None:
+        def visitor(fragment: str, cm, tm, _font_dict, font_size: float) -> None:
             value = " ".join(fragment.split())
             if not value:
                 return
@@ -83,7 +88,7 @@ def extract_modelo390_values(path: Path) -> Modelo390Values:
                     value,
                     Decimal(str(tm[4])),
                     Decimal(str(tm[5])),
-                    Decimal(str(font_size)),
+                    Decimal(str(effective_font_size(font_size, tm, cm))),
                 )
             )
 
@@ -166,7 +171,7 @@ def _box_labels(
     labels: set[str] = set()
     for fragments in positioned_pages:
         for text, _x, _y, font_size in fragments:
-            if font_size > Decimal("2.5") or re.fullmatch(r"\d+(?:\s+\d+)*", text) is None:
+            if font_size > _MAX_LABEL_FONT_SIZE or re.fullmatch(r"\d+(?:\s+\d+)*", text) is None:
                 continue
             labels.update(token for token in text.split() if token in FILED_CASILLAS)
     return labels
@@ -181,7 +186,7 @@ def _positioned_candidates(
     for fragments in positioned_pages:
         label_rows: list[Decimal] = []
         for text, _x, y, font_size in fragments:
-            if font_size > Decimal("2.5") or re.fullmatch(r"\d+(?:\s+\d+)*", text) is None:
+            if font_size > _MAX_LABEL_FONT_SIZE or re.fullmatch(r"\d+(?:\s+\d+)*", text) is None:
                 continue
             if key in text.split():
                 label_rows.append(y)

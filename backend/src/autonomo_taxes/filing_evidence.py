@@ -91,7 +91,7 @@ def extract_filing_evidence(path: Path) -> FilingEvidence:
             payload["extraction_status"] = values.extraction_status
             payload["structural_extraction_status"] = values.structural_extraction_status
             payload["settlement_extraction_status"] = values.settlement_extraction_status
-            payload["value_extraction_schema"] = "modelo303_v4"
+            payload["value_extraction_schema"] = "modelo303_v6"
     elif pdf_error is None and form_code == "390" and quarter is None:
         try:
             values = extract_modelo390_values(path)

@@ -6,6 +6,7 @@ import unittest
 from autonomo_taxes.modelo130 import (
     calculate_modelo130,
     difficult_expenses,
+    extract_modelo130_values,
     extract_modelo130_values_from_text,
     _extract_modelo130_values_from_positioned_words,
     previous_positive_payments_with_warnings,
@@ -96,6 +97,40 @@ class Modelo130Tests(unittest.TestCase):
         self.assertEqual(total, Decimal("0.00"))
         self.assertEqual(len(warnings), 2)
         self.assertIn("2026 1T", warnings[0])
+
+
+def test_extract_modelo130_values_reads_sede_receipt_amounts(tmp_path):
+    from pypdf import PdfWriter
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+    # Sede-downloaded receipts set the font operand to 1 and scale the text matrix to 9pt.
+    amounts = [
+        ("528.8", "604.0", "5.757,20"), ("536.3", "592.2", "115,54"), ("528.8", "579.5", "5.641,66"),
+        ("528.8", "567.7", "1.128,33"), ("527.8", "496.4", "1.128,33"), ("528.8", "387.1", "1.128,33"),
+        ("536.3", "375.3", "100,00"), ("528.8", "362.6", "1.028,33"), ("528.8", "302.7", "1.028,33"),
+        ("528.3", "267.4", "1.028,33"),
+    ]
+    commands = ["BT", "1 0 0 1 60 700 Tm /F1 9 Tf (2026 1T) Tj"]
+    commands += [f"9 0 0 9 {x} {y} Tm /F1 1 Tf ({value}) Tj" for x, y, value in amounts]
+    commands.append("ET")
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=595, height=842)
+    font = DictionaryObject({NameObject("/Type"): NameObject("/Font"),
+                             NameObject("/Subtype"): NameObject("/Type1"),
+                             NameObject("/BaseFont"): NameObject("/Helvetica")})
+    page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): DictionaryObject({NameObject("/F1"): writer._add_object(font)})})
+    stream = DecodedStreamObject()
+    stream.set_data("\n".join(commands).encode())
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    path = tmp_path / "sede-130.pdf"
+    writer.write(path)
+
+    values = extract_modelo130_values(path, 2026, 1)
+
+    assert values["01"] == Decimal("5757.20")
+    assert values["07"] == Decimal("1128.33")
+    assert values["13"] == Decimal("100.00")
+    assert values["19"] == Decimal("1028.33")
 
 
 if __name__ == "__main__":

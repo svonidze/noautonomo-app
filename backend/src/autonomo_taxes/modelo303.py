@@ -10,6 +10,7 @@ from pypdf import PdfReader
 
 from .history import RawXoloExpense
 from .money import cents, format_es, parse_amount
+from .pdf_text import effective_font_size
 
 
 PERCENTAGE_VALUES = {
@@ -42,6 +43,18 @@ STRUCTURAL_SINGLE_CONTEXT = {
 }
 
 PositionedFragment = tuple[str, Decimal, Decimal, Decimal]
+
+# Fragment sizes are rendered heights (see effective_font_size): AEAT prints
+# casilla number labels at 6-7pt and amounts at 9pt, whichever generator made
+# the receipt, so labels are recognised up to 8pt and amounts from 5pt.
+_MAX_LABEL_FONT_SIZE = Decimal(8)
+_OUTPUT_BASE_BOXES = ("150", "01", "04", "07", "10", "12")
+_DEDUCTIBLE_BASE_BOXES = ("28", "30", "32", "34", "36", "38")
+_DEDUCTIBLE_VAT_BOXES = ("29", "31", "33", "35", "37", "39")
+# Tipo % columns in the AEAT form, including the transitional rate rows:
+# https://sede.agenciatributaria.gob.es/static_files/Sede/Biblioteca/Manual/Practicos/IVA/IVA_2025/Imagenes/Cap_9_303_es_es.pdf
+_RATE_BOXES = ("151", "166", "02", "154", "05", "08", "157", "169", "17", "20", "23")
+_ZERO_OUTPUT_QUOTA_BASES = {"152": "150", "03": "01", "06": "04", "09": "07"}
 
 
 @dataclass(frozen=True)
@@ -150,8 +163,12 @@ def extract_modelo303_values(path: Path) -> Modelo303Values:
     reader = PdfReader(str(path))
     if len(reader.pages) < 2:
         raise ValueError(f"Modelo 303 report has no form page: {path}")
-    sequence = _extract_page2_monetary_sequence(reader.pages[1])
     layout_pages, positioned_pages = _extract_page_evidence(reader.pages)
+    sequence_fragments = _page2_monetary_fragments(positioned_pages[1])
+    sequence = [
+        parse_amount(fragment[0]) for fragment in sequence_fragments
+        if parse_amount(fragment[0]) not in PERCENTAGE_VALUES
+    ]
     extended = len(sequence) in {6, 7}
     structural = _structural_casilla_evidence_from_pages(
         layout_pages, positioned_pages, extended=extended,
@@ -161,6 +178,14 @@ def extract_modelo303_values(path: Path) -> Modelo303Values:
     if values.extraction_status.startswith("reverse_charge_"):
         if settlement.status == "casillas_extracted":
             values = replace(values, result=dict(settlement.casillas)["71"])
+    full_form = structural if extended else _full_form_evidence(layout_pages, positioned_pages)
+    from_casillas = _values_from_positioned_casillas(full_form, settlement, sequence)
+    if from_casillas is not None:
+        if values.extraction_status.startswith("unexpected_monetary_sequence_len_"):
+            if _sequence_is_explained(sequence_fragments, full_form, positioned_pages[1]):
+                values, structural = from_casillas, full_form
+        elif _receipt_totals(values) != _receipt_totals(from_casillas):
+            values = replace(values, extraction_status="sequence_and_casillas_disagree")
     return replace(
         values,
         structural_casillas=structural.casillas,
@@ -305,24 +330,14 @@ def write_modelo303_vat_crosscheck_markdown(path: Path, rows: list[dict[str, str
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def _extract_page2_monetary_sequence(page) -> list[Decimal]:
-    values: list[tuple[Decimal, Decimal, Decimal]] = []
-
-    def visitor(fragment: str, _cm, tm, _font_dict, font_size: float) -> None:
-        value = fragment.strip()
-        if font_size < 5 or not re.fullmatch(r"-?[0-9.]+,[0-9]{2}", value):
-            return
-        amount = parse_amount(value)
-        if amount in PERCENTAGE_VALUES:
-            return
-        x = Decimal(str(tm[4]))
-        if x <= Decimal("10"):
-            return
-        y = Decimal(str(tm[5]))
-        values.append((y, x, amount))
-
-    page.extract_text(visitor_text=visitor)
-    return [amount for _y, _x, amount in sorted(values, key=lambda item: (-item[0], item[1]))]
+def _page2_monetary_fragments(fragments: list[PositionedFragment]) -> list[PositionedFragment]:
+    values: list[PositionedFragment] = []
+    for fragment in fragments:
+        raw, x, _y, size = fragment
+        if size < 5 or x <= 10 or re.fullmatch(r"-?[0-9.]+,[0-9]{2}", raw) is None:
+            continue
+        values.append(fragment)
+    return sorted(values, key=lambda fragment: (-fragment[2], fragment[1]))
 
 
 SETTLEMENT_BOXES = ("64", "110", "78", "87", "69", "71", "72", "73")
@@ -350,6 +365,88 @@ def _reverse_charge_sequence_is_corroborated(
     return values == tuple(boxes[key] for key in keys)
 
 
+def _full_form_evidence(
+    layout_pages: list[str],
+    positioned_pages: list[list[PositionedFragment]],
+) -> Modelo303CasillaEvidence | None:
+    try:
+        return _structural_casilla_evidence_from_pages(layout_pages, positioned_pages, extended=True)
+    except ValueError:
+        return None
+
+
+def _values_from_positioned_casillas(
+    structural: Modelo303CasillaEvidence | None,
+    settlement: Modelo303CasillaEvidence,
+    sequence: list[Decimal],
+) -> Modelo303Values | None:
+    """Read the receipt totals from the casillas themselves.
+
+    Sede-generated receipts print every cuota (11, 29, 37) as an amount, and
+    newer pypdf releases also report the cuotas that older ones dropped from
+    provider receipts, so the page-2 monetary sequence stops matching the
+    provider layouts. The form and settlement casillas are unambiguous once
+    both were read completely and they add up. They always serve to contradict
+    a sequence layout; they replace one only when every printed amount is
+    explained (see _sequence_is_explained).
+    """
+    if structural is None or structural.status != "casillas_extracted":
+        return None
+    if settlement.status != "casillas_extracted":
+        return None
+    boxes = dict(structural.casillas)
+    if any(boxes[key] != 0 for key in ("150", "01", "04", "07")):
+        # Their cuotas (152, 03, 06, 09) are not read, so casilla 27 cannot be proven.
+        return None
+    if boxes["27"] != cents(boxes["11"] + boxes["13"]):
+        return None
+    if boxes["45"] != cents(sum((boxes[key] for key in _DEDUCTIBLE_VAT_BOXES), Decimal("0.00"))):
+        return None
+    if boxes["46"] != cents(boxes["27"] - boxes["45"]):
+        return None
+    return Modelo303Values(
+        output_base=cents(sum((boxes[key] for key in _OUTPUT_BASE_BOXES), Decimal("0.00"))),
+        output_vat=boxes["27"],
+        deductible_base=cents(sum((boxes[key] for key in _DEDUCTIBLE_BASE_BOXES), Decimal("0.00"))),
+        deductible_vat=boxes["45"],
+        result=dict(settlement.casillas)["71"],
+        extraction_status="positioned_casillas",
+        monetary_sequence=tuple(cents(value) for value in sequence),
+    )
+
+
+def _sequence_is_explained(
+    sequence: list[PositionedFragment],
+    structural: Modelo303CasillaEvidence | None,
+    fragments: list[PositionedFragment],
+) -> bool:
+    if structural is None:
+        return False
+    boxes = dict(structural.casillas)
+    # These output rows are unsupported unless their base and printed cuota are zero.
+    boxes.update({quota: Decimal("0.00") for quota, base in _ZERO_OUTPUT_QUOTA_BASES.items() if boxes.get(base) == 0})
+    owners: dict[PositionedFragment, set[str]] = {}
+    for label_fragment in fragments:
+        label, _x, _y, size = label_fragment
+        if (label not in boxes and label not in _RATE_BOXES) or size > _MAX_LABEL_FONT_SIZE:
+            continue
+        for amount in _positioned_casilla_amounts(label_fragment, fragments):
+            owners.setdefault(amount, set()).add(label)
+    # Equal numbers in another box do not explain an unassigned fragment.
+    for fragment in sequence:
+        labels = owners.get(fragment, set())
+        if len(labels) != 1:
+            return False
+        label = next(iter(labels))
+        if label not in _RATE_BOXES and cents(parse_amount(fragment[0])) != boxes[label]:
+            return False
+    return True
+
+
+def _receipt_totals(values: Modelo303Values) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    return (values.output_base, values.output_vat, values.deductible_base, values.deductible_vat)
+
+
 def _extract_settlement_casillas(pages) -> tuple[tuple[tuple[str, Decimal], ...], str]:
     _layouts, positioned_pages = _extract_page_evidence(pages)
     evidence = _settlement_casilla_evidence_from_fragments(positioned_pages)
@@ -364,7 +461,7 @@ def _extract_page_evidence(
     for page in pages:
         fragments: list[PositionedFragment] = []
 
-        def visitor(fragment: str, _cm, tm, _font_dict, font_size: float) -> None:
+        def visitor(fragment: str, cm, tm, _font_dict, font_size: float) -> None:
             value = " ".join(fragment.split())
             if not value:
                 return
@@ -373,7 +470,7 @@ def _extract_page_evidence(
                     value,
                     Decimal(str(tm[4])),
                     Decimal(str(tm[5])),
-                    Decimal(str(font_size)),
+                    Decimal(str(effective_font_size(font_size, tm, cm))),
                 )
             )
 
@@ -432,22 +529,12 @@ def _structural_casilla_evidence_from_pages(
                     sources[box].add("layout_line")
 
     for fragments in positioned_pages:
-        for label, label_x, label_y, font_size in fragments:
-            if label not in boxes or font_size > Decimal("4"):
+        for label_fragment in fragments:
+            label, _label_x, _label_y, font_size = label_fragment
+            if label not in boxes or font_size > _MAX_LABEL_FONT_SIZE:
                 continue
             recognized.add(label)
-            if label_x == 0 and label_y == 0:
-                continue
-            next_label_x = min((
-                x for raw, x, y, size in fragments
-                if extended and raw.isdigit() and size <= 4
-                and x > label_x and abs(y - label_y) <= 5
-            ), default=Decimal("Infinity"))
-            for raw, x, y, value_font_size in fragments:
-                if x <= label_x + Decimal("5") or x >= next_label_x or abs(y - label_y) > Decimal("5"):
-                    continue
-                if value_font_size < Decimal("5") or re.fullmatch(_AMOUNT_PATTERN, raw) is None:
-                    continue
+            for raw, _x, _y, _size in _positioned_casilla_amounts(label_fragment, fragments):
                 candidates[label].add(cents(parse_amount(raw)))
                 sources[label].add("positioned_row")
 
@@ -459,6 +546,25 @@ def _structural_casilla_evidence_from_pages(
         missing_status="structural_layout_not_found",
         incomplete_status="incomplete_structural_layout",
     )
+
+
+def _positioned_casilla_amounts(
+    label: PositionedFragment, fragments: list[PositionedFragment] | tuple[PositionedFragment, ...],
+) -> list[PositionedFragment]:
+    _raw, label_x, label_y, _size = label
+    if label_x == 0 and label_y == 0:
+        return []
+    # Base/cuota pairs share a row; the next label ends the current box.
+    next_label_x = min((
+        x for raw, x, y, size in fragments
+        if raw.isdigit() and size <= _MAX_LABEL_FONT_SIZE
+        and x > label_x and abs(y - label_y) <= 5
+    ), default=Decimal("Infinity"))
+    return [
+        fragment for fragment in fragments
+        if label_x + 5 < fragment[1] < next_label_x and abs(fragment[2] - label_y) <= 5
+        and fragment[3] >= 5 and re.fullmatch(_AMOUNT_PATTERN, fragment[0]) is not None
+    ]
 
 
 def _settlement_casillas_from_fragments(
@@ -477,7 +583,7 @@ def _settlement_casilla_evidence_from_fragments(
     recognized: set[str] = set()
     for fragments in positioned_pages:
         for label, label_x, label_y, font_size in fragments:
-            if label not in SETTLEMENT_BOXES or font_size > Decimal("4"):
+            if label not in SETTLEMENT_BOXES or font_size > _MAX_LABEL_FONT_SIZE:
                 continue
             if label in {"72", "73"}:
                 if label_x >= Decimal("150") or label_y <= Decimal("650"):
@@ -620,7 +726,7 @@ def _optional_amount(value: str | None) -> Decimal | None:
 
 
 def _crosscheck_status(extraction_status: str, base_diff: Decimal, vat_diff: Decimal) -> str:
-    if extraction_status.startswith("unexpected"):
+    if extraction_status.startswith("unexpected") or extraction_status == "sequence_and_casillas_disagree":
         return "needs_manual_review"
     if abs(base_diff) <= Decimal("0.02") and abs(vat_diff) <= Decimal("0.02"):
         return "matched"

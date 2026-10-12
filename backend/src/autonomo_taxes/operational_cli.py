@@ -7387,7 +7387,8 @@ def _filed_baseline(db: LedgerDB, period_key: str, form: str) -> dict[str, Any] 
                 ELSE 1
             END DESC,
             COALESCE(fs.filed_on, '') DESC,
-            fs.created_at DESC
+            fs.created_at DESC,
+            fs.rowid DESC
         """,
         (period_key,),
     ).fetchall()
@@ -7514,7 +7515,8 @@ def _filed_value_candidates(
                 ELSE 1
             END DESC,
             COALESCE(fs.filed_on, '') DESC,
-            fs.created_at DESC
+            fs.created_at DESC,
+            fs.rowid DESC
         """,
         (period_key,),
     ).fetchall()

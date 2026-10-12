@@ -1809,6 +1809,88 @@ def test_refresh_filing_inventory_adds_modelo390_schema_once(
         assert db.connection.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 0
 
 
+@pytest.mark.parametrize("old_schema", ["modelo303_v4", "modelo303_v5"])
+def test_refresh_sede_modelo303_preserves_old_schema_and_adds_corrected_v6_once(
+    tmp_path: Path, old_schema: str,
+) -> None:
+    import hashlib
+
+    from autonomo_taxes.annual_readiness import _best_modelo303_evidence
+    from autonomo_taxes.tax_result_view import select_filed_form_snapshot
+    from test_modelo303 import _RC_BOXES, _RC_SETTLEMENT, _modelo303_receipt
+
+    local_pdf = tmp_path / "MOD 303 2T 2026 Example Taxpayer.pdf"
+    _modelo303_receipt(
+        local_pdf, {**_RC_BOXES, "01": "0,00"}, _RC_SETTLEMENT, amount_size=1, amount_scale=9,
+        extra=[("02", 180, 766, 1, 6.5), ("4,00", 225, 766, 1, 9),
+               ("03", 300, 766, 1, 6.5), ("0,00", 345, 766, 1, 9)],
+    )
+    source_hash = hashlib.sha256(local_pdf.read_bytes()).hexdigest().upper()
+    inventory = tmp_path / "document_index.csv"
+    _write_csv(
+        inventory,
+        ["category", "original_name", "drive_relative_path", "local_source_path", "sha256"],
+        [{
+            "category": "tax_report",
+            "original_name": local_pdf.name,
+            "drive_relative_path": f"Xolo export/TAX_REPORT/{local_pdf.name}",
+            "local_source_path": str(local_pdf),
+            "sha256": source_hash,
+        }],
+    )
+    old_payload = {
+        "form": "303",
+        "period": "2026-Q2",
+        "value_extraction_schema": old_schema,
+        "filed_values": {key: "0.00" for key in (
+            "output_base", "output_vat", "deductible_base", "deductible_vat",
+            "result", "27", "45", "64", "110", "87", "69", "71", "72",
+            "compensation_carryforward",
+        )},
+    }
+    with LedgerDB.initialize(tmp_path / "ledger.sqlite3") as db:
+        db.ensure_period("2026-Q2")
+        db.create_filing_snapshot(
+            "2026-Q2", form_code="303", status="baseline", filed_on="2026-06-30",
+            snapshot_hash=source_hash, source_hash=source_hash, payload=old_payload,
+        )
+        first = refresh_filing_inventory(db, inventory)
+        second = refresh_filing_inventory(db, inventory)
+        snapshots = db.connection.execute(
+            "SELECT snapshot_hash, source_hash, payload_json FROM filing_snapshots ORDER BY rowid"
+        ).fetchall()
+
+        assert first["new_snapshots"] == 1
+        assert second["new_snapshots"] == 0
+        assert len(snapshots) == 2
+        assert json.loads(snapshots[0]["payload_json"]) == old_payload
+        assert snapshots[0]["snapshot_hash"] == source_hash
+        assert {row["source_hash"] for row in snapshots} == {source_hash}
+        corrected = json.loads(snapshots[1]["payload_json"])
+        assert corrected["value_extraction_schema"] == "modelo303_v6"
+        assert corrected["extraction_status"] == "positioned_casillas"
+        expected = {
+            "output_base": "1000.00", "output_vat": "210.00",
+            "deductible_base": "1400.00", "deductible_vat": "294.00",
+            "result": "-84.00", "27": "210.00", "45": "294.00",
+            "64": "-84.00", "110": "500.00", "87": "500.00",
+            "69": "-84.00", "71": "-84.00", "72": "84.00",
+            "compensation_carryforward": "584.00",
+        }
+        for key, value in expected.items():
+            assert corrected["filed_values"][key] == value
+        selected = select_filed_form_snapshot(
+            db.connection, period_key="2026-Q2", form_code="303",
+        )
+        annual = _best_modelo303_evidence(db, "2026-Q2")
+        assert selected["snapshot_hash"] == snapshots[1]["snapshot_hash"]
+        assert annual["snapshot_hash"] == snapshots[1]["snapshot_hash"]
+        assert annual["source_type"] == "modelo303_v6_extraction"
+        for key, value in expected.items():
+            assert selected["values"][key] == value
+            assert annual["values"][key] == value
+
+
 def test_migrate_updates_corrected_history_adjustment_without_duplicate(
     tmp_path: Path,
 ) -> None:

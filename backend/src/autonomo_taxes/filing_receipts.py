@@ -39,6 +39,7 @@ ACCEPTED_EXTRACTION_STATUSES = {
         "output_and_deductible",
         "reverse_charge_services",
         "reverse_charge_with_other_output",
+        "positioned_casillas",
     },
 }
 

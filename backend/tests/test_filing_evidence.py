@@ -119,7 +119,7 @@ def test_modelo303_filing_evidence_keeps_settlement_casillas(
 
     evidence = extract_filing_evidence(path)
 
-    assert evidence.payload["value_extraction_schema"] == "modelo303_v4"
+    assert evidence.payload["value_extraction_schema"] == "modelo303_v6"
     assert evidence.payload["structural_extraction_status"] == "casillas_extracted"
     assert evidence.payload["settlement_extraction_status"] == "casillas_extracted"
     assert evidence.payload["filed_values"]["13"] == "899.98"
