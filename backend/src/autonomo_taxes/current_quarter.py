@@ -13,6 +13,7 @@ from .tax_engine import (
     calculate_modelo130_rows,
     calculate_modelo303_rows,
     calculate_modelo349_rows,
+    limit_tax_rows,
 )
 
 
@@ -38,25 +39,32 @@ def build_current_quarter_dashboard(
     period_validation: dict[str, Any],
 ) -> dict[str, Any]:
     year, quarter = _parse_period(period_key)
-    actual = [row for row in actual_rows if row.tax_date <= as_of]
+    actual = limit_tax_rows([
+        row for row in actual_rows if row.tax_date <= as_of
+        or (row.include_modelo130 and row.effective_date("irpf") <= as_of)
+        or (row.include_modelo303 and row.effective_date("iva") <= as_of)
+    ], as_of)
     projected_candidates = list(projected_rows)
     actual_ids = {row.transaction_id for row in actual}
     approved_ids = {row["transaction_id"] for row in approved_current_rows}
     approved_delta = [
         row
         for row in projected_candidates
-        if row.transaction_id in approved_ids and _in_quarter(row.tax_date, year, quarter)
+        if row.parent_id in approved_ids and row.transaction_id not in actual_ids
+        and _affects_quarter(row, year, quarter)
     ]
     projected = actual + approved_delta
     unexpected_future = [
         row
         for row in projected_candidates
         if row.transaction_id not in actual_ids
-        and row.transaction_id not in approved_ids
-        and _in_quarter(row.tax_date, year, quarter)
+        and row.parent_id not in approved_ids
+        and _affects_quarter(row, year, quarter)
     ]
-    actual_current = [row for row in actual if _in_quarter(row.tax_date, year, quarter)]
-    projected_current = [row for row in projected if _in_quarter(row.tax_date, year, quarter)]
+    actual_current = [row for row in actual if row.component == "transaction"
+                      and row.tax_date <= as_of and _in_quarter(row.tax_date, year, quarter)]
+    projected_current = [row for row in projected if row.component == "transaction"
+                         and _in_quarter(row.tax_date, year, quarter)]
     readiness_items = _blocking_items(
         period_validation,
         approved_current_rows,
@@ -78,7 +86,10 @@ def build_current_quarter_dashboard(
         "filing_ready": False,
         "submission_ready": False,
         "posted_actual": _quarter_totals(actual_current),
-        "approved_forecast_delta": _quarter_totals(approved_delta),
+        "approved_forecast_delta": _quarter_totals([
+            row for row in approved_delta if row.component == "transaction"
+            and _in_quarter(row.tax_date, year, quarter)
+        ]),
         "projected_total": _quarter_totals(projected_current),
         "forecast_rows": approved_current_rows,
         "obligations": obligations,
@@ -86,6 +97,8 @@ def build_current_quarter_dashboard(
         "blocking_items": blocking_items,
         "expected_items": expected_items,
         "policy": {
+            "accounting_totals_date_basis": "source_transaction_date",
+            "tax_calculation_date_basis": "reviewed_irpf_iva_attribution",
             "difficult_expenses": "year_specific_aeat_rule",
             "difficult_expenses_rate": difficult_expenses_rate,
             "previous_positive_casilla_07": previous_positive_casilla_07,
@@ -119,6 +132,12 @@ def build_current_quarter_dashboard(
     return dashboard
 
 
+def _affects_quarter(row: TaxRow, year: int, quarter: int) -> bool:
+    return any(_in_quarter(value, year, quarter) for value in (
+        row.tax_date, row.effective_date("irpf"), row.effective_date("iva"),
+    ))
+
+
 def load_xolo_modelo130_forecast(path: str | Path, *, period: str) -> dict[str, Any] | None:
     source = Path(path)
     with source.open("r", encoding="utf-8-sig", newline="") as handle:
@@ -145,10 +164,10 @@ def load_xolo_modelo130_forecast(path: str | Path, *, period: str) -> dict[str, 
 def add_xolo_comparison(dashboard: dict[str, Any], comparison: dict[str, Any] | None) -> None:
     if comparison is None:
         return
-    projected = dashboard["tax_arithmetic_preview"]["projected_reviewed"]["modelo130"]["values"]
+    projected = dashboard["tax_arithmetic_preview"]["projected_reviewed"]["modelo130"].get("values", {})
     differences: dict[str, Decimal | None] = {}
     for key, xolo_value in comparison["values"].items():
-        differences[key] = None if xolo_value is None else projected[key] - xolo_value
+        differences[key] = None if xolo_value is None or key not in projected else projected[key] - xolo_value
     comparison["difference_projected_minus_xolo"] = differences
     dashboard["xolo_forecast"] = comparison
 
@@ -417,8 +436,8 @@ def _render_markdown(dashboard: dict[str, Any]) -> str:
     posted = dashboard["posted_actual"]
     delta = dashboard["approved_forecast_delta"]
     projected_total = dashboard["projected_total"]
-    posted_130 = dashboard["tax_arithmetic_preview"]["posted_actual"]["modelo130"]["values"]
-    projected_130 = dashboard["tax_arithmetic_preview"]["projected_reviewed"]["modelo130"]["values"]
+    posted_130 = dashboard["tax_arithmetic_preview"]["posted_actual"]["modelo130"].get("values", {})
+    projected_130 = dashboard["tax_arithmetic_preview"]["projected_reviewed"]["modelo130"].get("values", {})
     lines = [
         f"# {dashboard['period']} operational dashboard",
         "",
@@ -440,10 +459,10 @@ def _render_markdown(dashboard: dict[str, Any]) -> str:
         "| --- | ---: | ---: |",
     ]
     for key in MODELO130_KEYS:
-        lines.append(f"| {key} | {_money(posted_130[key])} | {_money(projected_130[key])} |")
+        lines.append(f"| {key} | {_money(posted_130.get(key))} | {_money(projected_130.get(key))} |")
     lines.append(
-        f"| difficult expenses | {_money(posted_130['difficult_expenses'])} | "
-        f"{_money(projected_130['difficult_expenses'])} |"
+        f"| difficult expenses | {_money(posted_130.get('difficult_expenses'))} | "
+        f"{_money(projected_130.get('difficult_expenses'))} |"
     )
     lines.append("")
 
@@ -481,7 +500,7 @@ def _render_markdown(dashboard: dict[str, Any]) -> str:
             xolo_value = comparison["values"].get(key)
             difference = comparison["difference_projected_minus_xolo"].get(key)
             lines.append(
-                f"| {key} | {_money(projected_130[key])} | {_money(xolo_value)} | {_money(difference)} |"
+                f"| {key} | {_money(projected_130.get(key))} | {_money(xolo_value)} | {_money(difference)} |"
             )
         lines.append("")
 

@@ -1,0 +1,12 @@
+{
+  "taxAttribution.title": "Tax recognition",
+  "taxAttribution.irpfDate": "IRPF recognition date",
+  "taxAttribution.ivaDate": "IVA recognition date",
+  "taxAttribution.income": "IRPF income",
+  "taxAttribution.ivaBase": "IVA taxable base",
+  "taxAttribution.pending": "Amount needs confirmation",
+  "taxAttribution.fx": "Realized exchange gains and losses",
+  "taxAttribution.history": "Corrected calculation; filed returns are preserved.",
+  "taxAttribution.stale": "The source facts changed. Review this tax attribution again.",
+  "taxAttribution.documentBasis": "Document totals use transaction dates. Tax calculations use their reviewed IRPF and IVA dates."
+}

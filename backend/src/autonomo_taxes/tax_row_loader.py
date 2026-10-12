@@ -5,7 +5,8 @@ from decimal import Decimal
 from typing import Any, Collection
 
 from .ledger_db import LedgerDB
-from .tax_engine import CalculationBlocked, TaxRow, WITHHOLDING_TYPE_BY_TAX_CODE
+from .tax_engine import CalculationBlocked, TaxRow, WITHHOLDING_TYPE_BY_TAX_CODE, limit_tax_rows
+from .tax_attribution import attach_attributions, attributed_periods, attributed_dates
 
 
 def load_tax_rows(
@@ -21,15 +22,16 @@ def load_tax_rows(
     authoritative_ids = (
         {
             row["transaction_id"]
-            for row in database.list_authoritative_history_transactions(year=year)
+            for row in database.list_authoritative_history_transactions()
         }
         if mode == "production" and allow_authoritative_history
         else set()
     )
     grouped: dict[str, dict[str, Any]] = {}
     for raw in database.list_tax_rows(year=year):
-        if through is not None and not (
-            date(year, 1, 1) <= date.fromisoformat(raw["transaction_date"]) <= through
+        if through is not None and not any(
+            date(year, 1, 1) <= day <= through
+            for day in attributed_dates(database, raw["transaction_id"], raw["transaction_date"])
         ):
             continue
         if raw["entry_type"] == "verify_history_adjustment" and mode != "verify_history":
@@ -44,6 +46,9 @@ def load_tax_rows(
                 and (
                     raw["transaction_id"] in authoritative_ids
                     or raw["period_key"] in approved_periods
+                    or bool(approved_periods & attributed_periods(
+                        database, raw["transaction_id"], raw["transaction_date"]
+                    ))
                 )
             ):
                 continue
@@ -106,7 +111,15 @@ def load_tax_rows(
         for key in ("include_modelo130", "include_modelo303", "include_modelo347"):
             bucket[key] = int(bool(bucket.get(key)) or bool(raw.get(key)))
 
-    return [_to_tax_row(row) for row in grouped.values()]
+    rows = attach_attributions(database, (_to_tax_row(row) for row in grouped.values()))
+    if through is not None:
+        start = date(year, 1, 1)
+        rows = limit_tax_rows([
+            row for row in rows if any(start <= day <= through for day in (
+                row.tax_date, row.effective_date("irpf"), row.effective_date("iva"),
+            ))
+        ], through)
+    return rows
 
 
 def _to_tax_row(row: dict[str, Any]) -> TaxRow:
@@ -153,4 +166,8 @@ def _to_tax_row(row: dict[str, Any]) -> TaxRow:
             None if row.get("vat_investment_good") is None else bool(row["vat_investment_good"])
         ),
         aeat_expense_concept=row.get("aeat_expense_concept") or "",
+        document_id=row.get("document_id") or "",
+        document_number=row.get("document_number") or "",
+        issued_on=date.fromisoformat(row["issued_on"]) if row.get("issued_on") else None,
+        document_source_hash=row.get("document_source_hash") or "",
     )

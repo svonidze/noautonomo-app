@@ -2,6 +2,7 @@ import type { HelpContext } from '../../vue/help.ts';
 import type { ViewServices } from '../../vue/services.ts';
 import type { UiMessage } from '../../core/i18n.ts';
 import type { Fields } from './workflow-model.ts';
+import type { TaxAttribution } from './tax-attribution-model.ts';
 export interface ReviewDecision extends Record<string, unknown> {
   business_purpose?: string;
   reason?: string;
@@ -72,6 +73,7 @@ export interface FxChoice {
   sourceReference?: string;
 }
 export interface WorkItem {
+  tax_attribution?: TaxAttribution | null;
   packet: ReviewPacket;
   supported?: boolean;
   review_allowed?: boolean;

@@ -10,7 +10,7 @@ from typing import Any
 
 from .cash_check import build_cash_check
 from .ledger_db import LedgerDB
-from .tax_engine import CalculationBlocked, calculate_modelo100_business_support
+from .tax_engine import CalculationBlocked, calculate_modelo100_business_support, project_tax_rows
 from .tax_result_view import TAX_FORM_KEYS
 from .tax_row_loader import load_tax_rows
 from .tax_rules import difficult_expense_rule_for_year
@@ -634,6 +634,7 @@ def _renta_totals(
         rows = load_tax_rows(
             LedgerDB(connection), year, allow_authoritative_history=True, through=through
         )
+        rows = project_tax_rows(rows, "irpf", date(year, 1, 1), through)
     except CalculationBlocked:
         return {**empty, "renta_status": "blocked"}
     if not rows:

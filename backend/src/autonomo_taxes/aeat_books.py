@@ -80,6 +80,27 @@ def build_aeat_book_projection(
 ) -> dict[str, Any]:
     year, quarter = _parse_quarter(period_key)
     through_date = _quarter_end(year, quarter)
+    from .tax_row_loader import load_tax_rows
+    from .tax_attribution import register_projection, active_attribution_ids
+    from .tax_engine import CalculationBlocked
+    attributed_ids = active_attribution_ids(database)
+    candidates = {r['transaction_id'] for r in database.list_tax_rows(year=year)} if attributed_ids else set()
+    if attributed_ids & candidates:
+        # shortcut: reject the unified workbook until its exporter supports separate tax bases.
+        result = failed_aeat_book_projection(
+            period_key=period_key,
+            message="Reviewed IRPF/IVA attributions require separate tax registers; unified AEAT XLSX is not supported for this view.",
+            allow_authoritative_history=allow_authoritative_history,
+        )
+        result['blockers'][0]['code'] = 'separate_tax_registers_required'
+        try:
+            result['tax_registers'] = register_projection(
+                load_tax_rows(database, year, allow_authoritative_history=allow_authoritative_history),
+                year=year, through=through_date,
+            )
+        except CalculationBlocked as exc:
+            result['tax_registers'] = {'blocked': True, 'reason': str(exc)}
+        return result
     profile = _taxpayer_profile(database, taxpayer_tax_id)
     activities = database.list_business_activities(
         taxpayer_profile_id=profile["taxpayer_profile_id"]
@@ -194,7 +215,7 @@ def write_aeat_book_projection(path: str | Path, projection: Mapping[str, Any]) 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        json.dumps(projection, indent=2, ensure_ascii=False) + "\n",
+        json.dumps(projection, indent=2, ensure_ascii=False, default=str) + "\n",
         encoding="utf-8",
     )
     return target

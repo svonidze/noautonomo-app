@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
@@ -143,16 +144,37 @@ def write_accounting_books(database: LedgerDB, output_dir: str | Path, *, period
     _write_csv(files["expense"], EXPENSE_FIELDS, expense_rows)
     _write_csv(files["assets"], ASSET_FIELDS, asset_rows)
     _write_csv(files["payments"], PAYMENT_FIELDS, payment_rows)
+    counts = {"income": len(income_rows), "expense": len(expense_rows),
+              "assets": len(asset_rows), "payments": len(payment_rows)}
+    from .tax_row_loader import load_tax_rows
+    from .tax_attribution import register_projection, active_attribution_ids
+    attributed_ids = active_attribution_ids(database)
+    candidates = {r['transaction_id'] for r in database.list_tax_rows(year=int(period_key[:4]))} if attributed_ids else set()
+    tax_rows = (load_tax_rows(database, int(period_key[:4]), allow_authoritative_history=True)
+                if attributed_ids & candidates else [])
+    if any(row.attribution_id for row in tax_rows):
+        projection = register_projection(
+            tax_rows, year=int(period_key[:4]), through=date.fromisoformat(period["ends_on"]),
+            iva_starts_on=date.fromisoformat(period["starts_on"]),
+        )
+        files["tax_registers"] = root / "tax-registers.json"
+        files["tax_registers"].write_text(json.dumps(projection, default=str, sort_keys=True,
+                                                     ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        counts["tax_registers"] = len(projection["bridge"])
+        fields = ("transaction_id", "source_transaction_id", "component", "attribution_id", "tax_date",
+                  "document_id", "document_number", "issued_on", "document_source_hash", "counterparty_name",
+                  "kind", "amount_eur", "taxable_base_eur", "vat_eur", "deductible_irpf_eur",
+                  "deductible_vat_eur", "withholding_eur")
+        for basis, register in projection["registers"].items():
+            files[basis] = root / f"{basis}-register.csv"
+            _write_csv(files[basis], fields, [{k: str(row[k]) if row[k] is not None else '' for k in fields}
+                                              for row in register["rows"]])
+            counts[basis] = len(register["rows"])
     return BookExportResult(
         period_key=period_key,
         output_dir=root,
         files=files,
-        row_counts={
-            "income": len(income_rows),
-            "expense": len(expense_rows),
-            "assets": len(asset_rows),
-            "payments": len(payment_rows),
-        },
+        row_counts=counts,
     )
 
 

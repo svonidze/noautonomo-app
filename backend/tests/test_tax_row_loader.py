@@ -254,7 +254,7 @@ def test_direct_asset_link_takes_precedence_over_inferred_candidate(tmp_path) ->
 
 @pytest.mark.parametrize("reverse", [False, True])
 def test_loader_merges_inferred_asset_from_historical_treatment_regardless_of_order(
-    reverse: bool,
+    reverse: bool, tmp_path,
 ) -> None:
     common = {
         "transaction_id": "amortization-transaction",
@@ -280,6 +280,9 @@ def test_loader_merges_inferred_asset_from_historical_treatment_regardless_of_or
     }
 
     class OrderedTreatments:
+        def __init__(self, connection):
+            self.connection = connection
+
         def list_tax_rows(self, *, year):
             assert year == 2026
             rows = [
@@ -293,11 +296,12 @@ def test_loader_merges_inferred_asset_from_historical_treatment_regardless_of_or
             ]
             return list(reversed(rows)) if reverse else rows
 
-    rows = load_tax_rows(
-        OrderedTreatments(),
-        2026,
-        include_approved_periods={"2026-Q3"},
-    )
+    with initialize(tmp_path / "ordered.sqlite") as db:
+        rows = load_tax_rows(
+            OrderedTreatments(db.connection),
+            2026,
+            include_approved_periods={"2026-Q3"},
+        )
 
     assert len(rows) == 1
     assert rows[0].asset_id == "macbook-asset"

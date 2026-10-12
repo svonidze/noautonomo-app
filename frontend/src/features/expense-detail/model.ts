@@ -1,5 +1,7 @@
 import type { ViewServices } from '../../vue/services.ts';
+import type { TaxAttribution } from '../review/tax-attribution-model.ts';
 export interface TransactionDetail {
+  tax_attribution?: TaxAttribution | null;
   transaction: {
     transaction_id: string;
     entry_type: string;

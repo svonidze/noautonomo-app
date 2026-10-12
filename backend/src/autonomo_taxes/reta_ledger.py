@@ -13,7 +13,7 @@ from typing import Any
 from .ledger_db import LedgerDB
 from .money import cents
 from .reta import BaseElection, bracket_check, parse_reta_table
-from .tax_engine import ZERO, CalculationBlocked, calculate_modelo100_business_support
+from .tax_engine import ZERO, CalculationBlocked, calculate_modelo100_business_support, project_tax_rows
 from .tax_row_loader import load_tax_rows
 from .tax_rules import difficult_expense_rule_for_year
 
@@ -113,11 +113,10 @@ def ledger_bracket_check(
 
     irpf_net = contributions = blocked = None
     try:
-        tax_rows = [
-            row
-            for row in load_tax_rows(db, year, allow_authoritative_history=True)
-            if row.tax_date <= through
-        ]
+        tax_rows = project_tax_rows(
+            load_tax_rows(db, year, allow_authoritative_history=True, through=through),
+            "irpf", start, through,
+        )
         rule = difficult_expense_rule_for_year(year)
         support = calculate_modelo100_business_support(
             tax_rows,

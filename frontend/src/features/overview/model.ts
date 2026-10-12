@@ -88,6 +88,7 @@ export interface ExpenseScope {
   missing_amount_count?: number;
 }
 export interface DashboardData {
+  has_tax_attributions?: boolean;
   totals: {
     actual: { income_eur: Amount; income_transaction_count: number };
     forecast: { transaction_count?: number };

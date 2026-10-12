@@ -65,7 +65,7 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
         raise ValueError(f"Unknown period: {export.period_key}")
 
     artifacts = []
-    for name in ("assets", "expense", "income", "payments"):
+    for name in sorted(export.files):
         path = export.files[name]
         artifacts.append(
             {
@@ -139,6 +139,15 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
         readiness_reasons.append("period_not_closed")
     if not any(row["status"] in FINAL_SNAPSHOT_STATUSES for row in snapshot_refs):
         readiness_reasons.append("final_filing_snapshot_missing")
+    attribution_basis = {}
+    if "tax_registers" in export.files:
+        registers = json.loads(export.files["tax_registers"].read_text(encoding="utf-8"))
+        if any(item["blocked"] for item in registers["registers"].values()):
+            readiness_reasons.append("tax_attribution_pending")
+        attribution_basis = {"book_date_basis": {
+            "income": "source_transaction_date", "expense": "source_transaction_date",
+            "irpf": "reviewed_irpf_ytd", "iva": "reviewed_iva_period",
+        }, "unified_aeat_import_supported": False}
 
     return {
         "manifest_version": 2,
@@ -157,6 +166,7 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
         "artifacts": artifacts,
         "rule_versions": rule_versions,
         "snapshot_refs": snapshot_refs,
+        **attribution_basis,
     }
 
 

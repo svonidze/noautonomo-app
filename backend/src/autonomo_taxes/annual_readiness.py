@@ -13,6 +13,7 @@ from .tax_engine import (
     OTHER_REVERSE_CHARGE_CODES,
     activity_overlaps,
     calculate_modelo303_rows,
+    project_tax_rows,
 )
 from .tax_row_loader import load_tax_rows
 from .tax_rules import ANNUAL_FORM_CODES
@@ -451,13 +452,11 @@ def _assess_reverse_charge_gate(
         )
         for period_key in periods:
             quarter = int(period_key[-1])
-            period_rows = [
-                row
-                for row in tax_rows
-                if row.tax_date.year == year
-                and ((row.tax_date.month - 1) // 3) + 1 == quarter
-                and row.include_modelo303
-            ]
+            from calendar import monthrange
+            period_rows = project_tax_rows(
+                tax_rows, "iva", date(year, quarter * 3 - 2, 1),
+                date(year, quarter * 3, monthrange(year, quarter * 3)[1]),
+            )
             item = evidence.get(period_key)
             if item is None:
                 continue
