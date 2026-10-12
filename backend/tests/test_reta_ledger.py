@@ -136,13 +136,14 @@ def test_migrates_schema_26_to_27_and_keeps_elections_append_only(tmp_path: Path
             "'DE','SYNTHETIC','unavailable',0)", (party["counterparty_id"],),
         )
         vies_before = dict(db.connection.execute("SELECT * FROM vies_checks").fetchone())
-        for name in ("reta_base_election_voids", "reta_base_elections", "reta_rate_tables"):
+        for name in ("tax_attribution_fx_events", "transaction_tax_attributions",
+                     "reta_base_election_voids", "reta_base_elections", "reta_rate_tables"):
             db.connection.execute(f"DROP TABLE {name}")
         db.connection.execute("PRAGMA user_version = 26")
         db.connection.commit()
 
     with LedgerDB.open(database, apply_migrations=True) as db:
-        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == LATEST_SCHEMA_VERSION == 27
+        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == LATEST_SCHEMA_VERSION == 28
         assert db.list_reta_base_elections() == [] and db.reta_rate_table(2026) is None
         assert dict(db.connection.execute("SELECT * FROM vies_checks").fetchone()) == vies_before
         for statement in ("UPDATE vies_checks SET outcome='invalid'", "DELETE FROM vies_checks"):

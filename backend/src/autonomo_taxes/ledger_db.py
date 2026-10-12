@@ -34,7 +34,7 @@ from .tax_rules import ALL_FORM_CODES, ANNUAL_FORM_CODES, FORM_RULES, QUARTERLY_
 from .vat_classification import is_vat_investment_good
 
 
-LATEST_SCHEMA_VERSION = 27
+LATEST_SCHEMA_VERSION = 28
 
 # Migrations that rebuild a table referenced by a foreign key. They must
 # run with foreign-key enforcement temporarily disabled, and that pragma
@@ -5492,7 +5492,9 @@ class LedgerDB:
 
     def list_tax_rows(self, *, year: int | None = None) -> list[dict[str, Any]]:
         sql = """
-            SELECT t.*, p.period_key, c.display_name AS counterparty_name, c.country_code,
+            SELECT t.*, p.period_key, td.document_number, td.issued_on,
+                   td.source_hash AS document_source_hash,
+                   c.display_name AS counterparty_name, c.country_code,
                    c.vat_id, tt.tax_code, tt.taxable_base_minor, tt.vat_minor,
                    tt.deductible_irpf_minor, tt.deductible_vat_minor, tt.withholding_minor,
                    tt.include_modelo130, tt.include_modelo303, tt.include_modelo347,
@@ -5540,8 +5542,20 @@ class LedgerDB:
         """
         params: tuple[Any, ...] = ()
         if year is not None:
-            sql += " AND substr(t.transaction_date, 1, 4) = ?"
-            params = (str(year),)
+            sql += """ AND (
+                substr(t.transaction_date, 1, 4) = ? OR EXISTS (
+                    SELECT 1 FROM transaction_tax_attributions ta
+                    WHERE ta.transaction_id = t.transaction_id
+                      AND ta.revision = (SELECT MAX(current.revision)
+                          FROM transaction_tax_attributions current
+                          WHERE current.transaction_id = t.transaction_id)
+                      AND (substr(json_extract(ta.decision_json, '$.irpf.date'), 1, 4) = ?
+                        OR substr(json_extract(ta.decision_json, '$.iva.date'), 1, 4) = ?
+                        OR EXISTS (SELECT 1 FROM tax_attribution_fx_events fx
+                            WHERE fx.attribution_id = ta.attribution_id
+                              AND substr(fx.recognized_on, 1, 4) = ?))
+                ))"""
+            params = (str(year),) * 4
         sql += " ORDER BY t.transaction_date, t.transaction_id, tt.treatment_id"
         return self._fetch_all(sql, params)
 
@@ -8311,6 +8325,40 @@ def _migration_27(connection: sqlite3.Connection) -> None:
             )
 
 
+def _migration_28(connection: sqlite3.Connection) -> None:
+    connection.execute("""
+        CREATE TABLE transaction_tax_attributions (
+            attribution_id TEXT PRIMARY KEY,
+            transaction_id TEXT NOT NULL REFERENCES transactions(transaction_id),
+            revision INTEGER NOT NULL CHECK (revision > 0),
+            source_snapshot_hash TEXT NOT NULL CHECK (length(source_snapshot_hash) = 64),
+            decision_json TEXT NOT NULL CHECK (json_valid(decision_json)),
+            evidence_ref TEXT NOT NULL CHECK (length(trim(evidence_ref)) > 0),
+            reason TEXT NOT NULL CHECK (length(trim(reason)) > 0),
+            actor TEXT NOT NULL CHECK (length(trim(actor)) > 0),
+            historical_correction INTEGER NOT NULL CHECK (historical_correction IN (0, 1)),
+            created_at TEXT NOT NULL,
+            UNIQUE (transaction_id, revision)
+        )
+    """)
+    connection.execute("""
+        CREATE TABLE tax_attribution_fx_events (
+            attribution_id TEXT NOT NULL REFERENCES transaction_tax_attributions(attribution_id),
+            event_key TEXT NOT NULL CHECK (length(trim(event_key)) > 0),
+            recognized_on TEXT NOT NULL,
+            amount_minor INTEGER NOT NULL CHECK (amount_minor <> 0),
+            evidence_ref TEXT NOT NULL CHECK (length(trim(evidence_ref)) > 0),
+            PRIMARY KEY (attribution_id, event_key)
+        )
+    """)
+    for table in ("transaction_tax_attributions", "tax_attribution_fx_events"):
+        for action in ("UPDATE", "DELETE"):
+            connection.execute(
+                f"CREATE TRIGGER {table}_no_{action.lower()} BEFORE {action} ON {table} "
+                "BEGIN SELECT RAISE(ABORT, 'Tax attributions are append-only'); END"
+            )
+
+
 _MIGRATIONS = {
     1: _migration_1,
     2: _migration_2,
@@ -8339,4 +8387,5 @@ _MIGRATIONS = {
     25: _migration_25,
     26: _migration_26,
     27: _migration_27,
+    28: _migration_28,
 }

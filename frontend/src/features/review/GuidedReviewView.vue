@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TaxAttributionDetails from './TaxAttributionDetails.vue';
 import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { eur, formatDateText } from '../../core/format.ts';
@@ -577,6 +578,11 @@ const retry = () =>
       <p v-if="!evaluation.canApply && evaluation.availableOn" class="review-alert warning">
         {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
       </p>
+      <TaxAttributionDetails
+        :attribution="item?.tax_attribution"
+        :source-date="state.transaction.transaction_date"
+        :entry-type="state.transaction.entry_type"
+      />
       <form id="review-form" class="review-form" @submit.prevent="submit('approve')">
         <section class="panel review-panel">
           <header class="panel-header">

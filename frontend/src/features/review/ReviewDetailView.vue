@@ -4,17 +4,19 @@ import { useLocale } from '../../vue/locale.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { followSpaLink } from '../../vue/services.ts';
-import { transactionDetail } from '../expense-detail/model.ts';
+import { transactionDetail, type TransactionDetail } from '../expense-detail/model.ts';
+import TaxAttributionDetails from './TaxAttributionDetails.vue';
 import ExpenseWorkflowView from './ExpenseWorkflowView.vue';
 import GuidedReviewView from './GuidedReviewView.vue';
 import type { ReviewDetailContext } from './guided-model.ts';
 const props = defineProps<{ context: ReviewDetailContext }>();
 const { locale, t } = useLocale();
-const mode = ref<'loading' | 'workflow' | 'guided'>('loading'),
+const mode = ref<'loading' | 'workflow' | 'guided' | 'attributed'>('loading'),
   error = shallowRef<unknown>(),
   factsOnly = ref(false),
   back = ref(props.context.returnUrl),
   period = ref(props.context.period);
+const savedDetail = shallowRef<TransactionDetail>();
 let active = true,
   generation = 0;
 onBeforeUnmount(() => {
@@ -37,6 +39,16 @@ async function load() {
     if (!active || revision !== generation) return;
     period.value = data.period.period_key;
     back.value = context.resolved(data.period);
+    savedDetail.value = data;
+    if (
+      data.transaction.entry_type === 'income' &&
+      data.tax_attribution &&
+      ['posted', 'included_in_snapshot'].includes(data.transaction.lifecycle_status)
+    ) {
+      mode.value = 'attributed';
+      context.settled();
+      return;
+    }
     if (
       data.transaction.entry_type === 'expense' &&
       ['posted', 'included_in_snapshot'].includes(data.transaction.lifecycle_status)
@@ -109,6 +121,30 @@ const retry = () => (forbidden.value ? window.location.reload() : void load());
   </div>
   <div v-else-if="mode === 'loading'" class="empty-state" role="status">
     {{ t('common.loading') }}
+  </div>
+  <div v-else-if="mode === 'attributed' && savedDetail">
+    <header class="panel-header">
+      <a
+        class="secondary-button"
+        :href="back"
+        @click="followSpaLink($event, context.services.navigate)"
+        >{{ t('review.workspaceBack') }}</a
+      >
+      <h2>{{ savedDetail.document?.document_number || savedDetail.counterparty?.display_name }}</h2>
+      <a
+        v-if="savedDetail.document?.document_id"
+        class="secondary-button"
+        :href="`/api/document/${encodeURIComponent(savedDetail.document.document_id)}/content`"
+        target="_blank"
+        rel="noreferrer"
+        >{{ t('common.file') }}</a
+      >
+    </header>
+    <TaxAttributionDetails
+      :attribution="savedDetail.tax_attribution"
+      :source-date="savedDetail.transaction.transaction_date"
+      :entry-type="savedDetail.transaction.entry_type"
+    />
   </div>
   <ExpenseWorkflowView
     v-else-if="mode === 'workflow'"

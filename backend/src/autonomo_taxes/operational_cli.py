@@ -189,6 +189,18 @@ TAX_CALENDAR_SHEET_FIELDS = [
 
 
 def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    attribution = subparsers.add_parser("tax-attribution", help="Review independent IRPF/IVA dates and amounts")
+    attribution_sub = attribution.add_subparsers(dest="attribution_command", required=True)
+    prepare = attribution_sub.add_parser("prepare", help="Write a private attribution review packet")
+    _db_arg(prepare)
+    prepare.add_argument("transaction_id")
+    prepare.add_argument("--out", type=Path, required=True)
+    prepare.set_defaults(_operational_handler=_cmd_tax_attribution_prepare)
+    apply = attribution_sub.add_parser("apply", help="Append one reviewed attribution; never file or pay")
+    _db_arg(apply)
+    apply.add_argument("--input", type=Path, required=True)
+    apply.add_argument("--actor", required=True)
+    apply.set_defaults(_operational_handler=_cmd_tax_attribution_apply)
     db = subparsers.add_parser("db", help="Initialize or inspect the canonical SQLite ledger")
     db_sub = db.add_subparsers(dest="db_command", required=True)
     db_init = db_sub.add_parser("init", help="Initialize the ledger schema")
@@ -3802,6 +3814,9 @@ def _cmd_period_dashboard(args: argparse.Namespace) -> int:
             ),
         )
 
+        from .tax_attribution import attribution_state_hash
+        dashboard["tax_attribution_state_hash"] = attribution_state_hash(db)
+
     if args.xolo_modelo130_calculations:
         add_xolo_comparison(
             dashboard,
@@ -3915,6 +3930,8 @@ def _build_period_preparation_context(
             allow_authoritative_history=True,
         ),
     )
+    from .tax_attribution import attribution_state_hash
+    dashboard["tax_attribution_state_hash"] = attribution_state_hash(db)
     calculations = _period_prepare_calculations(
         dashboard=dashboard,
         rows=projected_rows,
@@ -6058,11 +6075,34 @@ def _parse_quarter_period(period_key: str) -> tuple[int, int]:
     return year, quarter
 
 
+def _cmd_tax_attribution_prepare(args: argparse.Namespace) -> int:
+    from .tax_attribution import prepare_attribution
+    with open_ledger_db(args.db, read_only=True) as db:
+        packet = prepare_attribution(db, args.transaction_id)
+    _write_json(args.out, packet)
+    args.out.chmod(0o600)
+    _emit({"transaction_id": args.transaction_id, "expected_revision": packet["expected_revision"], "output": str(args.out)})
+    return 0
+
+
+def _cmd_tax_attribution_apply(args: argparse.Namespace) -> int:
+    from .tax_attribution import apply_attribution
+    packet = json.loads(args.input.read_text(encoding="utf-8"))
+    with open_ledger_db(args.db) as db:
+        result = apply_attribution(db, packet, actor=args.actor)
+    _emit({"applied": True, "transaction_id": result["transaction_id"], "revision": result["revision"],
+           "attribution_id": result["attribution_id"], "refresh_required": True})
+    return 0
+
+
 def _approved_forecast_rows(db: LedgerDB, period_key: str) -> list[dict[str, Any]]:
+    from .tax_attribution import attributed_periods
     year = int(period_key[:4])
     grouped: dict[str, dict[str, Any]] = {}
     for raw in db.list_tax_rows(year=year):
-        if raw["period_key"] != period_key or raw["lifecycle_status"] != "approved":
+        if raw["lifecycle_status"] != "approved" or period_key not in attributed_periods(
+            db, raw["transaction_id"], raw["transaction_date"]
+        ):
             continue
         bucket = grouped.setdefault(
             raw["transaction_id"],

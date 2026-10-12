@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TaxAttributionDetails from '../review/TaxAttributionDetails.vue';
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { followSpaLink } from '../../vue/services.ts';
@@ -222,6 +223,11 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
           <p v-else>{{ t('expense.noNotes') }}</p>
         </div>
       </section>
+      <TaxAttributionDetails
+        :attribution="data.tax_attribution"
+        :source-date="data.transaction.transaction_date"
+        :entry-type="data.transaction.entry_type"
+      />
       <section class="panel">
         <header class="panel-header">
           <h2>{{ t('review.factsTitle') }}</h2>

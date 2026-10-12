@@ -1,0 +1,12 @@
+{
+  "taxAttribution.title": "Учет для налогов",
+  "taxAttribution.irpfDate": "Дата учета IRPF",
+  "taxAttribution.ivaDate": "Дата учета IVA",
+  "taxAttribution.income": "Доход для IRPF",
+  "taxAttribution.ivaBase": "База IVA",
+  "taxAttribution.pending": "Сумма требует подтверждения",
+  "taxAttribution.fx": "Курсовые прибыли и убытки при оплате",
+  "taxAttribution.history": "Скорректированный расчет; поданные декларации сохранены.",
+  "taxAttribution.stale": "Исходные данные изменились. Требуется повторная проверка налогового учета.",
+  "taxAttribution.documentBasis": "Итоги документов показаны по датам операций. Налоги рассчитаны по подтвержденным датам IRPF и IVA."
+}

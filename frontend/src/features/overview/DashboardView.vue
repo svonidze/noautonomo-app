@@ -160,6 +160,9 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
       </button>
     </div>
     <template v-if="data">
+      <p v-if="data.has_tax_attributions" class="period-note">
+        {{ t('taxAttribution.documentBasis') }}
+      </p>
       <div v-if="approved" class="period-note posting-banner">
         <div>
           <strong>{{ t('dashboard.postingBannerTitle', { count: approved }) }}</strong>

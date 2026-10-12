@@ -45,6 +45,7 @@ from .account_settings import AccountSettingsError, read_settings, save_backups,
 from .fx_reference import ECBRateObservation, FXReferenceError, fetch_eur_rate
 from .expense_view import enrich_expense_context, expense_page, expense_summary
 from .ledger_db import LedgerDB, LedgerDbError, SchemaVersionError, StaleRowVersionError, open as open_ledger_db
+from .tax_attribution import TaxAttributionError
 from .legacy_paths import LegacyPathResolver
 from .posting import build_posting_preview
 from .reta_ledger import RetaInputUnavailable, ledger_bracket_check
@@ -508,6 +509,7 @@ class LocalAccountingApp:
             "tax_preview": _compact_tax_preview(cached),
             "tax_forms": tax_forms,
             "forecast_as_of": cached.get("as_of") if cached else None,
+            "has_tax_attributions": bool(cached.get("tax_attribution_state_hash")),
             "filing_ready": bool(cached and cached.get("filing_ready")),
             "posting_preview_summary": _posting_preview_summary(posting_preview),
             "submission_ready": bool(cached and cached.get("submission_ready")),
@@ -695,10 +697,13 @@ class LocalAccountingApp:
                     """,
                     (normalized_id,),
                 ).fetchall()
+                from .tax_attribution import attribution_view
+                attribution = attribution_view(LedgerDB(connection), normalized_id)
             finally:
                 connection.rollback()
 
         return {
+            **({"tax_attribution": attribution} if attribution is not None else {}),
             "workflow_follow_up": follow_up,
             "transaction": {
                 "transaction_id": row["transaction_id"],
@@ -1627,6 +1632,32 @@ class LocalAccountingApp:
             raise LocalWebError("Google Drive intake returned an invalid result")
         return dict(result)
 
+    def tax_attribution(self, transaction_id: str) -> dict[str, Any]:
+        from .tax_attribution import prepare_attribution, attribution_view
+        with open_ledger_db(self.config.database, read_only=True) as db:
+            return {"packet": prepare_attribution(db, transaction_id),
+                    "current": attribution_view(db, transaction_id)}
+
+    def tax_attribution_apply(self, transaction_id: str, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+        from .tax_attribution import apply_attribution, attributed_periods, TaxAttributionError
+        if not isinstance(payload, dict) or payload.get("transaction_id") != transaction_id:
+            raise TaxAttributionError("Request transaction does not match the route")
+        with open_ledger_db(self.config.database) as db:
+            original_date = db.connection.execute("SELECT transaction_date FROM transactions WHERE transaction_id=?", (transaction_id,)).fetchone()
+            if original_date is None:
+                raise TaxAttributionError("Transaction not found")
+            affected = attributed_periods(db, transaction_id, original_date[0])
+            result = apply_attribution(db, payload, actor=actor)
+            affected |= attributed_periods(db, transaction_id, original_date[0])
+            known = {row["period_key"] for row in db.list_periods()}
+        pending = []
+        for period in sorted(affected & known):
+            try:
+                self.refresh_dashboard(period)
+            except Exception:
+                pending.append(period)
+        return {"applied": True, "current": result, "refresh_pending": pending}
+
     def review_work_item(self, review_id: str) -> dict[str, Any]:
         try:
             with open_ledger_db(self.config.database, read_only=True) as db:
@@ -1636,6 +1667,8 @@ class LocalAccountingApp:
                 context = self._status_context(db.connection).transaction(packet["state"]["transaction"]["transaction_id"])
                 result["ui_context"] = context
                 result["posting_context"] = context.get("posting")
+                from .tax_attribution import attribution_view
+                result["tax_attribution"] = attribution_view(db, packet["state"]["transaction"]["transaction_id"])
                 result["review_allowed"] = result["supported"] and packet["state"]["period"]["status"] == "open" and not any(
                     r["code"] == "future_dated" for r in (context.get("posting") or {}).get("blockers", []))
                 return result
@@ -2074,6 +2107,9 @@ class LocalAccountingApp:
         return [dict(row) | {"ui_context": simple_context("obligation", dict(row))} for row in rows]
 
     def _load_cached_dashboard(self, period_key: str) -> dict[str, Any]:
+        from .tax_attribution import attribution_state_hash
+        with open_ledger_db(self.config.database, read_only=True) as db:
+            attribution_hash = attribution_state_hash(db)
         candidates = (self.config.cache_root / period_key / "dashboard.json",)
         for path in candidates:
             if path.is_file():
@@ -2081,7 +2117,7 @@ class LocalAccountingApp:
                     value = json.loads(path.read_text(encoding="utf-8"))
                 except (OSError, json.JSONDecodeError):
                     continue
-                if value.get("period") == period_key:
+                if value.get("period") == period_key and value.get("tax_attribution_state_hash") == attribution_hash:
                     return value
         return {}
 
@@ -2363,6 +2399,8 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
                 self._send_json(self.server.app.counterparty_detail(unquote(match.group(1))))
             elif match := re.fullmatch(r"/api/counterparties/([^/]+)/name-history", parsed.path):
                 self._send_json(self.server.app.counterparty_name_history(unquote(match.group(1))))
+            elif match := re.fullmatch(r"/api/tax-attributions/([^/]+)", parsed.path):
+                self._send_json(self.server.app.tax_attribution(unquote(match.group(1))))
             elif parsed.path == "/api/review/work-item":
                 self._send_json(
                     self.server.app.review_work_item(_single_query(query, "review_id"))
@@ -2381,7 +2419,7 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
                 self._send_error_json(HTTPStatus.NOT_FOUND, "Unknown API endpoint")
             else:
                 self.send_error(HTTPStatus.NOT_FOUND)
-        except (ExpenseWorkflowError, AccountSettingsError) as exc:
+        except (ExpenseWorkflowError, AccountSettingsError, TaxAttributionError) as exc:
             self._send_error_json(HTTPStatus(exc.status), str(exc), code=exc.code,
                 message_code=getattr(exc, "message_code", None))
         except LocalWebApiError as exc:
@@ -2404,7 +2442,13 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
             self._require_session(principal)
             self._guard_origin()
             parsed = urlparse(self.path)
-            if match := re.fullmatch(r"/api/expense-workflows/([^/]+)/(save|preview|confirm|follow-up)", parsed.path):
+            if match := re.fullmatch(r"/api/tax-attributions/([^/]+)", parsed.path):
+                self._require_same_origin()
+                self._require_json_content_type()
+                self._send_json(self.server.app.tax_attribution_apply(
+                    unquote(match.group(1)), self._read_json(max_bytes=150_000), principal or "local-session",
+                ))
+            elif match := re.fullmatch(r"/api/expense-workflows/([^/]+)/(save|preview|confirm|follow-up)", parsed.path):
                 self._require_same_origin()
                 self._require_json_content_type()
                 payload = self._read_json(max_bytes=150_000)
@@ -2554,7 +2598,7 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
                 self._send_error_json(HTTPStatus.NOT_FOUND, "Unknown API endpoint")
             else:
                 self.send_error(HTTPStatus.NOT_FOUND)
-        except (ExpenseWorkflowError, AccountSettingsError) as exc:
+        except (ExpenseWorkflowError, AccountSettingsError, TaxAttributionError) as exc:
             self._send_error_json(HTTPStatus(exc.status), str(exc), code=exc.code,
                 message_code=getattr(exc, "message_code", None))
         except LocalWebApiError as exc:

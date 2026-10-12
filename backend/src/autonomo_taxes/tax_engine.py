@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Iterable, Mapping
@@ -71,6 +71,18 @@ class CalculationBlocked(ValueError):
 
 
 @dataclass(frozen=True)
+class TaxBasis:
+    date: date
+    amount_eur: Decimal = ZERO
+    taxable_base_eur: Decimal = ZERO
+    vat_eur: Decimal = ZERO
+    deductible_irpf_eur: Decimal = ZERO
+    deductible_vat_eur: Decimal = ZERO
+    withholding_eur: Decimal = ZERO
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class TaxRow:
     transaction_id: str
     tax_date: date
@@ -94,6 +106,19 @@ class TaxRow:
     vat_investment_good: bool | None = None
     # AEAT expense concept (G45 = the owner's social security contributions).
     aeat_expense_concept: str = ""
+    irpf_basis: TaxBasis | None = None
+    iva_basis: TaxBasis | None = None
+    source_transaction_id: str = ""
+    attribution_id: str = ""
+    component: str = "transaction"
+    cutoff: date | None = None
+    document_id: str = ""
+    document_number: str = ""
+    issued_on: date | None = None
+    document_source_hash: str = ""
+    attribution_evidence_ref: str = ""
+    attribution_reason: str = ""
+    fx_evidence_ref: str = ""
 
     def __post_init__(self) -> None:
         if self.kind not in {"income", "expense", "adjustment"}:
@@ -101,6 +126,55 @@ class TaxRow:
         if not self.transaction_id:
             raise ValueError("transaction_id is required")
         is_vat_investment_good(self.vat_investment_good, legacy_asset=bool(self.asset_id), tax_code=self.tax_code)
+
+    def effective_date(self, basis: str) -> date:
+        attribution = self.irpf_basis if basis == "irpf" else self.iva_basis
+        return attribution.date if attribution else self.tax_date
+
+    @property
+    def parent_id(self) -> str:
+        return self.source_transaction_id or self.transaction_id
+
+
+def limit_tax_rows(rows: Iterable[TaxRow], through: date) -> list[TaxRow]:
+    return [replace(row, cutoff=min(row.cutoff, through) if row.cutoff else through) for row in rows]
+
+
+def project_tax_rows(
+    rows: Iterable[TaxRow], basis: str, starts_on: date, through: date,
+) -> list[TaxRow]:
+    """Resolve a form's amounts only after its own date window is selected."""
+    if basis not in {"irpf", "iva"}:
+        raise ValueError("Tax basis must be irpf or iva")
+    result = []
+    for row in rows:
+        enabled = row.include_modelo130 if basis == "irpf" else row.include_modelo303
+        effective_date = row.effective_date(basis)
+        end = min(row.cutoff, through) if row.cutoff else through
+        if not enabled or not starts_on <= effective_date <= end:
+            continue
+        attribution = row.irpf_basis if basis == "irpf" else row.iva_basis
+        if attribution and attribution.error:
+            raise CalculationBlocked(f"Tax attribution {row.parent_id} ({basis}): {attribution.error}")
+        amounts = {
+            key: getattr(attribution, key) for key in (
+                "amount_eur", "taxable_base_eur", "vat_eur", "deductible_irpf_eur",
+                "deductible_vat_eur", "withholding_eur",
+            )
+        } if attribution else {}
+        result.append(replace(
+            row, tax_date=effective_date, irpf_basis=None, iva_basis=None,
+            include_modelo130=basis == "irpf", include_modelo303=basis == "iva",
+            **amounts,
+        ))
+    return result
+
+
+def _attribution_warnings(rows: Iterable[TaxRow]) -> tuple[str, ...]:
+    return (
+        ("Reviewed tax attributions applied; this is a corrected calculation, not a replacement of filed snapshots.",)
+        if any(row.attribution_id for row in rows) else ()
+    )
 
 
 @dataclass(frozen=True)
@@ -124,7 +198,8 @@ def calculate_modelo130_rows(
     reduction: Decimal = ZERO,
     include_difficult_expenses: bool = True,
 ) -> tuple[Modelo130Result, CalculationResult]:
-    selected = [row for row in rows if _in_ytd(row.tax_date, year, quarter) and row.include_modelo130]
+    rows = list(rows)
+    selected = project_tax_rows(rows, "irpf", date(year, 1, 1), _quarter_end(year, quarter))
     incomes = [row for row in selected if row.kind == "income"]
     expenses = [row for row in selected if row.kind in {"expense", "adjustment"}]
     income = cents(
@@ -155,10 +230,10 @@ def calculate_modelo130_rows(
     values = dict(result.as_dict())
     values["difficult_expenses"] = result.difficult_expenses
     lineage = {
-        "01": tuple(row.transaction_id for row in incomes),
-        "02": tuple(row.transaction_id for row in expenses),
+        "01": tuple(dict.fromkeys(row.parent_id for row in incomes)),
+        "02": tuple(dict.fromkeys(row.parent_id for row in expenses)),
     }
-    return result, CalculationResult("130", f"{year}-Q{quarter}", values, lineage)
+    return result, CalculationResult("130", f"{year}-Q{quarter}", values, lineage, _attribution_warnings(rows))
 
 
 def calculate_modelo303_rows(
@@ -174,7 +249,8 @@ def calculate_modelo303_rows(
     if final_settlement == "refund" and quarter != 4:
         raise CalculationBlocked("Modelo 303 refund is available only for the final period of the year")
     previous_compensation = cents(max(previous_compensation, ZERO))
-    selected = [row for row in rows if _in_quarter(row.tax_date, year, quarter) and row.include_modelo303]
+    rows = list(rows)
+    selected = project_tax_rows(rows, "iva", date(year, quarter * 3 - 2, 1), _quarter_end(year, quarter))
     oss_acquisitions = [
         row.transaction_id for row in selected
         if row.tax_code in INTRACOMMUNITY_ACQUISITION_CODES and is_oss_non_union_identifier(row.vat_id)
@@ -384,14 +460,16 @@ def calculate_modelo303_rows(
     deductible_inputs = domestic_deductible + other_reverse_input + import_deductible + intracommunity_input
     if any(row.vat_investment_good is None for row in deductible_inputs):
         warnings += (LEGACY_VAT_CLASSIFICATION_WARNING,)
-    return CalculationResult("303", f"{year}-Q{quarter}", values, lineage, warnings)
+    return CalculationResult("303", f"{year}-Q{quarter}", values, lineage, warnings + _attribution_warnings(rows))
 
 
 def calculate_modelo349_rows(rows: Iterable[TaxRow], *, year: int, quarter: int) -> CalculationResult:
+    rows = list(rows)
     selected = [
         row
         for row in rows
         if _in_quarter(row.tax_date, year, quarter) and row.tax_code in EU_349_CODES
+        and (row.cutoff is None or row.tax_date <= row.cutoff)
     ]
     missing_vat_id = [row.transaction_id for row in selected if not row.vat_id]
     if missing_vat_id:
@@ -421,6 +499,7 @@ def calculate_modelo349_rows(rows: Iterable[TaxRow], *, year: int, quarter: int)
         f"{year}-Q{quarter}",
         values,
         {key: tuple(ids) for key, ids in lineage.items()},
+        _original_date_warnings(rows),
     )
 
 
@@ -570,7 +649,9 @@ def calculate_modelo347_rows(
     year: int,
     threshold: Decimal = Decimal("3005.06"),
 ) -> CalculationResult:
-    selected = [row for row in rows if row.tax_date.year == year and row.include_modelo347]
+    rows = list(rows)
+    selected = [row for row in rows if row.tax_date.year == year and row.include_modelo347
+                and (row.cutoff is None or row.tax_date <= row.cutoff)]
     missing_counterparty = [row.transaction_id for row in selected if not row.counterparty_id]
     if missing_counterparty:
         raise CalculationBlocked(f"Modelo 347 requires counterparties: {', '.join(missing_counterparty)}")
@@ -607,7 +688,7 @@ def calculate_modelo347_rows(
         lineage,
         (
             "Ordinary acquisition (A) and supply (B) records are separated; special 347 record keys require explicit review.",
-        ),
+        ) + _original_date_warnings(rows),
     )
 
 
@@ -620,12 +701,14 @@ def calculate_retention_rows(
 ) -> CalculationResult:
     if withholding_type not in {"professional", "rent", "nonresident"}:
         raise ValueError(f"Unsupported withholding type: {withholding_type}")
+    rows = list(rows)
     selected = [
         row
         for row in rows
         if row.tax_date.year == year
         and (quarter is None or _in_quarter(row.tax_date, year, quarter))
         and row.withholding_type == withholding_type
+        and (row.cutoff is None or row.tax_date <= row.cutoff)
     ]
     form = "111" if withholding_type == "professional" and quarter else "190"
     if withholding_type == "rent":
@@ -653,7 +736,7 @@ def calculate_retention_rows(
         period,
         values,
         {"withholding": tuple(row.transaction_id for row in selected)},
-        warnings,
+        warnings + _original_date_warnings(rows),
     )
 
 
@@ -672,7 +755,8 @@ def calculate_modelo100_business_support(
     unsupported = tuple(sorted({value for value in unsupported_categories if value}))
     if unsupported:
         raise CalculationBlocked(f"Renta WEB review required for unsupported categories: {', '.join(unsupported)}")
-    selected = [row for row in rows if row.tax_date.year == year and row.include_modelo130]
+    rows = list(rows)
+    selected = project_tax_rows(rows, "irpf", date(year, 1, 1), date(year, 12, 31))
     incomes = [row for row in selected if row.kind == "income"]
     expenses = [row for row in selected if row.kind in {"expense", "adjustment"}]
     income = cents(
@@ -710,8 +794,8 @@ def calculate_modelo100_business_support(
         str(year),
         values,
         {
-            "business_income": tuple(row.transaction_id for row in incomes),
-            "business_expenses_before_difficult": tuple(row.transaction_id for row in expenses),
+            "business_income": tuple(dict.fromkeys(row.parent_id for row in incomes)),
+            "business_expenses_before_difficult": tuple(dict.fromkeys(row.parent_id for row in expenses)),
         },
         (
             "This output is decision support and must be compared with Renta WEB.",
@@ -721,7 +805,7 @@ def calculate_modelo100_business_support(
                 "the net income before any art. 32.1 or 32.2 reduction, so it is an upper bound when "
                 "one applies (art. 32.2.3 often applies at low incomes)."
             ),
-        ),
+        ) + _attribution_warnings(rows),
     )
 
 
@@ -828,6 +912,17 @@ def _new_activity_reduction(
         window=window,
         base=min(net_income, NEW_ACTIVITY_REDUCTION_BASE_CAP_EUR),
     )
+
+
+def _quarter_end(year: int, quarter: int) -> date:
+    if quarter not in {1, 2, 3, 4}:
+        raise ValueError("Quarter must be between 1 and 4")
+    return date(year + (quarter == 4), quarter * 3 % 12 + 1, 1) - timedelta(days=1)
+
+
+def _original_date_warnings(rows: Iterable[TaxRow]) -> tuple[str, ...]:
+    return (("This form retains source transaction dates and amounts; reviewed IRPF/IVA attributions are not applied.",)
+            if any(row.attribution_id for row in rows) else ())
 
 
 def _in_ytd(value: date, year: int, quarter: int) -> bool:
