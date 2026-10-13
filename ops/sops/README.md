@@ -214,7 +214,7 @@ validate_sha "$app_sha"
 "$sops_ops/deploy.sh" "$app_sha" "$secret_sha"
 ```
 
-The bootstrap transport ref normally selects `master`; use a one-shot
+The bootstrap transport ref normally selects `main`; use a one-shot
 `AUTONOMO_DEPLOY_REF` only for an explicitly approved PR SHA. Use the one-shot
 storage migration flag only for a release needing it, as in the
 [default migration explanation](../docs/README.md#schema-migration).

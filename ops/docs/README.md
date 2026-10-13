@@ -367,13 +367,13 @@ Use the checklist setup above in the same shell.
 
 Copy the merged commit SHA from the reviewed PR. This command installs code,
 restarts the service, and switches `current` after checks pass. It verifies the
-SHA is reachable from fetched `master`, not merely present in the local object
+SHA is reachable from fetched `main`, not merely present in the local object
 database. Expected final output: `deployed_sha` and `previous_sha`.
 
 ```bash
 read -r -p 'Reviewed merge commit, full SHA: ' app_sha
 validate_sha "$app_sha"
-"$run" --setenv AUTONOMO_DEPLOY_REF=master -- "$ops_root/deploy.sh" "$app_sha"
+"$run" --setenv AUTONOMO_DEPLOY_REF=main -- "$ops_root/deploy.sh" "$app_sha"
 ```
 
 ### Explicitly authorized unmerged PR
@@ -394,14 +394,14 @@ validate_sha "$app_sha"
 ### Schema migration
 
 For a release that needs storage migration, use the following command **instead
-of** the deployment command above. Set `deploy_ref` to `master` or the approved
+of** the deployment command above. Set `deploy_ref` to `main` or the approved
 PR branch. The flag renders an `ExecStartPre` storage migration and readiness
 gate into this release's unit; it is not a permanent runtime.env change. That
 unit retains the startup hook on later restarts. Do not use it for old releases
 without the storage migration command.
 
 ```bash
-read -r -p 'Reviewed transport ref (master or approved PR branch): ' deploy_ref
+read -r -p 'Reviewed transport ref (main or approved PR branch): ' deploy_ref
 read -r -p 'Reviewed migration release, full SHA: ' app_sha
 validate_sha "$app_sha"
 "$run" --setenv "AUTONOMO_DEPLOY_REF=$deploy_ref" \

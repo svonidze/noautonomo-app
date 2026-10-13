@@ -8,7 +8,7 @@ approve the future implementation.
 
 ## Source and upstream changes
 
-Implementation starts from freshly fetched master
+Implementation starts from freshly fetched main
 `27522dec76169435d4793324cce11c8be3179922`, not the older planning snapshot.
 This base includes account/backup settings, expense workflow and follow-up,
 depreciation actions, tax-result/payment views, verified FX fixes and deployment
@@ -37,11 +37,11 @@ preservation obligations, not permission to perform real accounting operations.
 | 11 | shell-router | Vue shell/settings, Vue Router and help history | Complete navigation/dirty/busy/settings parity; old test oracles retained |
 | 12 | finalize | Remove monolith, temporary adapters/globals/source tests | Coverage disposition complete, installed app acceptance, documentation |
 
-Branches use `codex/ui-NN-<suffix>`. The first PR targets master, each next PR
+Branches use `codex/ui-NN-<suffix>`. The first PR targets main, each next PR
 targets the previous branch at its recorded tested SHA. Publish coherent tested
 commits as draft PRs. Merge only when separately authorized, bottom-up using merge
 commits; retarget and propagate ancestor updates upward, then rerun affected gates.
-No hard stack-depth limit or freeze of master. Preserve unrelated work.
+No hard stack-depth limit or freeze of main. Preserve unrelated work.
 
 ## Interfaces and compatibility
 

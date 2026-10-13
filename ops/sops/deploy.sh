@@ -35,7 +35,7 @@ if [[ -L "$root/current" ]]; then
   previous_secret="$(current_secret_config_sha 2>/dev/null || true)"
   previous_unit="$(current_deployment_unit)"
 fi
-release_ref="${AUTONOMO_DEPLOY_REF:-master}"
+release_ref="${AUTONOMO_DEPLOY_REF:-main}"
 [[ "$release_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$release_ref" != *..* ]] \
   || die "AUTONOMO_DEPLOY_REF must be a safe remote branch or ref name"
 mkdir -p "$root/releases"
