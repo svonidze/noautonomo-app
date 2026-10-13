@@ -57,6 +57,54 @@ or altered originals, closed/future periods, unresolved unrelated blockers and
 unreviewed tax/FX decisions remain blocking. The application cannot make an
 incomplete period ready by silently resolving its other issues.
 
+### Prepaid subscriptions across quarters
+
+For IRPF under accrual accounting (*devengo*), the subscription cost belongs to
+the time when access is provided. If the paid service crosses a quarter boundary,
+each quarter takes its share of the cost. Paying the whole bill in advance does
+not move all of that expense into the payment quarter. Confirm the taxpayer's
+accounting method before applying this split; an elected cash method
+(*cobros y pagos*) follows different timing. See AEAT's guidance on
+[accrual accounting](https://sede.agenciatributaria.gob.es/Sede/ayuda/manuales-videos-folletos/manuales-practicos/irpf-2025/c06-rendimientos-actividades-economicas-cuestiones-generales/criterios-imputacion-temporal-componentes-rendimiento-neto/criterio-general-imputacion-fiscal-principio-devengo.html)
+and the [cash method](https://sede.agenciatributaria.gob.es/Sede/ayuda/manuales-videos-folletos/manuales-practicos/irpf-2025/c06-rendimientos-actividades-economicas-cuestiones-generales/criterios-imputacion-temporal-componentes-rendimiento-neto/criterios-especiales-imputacion-fiscal-reglamento-irpf.html).
+
+IVA has its own rule for advances: for ordinary taxable services, it arises when
+the supplier receives the advance, on the amount received. A full advance can
+therefore put all the IVA in the first quarter even though access continues into
+the next quarter. This explains why IRPF and IVA can use different quarters.
+See [AEAT's advance-payment rule](https://sede.agenciatributaria.gob.es/Sede/iva/calculo-iva-repercutido-clientes/que-momento-tengo-que-repercutir-iva.html).
+
+A made-up example: a subscription costs EUR 60 before IVA, is paid in full on
+21 March and provides access evenly from 21 March through 19 April, inclusive.
+That is 30 days at EUR 2 per day: 11 days in Q1 and 19 days in Q2. Assume the
+business cost is fully deductible and ordinary IVA applies at 21%.
+
+| Item | Q1 | Q2 |
+|---|---|---|
+| IRPF expense for the days of access | EUR 22 | EUR 38 |
+| IVA arising on the full advance | EUR 12.60 | EUR 0 |
+
+If the reviewed treatment for a foreign business service is reverse charge,
+declare the IVA yourself. When the documentation and business use support a
+full deduction in that quarter, the same amount appears as IVA due and as
+deductible IVA, so their effect on the total IVA payable is zero. A deduction
+still needs its own confirmed basis; prepayment alone does not establish it.
+See [AEAT's rules for foreign services](https://sede.agenciatributaria.gob.es/Sede/iva/iva-operaciones-comercio-exterior/prestaciones-servicios.html).
+
+In the application, keep the original invoice and a linked note showing each
+quarter's share and the remaining cost. An operator can record the expense for
+service already provided gradually or process the remainder once the cycle ends.
+Future service remains a plan.
+
+For a posted invoice, use a reviewed correction linked to the original document
+and transaction to recognize only the remaining IRPF expense in an open period.
+If all IVA was already recorded, the later entry adds zero IVA due and zero IVA
+deduction. Do not upload the invoice again or create another purchase or payment.
+Check that the two IRPF portions total the reviewed deductible cost and preserve
+filed returns and their snapshots. See
+[separate IRPF and IVA recognition](TAX_ATTRIBUTION.md) for the tax registers and
+the saved tax dates.
+
 ### Equipment and depreciation
 
 One new asset is supported per expense. Confirm its description/category,
