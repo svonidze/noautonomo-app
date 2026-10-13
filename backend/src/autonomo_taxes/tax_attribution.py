@@ -286,12 +286,15 @@ def _basis(payload: dict[str, Any] | None, basis: str, row: TaxRow, error: str |
         income = Decimal(payload['income_minor']) / 100
         return TaxBasis(day, income if row.kind == 'income' else row.amount_eur,
                         income, deductible_irpf_eur=Decimal(payload['deductible_minor']) / 100,
-                        withholding_eur=Decimal(payload['withholding_minor']) / 100, error=error)
+                        withholding_eur=Decimal(payload['withholding_minor']) / 100, error=error,
+                        evidence_ref=payload['evidence_ref'])
     if payload['pending_reason'] is not None:
-        return TaxBasis(day, error=error or 'IVA amounts pending: ' + payload['pending_reason'])
+        return TaxBasis(day, error=error or 'IVA amounts pending: ' + payload['pending_reason'],
+                        evidence_ref=payload['evidence_ref'])
     base = Decimal(payload['base_minor']) / 100
     return TaxBasis(day, base, base, vat_eur=Decimal(payload['vat_minor']) / 100,
-                    deductible_vat_eur=Decimal(payload['deductible_minor']) / 100, error=error)
+                    deductible_vat_eur=Decimal(payload['deductible_minor']) / 100, error=error,
+                    evidence_ref=payload['evidence_ref'])
 
 
 def attach_attributions(db: LedgerDB, rows: Iterable[TaxRow]) -> list[TaxRow]:
@@ -316,7 +319,8 @@ def attach_attributions(db: LedgerDB, rows: Iterable[TaxRow]) -> list[TaxRow]:
             day = _date(event['date'])
             is_gain = amount > 0
             basis = TaxBasis(day, abs(amount), amount if is_gain else Decimal(0),
-                             deductible_irpf_eur=-amount if not is_gain else Decimal(0), error=error)
+                             deductible_irpf_eur=-amount if not is_gain else Decimal(0), error=error,
+                             evidence_ref=event['evidence_ref'])
             result.append(TaxRow(
                 transaction_id=f"fx:{row.transaction_id}:{event['event_key']}", source_transaction_id=row.transaction_id,
                 tax_date=day, kind='income' if is_gain else 'expense', amount_eur=abs(amount),
@@ -350,32 +354,39 @@ def attributed_periods(db: LedgerDB, transaction_id: str, original_date: str) ->
 
 def register_projection(rows: Iterable[TaxRow], *, year: int, through: date,
                         iva_starts_on: date | None = None) -> dict[str, Any]:
-    from .tax_engine import project_tax_rows
+    from .tax_engine import project_tax_rows, calculate_modelo303_rows
     rows = list(rows)
     result: dict[str, Any] = {'date_basis': 'separate_reviewed_irpf_iva', 'registers': {}, 'bridge': []}
+    selected_ids: set[str] = set()
+    parent_ids: set[str] = set()
     for basis in ('irpf', 'iva'):
         start = iva_starts_on if basis == 'iva' and iva_starts_on else date(year, 1, 1)
         scope = {'starts_on': start, 'through': through}
-        try:
-            projected = project_tax_rows(rows, basis, start, through)
-            projected.sort(key=lambda row: (row.tax_date, row.transaction_id))
-            result['registers'][basis] = {**scope, 'blocked': False, 'rows': [asdict(r) for r in projected]}
-        except CalculationBlocked as exc:
-            blocked_rows = []
-            for row in rows:
-                try:
-                    project_tax_rows([row], basis, start, through)
-                except CalculationBlocked as row_error:
-                    day = row.effective_date(basis)
-                    blocked_rows.append({'transaction_id': row.transaction_id,
-                        'source_transaction_id': row.parent_id, 'tax_date': day,
-                        'period': f'{day.year}-Q{(day.month - 1) // 3 + 1}',
-                        'reason': str(row_error)})
-            result['registers'][basis] = {**scope, 'blocked': True, 'reason': str(exc),
-                                         'blocked_rows': blocked_rows, 'rows': []}
-    parent_ids = {r['source_transaction_id'] or r['transaction_id']
-                  for register in result['registers'].values()
-                  for r in [*register['rows'], *register.get('blocked_rows', [])]}
+        projected = []
+        blocked_rows = []
+        for row in rows:
+            try:
+                resolved = project_tax_rows([row], basis, start, through)
+                if not resolved:
+                    continue
+                if basis == 'iva':
+                    # Use the calculator's complete classification/rate guard, not an exporter copy.
+                    calculate_modelo303_rows(resolved, year=year,
+                                             quarter=(resolved[0].tax_date.month - 1) // 3 + 1)
+                projected.extend(resolved)
+            except CalculationBlocked as exc:
+                day = row.effective_date(basis)
+                blocked_rows.append({'transaction_id': row.transaction_id,
+                    'source_transaction_id': row.parent_id, 'tax_date': day,
+                    'period': f'{day.year}-Q{(day.month - 1) // 3 + 1}', 'reason': str(exc)})
+            selected_ids.add(row.transaction_id)
+            parent_ids.add(row.parent_id)
+        projected.sort(key=lambda row: (row.tax_date, row.transaction_id))
+        result['registers'][basis] = {**scope, 'blocked': bool(blocked_rows),
+            'rows': [] if blocked_rows else [asdict(row) for row in projected]}
+        if blocked_rows:
+            result['registers'][basis].update(reason=blocked_rows[0]['reason'], blocked_rows=blocked_rows)
+    result['selected_row_ids'] = sorted(selected_ids)
     result['source_rows'] = [asdict(row) for row in rows
                              if row.component == 'transaction' and row.transaction_id in parent_ids]
     for row in rows:

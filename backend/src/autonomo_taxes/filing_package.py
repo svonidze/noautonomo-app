@@ -139,6 +139,24 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
         readiness_reasons.append("period_not_closed")
     if not any(row["status"] in FINAL_SNAPSHOT_STATUSES for row in snapshot_refs):
         readiness_reasons.append("final_filing_snapshot_missing")
+    else:
+        # Historical recognition can leave the latest-only loader's year entirely.
+        year_start = period['starts_on'][:4] + '-01-01'
+        end = period['ends_on']
+        attribution_history = connection.execute("""
+            SELECT 1 FROM transaction_tax_attributions a
+            JOIN transactions t ON t.transaction_id=a.transaction_id
+            WHERE t.transaction_date BETWEEN ? AND ?
+               OR json_extract(a.decision_json, '$.irpf.date') BETWEEN ? AND ?
+               OR json_extract(a.decision_json, '$.iva.date') BETWEEN ? AND ?
+               OR EXISTS (
+                   SELECT 1 FROM tax_attribution_fx_events fx
+                   WHERE fx.attribution_id=a.attribution_id
+                     AND fx.recognized_on BETWEEN ? AND ?)
+            LIMIT 1
+        """, (year_start, end, year_start, end, period['starts_on'], end, year_start, end)).fetchone()
+        if attribution_history:
+            readiness_reasons.append('tax_attribution_snapshot_review_required')
     attribution_basis = {}
     if "tax_registers" in export.files:
         registers = json.loads(export.files["tax_registers"].read_text(encoding="utf-8"))
