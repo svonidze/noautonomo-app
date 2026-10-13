@@ -4,6 +4,15 @@ Install the application on your own computer and create a fresh local ledger.
 For an existing server installation, follow [Operations](ops/docs/README.md).
 Return to the [project overview](README.md) for an introduction to the application.
 
+## Workspace folders
+
+Keep the repositories as siblings under a local `noautonomo/` directory:
+`blog` (`svonidze/noautonomo-blog`), `landing` (`svonidze/noautonomo-landing`),
+`app` (`svonidze/noautonomo-app`), and `secrets` (`svonidze/noautonomo-secrets`).
+Run the application commands below from `app`. Each folder keeps its own Git
+history; the parent directory is not a repository. Private runtime data stays
+outside these source checkouts.
+
 ## Requirements and installation
 
 Python 3.11 or newer is required. Installing from source also requires Node
