@@ -4,6 +4,8 @@ from decimal import Decimal
 import json
 from pathlib import Path
 
+import pytest
+
 from autonomo_taxes.cli import main
 from autonomo_taxes.ledger_db import initialize
 from autonomo_taxes.period_prepare import build_period_preparation, write_period_preparation
@@ -147,6 +149,49 @@ def test_period_preparation_writes_calculations_cash_and_calendar(tmp_path) -> N
     assert "### Modelo 130" in markdown
     assert "Casilla 19: 777.29" in markdown
     assert "--period 2026-Q3 --form 130" in markdown
+
+
+@pytest.mark.parametrize(
+    "form,calculation,expected_result",
+    [
+        ("130", {"values": {"19": Decimal("137.25")}}, "137.25"),
+        ("130", {"values": {"19": Decimal("0.00")}}, "0.00"),
+        ("130", {"values": {"19": "0.00"}}, "0.00"),
+        ("130", {"values": {"19": "137.25", "result": "999.00"}}, "137.25"),
+        ("130", None, "review required"),
+        ("130", {"values": {}}, "review required"),
+        ("130", {"values": None}, "review required"),
+        ("130", {"values": {"result": "137.25"}}, "review required"),
+        ("130", {"blocked": True, "reason": "Synthetic review pending"}, "review required"),
+        ("130", {"blocked": True, "values": {"19": "137.25"}}, "review required"),
+        ("303", {"values": {"71": "999.00", "result": Decimal("-23.45")}}, "-23.45"),
+        ("303", {"values": {"71": "999.00", "result": Decimal("0.00")}}, "0.00"),
+        ("303", {"values": {"71": "137.25"}}, "review required"),
+        ("111", {"values": {"withholding": "999.00", "result": "137.25"}}, "137.25"),
+        ("115", {"values": {"withholding": "999.00", "result": "137.25"}}, "137.25"),
+        ("216", {"values": {"withholding": "999.00", "result": "137.25"}}, "137.25"),
+        ("349", {"values": {}}, "review required"),
+    ],
+)
+def test_preparation_markdown_form_results(tmp_path, form, calculation, expected_result) -> None:
+    calculations = {} if calculation is None else {form: calculation}
+    report = build_period_preparation(
+        period={"period_key": "2028-Q2", "ends_on": "2028-06-30"},
+        as_of=date(2028, 6, 1),
+        dashboard={"blocking_items": []},
+        calculations=calculations,
+        obligations=[{"obligation_code": form, "determination": "due", "filing_status": "due"}],
+        available_eur=Decimal("2000.00"),
+        cash_buffer_eur=None,
+    )
+
+    outputs = write_period_preparation(report, tmp_path)
+    markdown = outputs["markdown"].read_text(encoding="utf-8")
+
+    assert f"- Modelo {form}: result {expected_result} EUR." in markdown
+    if calculation and calculation.get("blocked"):
+        assert "- calculation:" in markdown
+        assert "- Blocked:" in markdown
 
 
 def test_unknown_obligation_blocks_preparation() -> None:
@@ -305,6 +350,10 @@ def test_period_prepare_cli_builds_real_manual_filing_bundle(
     )
     assert (output / "tax-actions.ics").is_file()
     assert (output / "books" / "filing-package-manifest.json").is_file()
+    markdown = (output / "preparation.md").read_text(encoding="utf-8")
+    assert "- Modelo 130: result 190.00 EUR." in markdown
+    assert "- Modelo 303: result 0.00 EUR." in markdown
+    assert "- Modelo 349: result review required EUR." in markdown
 
 
 def test_preparation_preserves_typed_income_evidence_and_posting_gates(tmp_path) -> None:

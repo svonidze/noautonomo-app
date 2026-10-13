@@ -319,7 +319,11 @@ def _markdown(report: Mapping[str, Any]) -> str:
     ]
     for form in report["due_forms"]:
         calculation = report["calculations"].get(form, {})
-        result = calculation.get("values", {}).get("result")
+        values = calculation.get("values") or {}
+        result = (
+            None if calculation.get("blocked")
+            else values.get("19" if form == "130" else "result")
+        )
         lines.append(f"- Modelo {form}: result {result if result is not None else 'review required'} EUR.")
     lines.extend(
         [
