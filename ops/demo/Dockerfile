@@ -10,7 +10,7 @@ RUN python verify_ui_build.py backend/src/autonomo_taxes/web_ui/dist "${SOURCE_S
 FROM python:3.11.17-slim-bookworm@sha256:0a310eeecf4e1f5a0743f9a6520c90c88d089c903ca5fd283f501e3a805f5f89
 
 ARG SOURCE_SHA
-LABEL org.opencontainers.image.source="https://github.com/svonidze/spain-autonomo-taxes" \
+LABEL org.opencontainers.image.source="https://github.com/svonidze/noautonomo-app" \
       org.opencontainers.image.revision="${SOURCE_SHA}"
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

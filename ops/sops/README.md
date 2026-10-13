@@ -14,7 +14,7 @@ choosing this mode.
 ## Bootstrap boundaries
 
 The approved ciphertext repository is
-[`svonidze/spain-autonomo-taxes-secrets`](https://github.com/svonidze/spain-autonomo-taxes-secrets),
+[`svonidze/noautonomo-secrets`](https://github.com/svonidze/noautonomo-secrets),
 branch `main`. Production sync uses SSH with a repository-specific **read-only**
 deploy key. Keep the private deploy key and server age identity outside every
 Git repository; keep the recovery identity on a separate trusted device or in
@@ -31,7 +31,7 @@ The loader accepts only plain `AUTONOMO_*=value` assignments, not shell syntax.
 It does not use the default runtime.env for bootstrap. Set:
 
 - Private/release/ops roots, code checkout, transport ref, and health URL.
-- `AUTONOMO_SECRET_CONFIG_REPO=github.com:svonidze/spain-autonomo-taxes-secrets.git`
+- `AUTONOMO_SECRET_CONFIG_REPO=github.com:svonidze/noautonomo-secrets.git`
   and `AUTONOMO_SECRET_CONFIG_BRANCH=main` (SSH forces user `git`).
 - `AUTONOMO_SECRET_CONFIG_MOUNT` to a dedicated directory **inside**, but not
   equal to, private-root, normally `runtime-config`.

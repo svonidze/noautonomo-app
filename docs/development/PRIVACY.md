@@ -34,7 +34,7 @@ The request contains no amount, counterparty, document, identifier or other loca
 
 Use client-side authenticated encryption such as `age` for private-data and forensic Git backups. Keep at least two independently stored ciphertext copies and verify each by restoring it to an isolated directory. Store the private decryption identity outside the repository, preferably in a password manager.
 
-The only approved Git exception is `svonidze/spain-autonomo-taxes-secrets`: it may contain SOPS-encrypted runtime configuration whose data key is wrapped for both the server age recipient and an offline recovery recipient. It must never contain plaintext secrets, age identities, SSH private keys, accounting data, source documents, or decrypted generations. The code repository remains entirely outside this exception.
+The only approved Git exception is `svonidze/noautonomo-secrets`: it may contain SOPS-encrypted runtime configuration whose data key is wrapped for both the server age recipient and an offline recovery recipient. It must never contain plaintext secrets, age identities, SSH private keys, accounting data, source documents, or decrypted generations. The code repository remains entirely outside this exception.
 
 The secrets repository is a ciphertext distribution and recovery layer, not an authorization boundary or a replacement for credential rotation. Git history is durable, filenames and commit metadata remain visible, and anyone holding a historical age identity may decrypt every historical revision addressed to it. If an identity is compromised, rotate the underlying provider credentials as well as the SOPS data keys.
 
