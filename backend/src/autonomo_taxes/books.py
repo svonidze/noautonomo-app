@@ -153,6 +153,7 @@ def write_accounting_books(database: LedgerDB, output_dir: str | Path, *, period
     tax_rows = (load_tax_rows(database, int(period_key[:4]), allow_authoritative_history=True)
                 if attributed_ids & candidates else [])
     if any(row.attribution_id for row in tax_rows):
+        from .tax_register_workbook import REVIEW_XLSX_FILENAME, write_tax_register_review_xlsx
         projection = register_projection(
             tax_rows, year=int(period_key[:4]), through=date.fromisoformat(period["ends_on"]),
             iva_starts_on=date.fromisoformat(period["starts_on"]),
@@ -170,6 +171,8 @@ def write_accounting_books(database: LedgerDB, output_dir: str | Path, *, period
             _write_csv(files[basis], fields, [{k: str(row[k]) if row[k] is not None else '' for k in fields}
                                               for row in register["rows"]])
             counts[basis] = len(register["rows"])
+        files['tax_registers_xlsx'] = write_tax_register_review_xlsx(root / REVIEW_XLSX_FILENAME, projection)
+        counts['tax_registers_xlsx'] = sum(len(register['rows']) for register in projection['registers'].values())
     return BookExportResult(
         period_key=period_key,
         output_dir=root,
