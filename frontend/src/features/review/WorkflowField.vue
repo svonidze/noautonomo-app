@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { formatMessage } from '../../core/i18n.ts';
 import type { Scalar, FieldSpec } from './workflow-model.ts';
-const props = defineProps<{ field: FieldSpec; modelValue?: Scalar }>();
+const props = defineProps<{ field: FieldSpec; modelValue?: Scalar; readOnly?: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [value: Scalar] }>();
 const { locale } = useLocale();
 const display = (value: Scalar | undefined) =>
@@ -39,10 +39,11 @@ watch(
     ><span>{{ formatMessage(field.label, {}, locale) }}</span
     ><input
       v-model="raw"
+      :readonly="readOnly"
       :data-p="field.path"
       :data-kind="field.kind || 'text'"
       :type="field.type || 'text'"
       :step="field.type === 'number' ? '0.01' : undefined"
-      @input="emit('update:modelValue', read())"
+      @input="!readOnly && emit('update:modelValue', read())"
   /></label>
 </template>

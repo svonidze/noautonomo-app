@@ -14,6 +14,8 @@ import { operationRequest } from '../../core/operation-request.ts';
 import { eur, formatDateText } from '../../core/format.ts';
 import type { Counterparty } from '../contacts/model.ts';
 import WorkflowField from './WorkflowField.vue';
+import DocumentPreview from '../../components/DocumentPreview.vue';
+import { documentHref } from '../../vue/services.ts';
 import {
   chooseRule,
   copyProposal,
@@ -86,7 +88,7 @@ async function load() {
     suppliers.value = parties;
     // Before browser defaults: the server proposal was calculated without them.
     savedInputs.value = proposalInputs(payload.value);
-    defaults(payload.value, value.deduction_rules);
+    if (!context.services.readOnly) defaults(payload.value, value.deduction_rules);
   } catch (failure) {
     if (current(revision)) error.value = failure;
   } finally {
@@ -118,10 +120,10 @@ const manual = computed(() =>
     ['document_structural_review', 'document_classification_review'].includes(issue.issue_code),
   ),
 );
-const sourceUrl = computed(
-  () =>
-    `/api/document/${encodeURIComponent(draft.value?.source.document.document_id || '')}/content`,
-);
+const sourceUrl = computed(() => {
+  locale.value;
+  return documentHref(props.context.services, draft.value?.source.document.document_id || '');
+});
 const visibleTaxes = computed(() =>
   taxFields.filter(
     (field) => !payload.value?.asset || !field.path.endsWith('deductible_irpf_minor'),
@@ -149,6 +151,7 @@ function invalidate() {
   request = null;
 }
 function update(path: string, value: Scalar) {
+  if (props.context.services.readOnly) return;
   if (busy.value || !payload.value) return;
   setField(payload.value, path, value);
   invalidate();
@@ -184,6 +187,7 @@ function check(path: string, event: Event) {
   update(path, (event.target as HTMLInputElement).checked);
 }
 function setKind(event: Event) {
+  if (props.context.services.readOnly) return;
   if (!payload.value || busy.value) return;
   payload.value.asset =
     (event.target as HTMLSelectElement).value === 'asset'
@@ -201,12 +205,14 @@ function setKind(event: Event) {
   invalidate();
 }
 function newSupplier() {
+  if (props.context.services.readOnly) return;
   if (!payload.value || busy.value) return;
   payload.value.facts.counterparty_id = null;
   payload.value.supplier = { display_name: '', tax_id: '', vat_id: '', country_code: '' };
   invalidate();
 }
 async function task(callback: (revision: number) => Promise<void>) {
+  if (props.context.services.readOnly) return;
   if (busy.value || !active) return;
   const revision = generation;
   busy.value = true;
@@ -224,6 +230,7 @@ async function task(callback: (revision: number) => Promise<void>) {
   }
 }
 async function save(revision: number) {
+  if (props.context.services.readOnly) return false;
   const result = (await props.context.services.request(base() + '/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -287,6 +294,7 @@ const followUp = () =>
     if (current(revision)) posted.value = { ...posted.value!, ...result };
   });
 function reset() {
+  if (props.context.services.readOnly) return;
   if (
     !draft.value ||
     busy.value ||
@@ -319,11 +327,13 @@ const ruleText = (key: string, values: Record<string, unknown> = {}) =>
   messageIds.includes(key) ? formatMessage(key, values, locale.value) : key;
 const ruleName = (id: string) => ruleText(`expenseRules.rule.${id}`);
 function onRule(event: Event) {
+  if (props.context.services.readOnly) return;
   if (!payload.value || busy.value) return;
   chooseRule(payload.value, rules.value, (event.target as HTMLSelectElement).value);
   invalidate();
 }
 function setCount(name: string, event: Event) {
+  if (props.context.services.readOnly) return;
   const raw = (event.target as HTMLInputElement).value;
   const value = Math.trunc(Number(raw));
   update(
@@ -352,6 +362,7 @@ const visibleTechnical = computed(() =>
   ),
 );
 function copyIntoFields() {
+  if (props.context.services.readOnly) return;
   if (!payload.value || !proposal.value || stale.value || busy.value) return;
   if (!copyProposal(payload.value, proposal.value)) return;
   invalidate();
@@ -374,6 +385,7 @@ const previewRule = computed(() => {
   return `${irpf}; ${vat}`;
 });
 function useFx(settlement = false) {
+  if (props.context.services.readOnly) return;
   if (!payload.value || busy.value) return;
   const suggestion = draft.value?.fx_suggestion;
   if (!settlement && !['exact', 'prior'].includes(suggestion?.status || '')) return;
@@ -438,6 +450,7 @@ const supplierHidden = (party: Counterparty) =>
       <h2>{{ t('workflow.reviewAndPostExpense') }}</h2>
       <span>{{ draft?.source.period.period_key }}</span>
     </header>
+    <p v-if="context.services.readOnly" class="review-alert">{{ t('demo.readOnlyReason') }}</p>
     <div class="wf-message" role="status">{{ messageText(notice, locale) }}</div>
     <div v-if="error" class="review-alert error" role="alert" tabindex="-1">
       {{ errorMessage(error, locale)
@@ -454,7 +467,13 @@ const supplierHidden = (party: Counterparty) =>
     <p v-if="!draft && !error" role="status">{{ t('common.loading') }}</p>
     <div v-if="draft?.conflict" class="review-alert warning">
       {{ t('workflow.sourceChangedTheSavedDraftIsRetainedCompareIt')
-      }}<button type="button" id="wf-reset" :disabled="busy" @click="reset">
+      }}<button
+        type="button"
+        id="wf-reset"
+        :disabled="context.services.readOnly || busy"
+        @click="reset"
+        :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+      >
         {{ t('workflow.useCurrentFacts') }}
       </button>
     </div>
@@ -463,7 +482,13 @@ const supplierHidden = (party: Counterparty) =>
       <p>{{ t('workflow.thisIsNotAPaymentOrTaxFiling') }}</p>
       <template v-if="posted.follow_up_pending"
         ><p>{{ t('workflow.refreshOrInboxCleanupNeedsRetryDoNotRepost') }}</p>
-        <button id="wf-follow-up" type="button" :disabled="busy" @click="followUp">
+        <button
+          id="wf-follow-up"
+          type="button"
+          :disabled="context.services.readOnly || busy"
+          @click="followUp"
+          :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+        >
           {{ t('workflow.retryFollowUp') }}
         </button></template
       ><button id="wf-open-posted" type="button" :disabled="busy" @click="context.onPosted(posted)">
@@ -474,16 +499,18 @@ const supplierHidden = (party: Counterparty) =>
       <div class="wf-layout">
         <aside class="panel wf-source">
           <a :href="sourceUrl" target="_blank" rel="noreferrer">{{ t('workflow.openOriginal') }}</a
-          ><iframe
+          ><DocumentPreview
+            :services="context.services"
+            :document-id="draft.source.document.document_id"
             :title="t('workflow.sourceDocument')"
-            :src="sourceUrl.replace(/content$/, 'preview')"
-          ></iframe>
+          />
         </aside>
         <form id="wf-form" class="panel wf-fields" @submit.prevent="preview">
           <fieldset :disabled="busy">
             <h3>{{ t('workflow.documentFacts') }}</h3>
             <div class="wf-grid">
               <WorkflowField
+                :read-only="context.services.readOnly"
                 v-for="field in factsFields"
                 :key="field.path"
                 :field="field"
@@ -501,6 +528,7 @@ const supplierHidden = (party: Counterparty) =>
                 data-p="facts.counterparty_id"
                 :value="payload.facts.counterparty_id ?? ''"
                 @input="select('facts.counterparty_id', $event)"
+                :disabled="context.services.readOnly"
               >
                 <option value=""></option>
                 <option
@@ -518,11 +546,14 @@ const supplierHidden = (party: Counterparty) =>
               class="secondary-button"
               type="button"
               @click="newSupplier"
+              :disabled="context.services.readOnly"
+              :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
             >
               {{ t('workflow.newSupplier') }}
             </button>
             <div v-if="payload.supplier" class="wf-grid">
               <WorkflowField
+                :read-only="context.services.readOnly"
                 v-for="field in supplierFields"
                 :key="field.path"
                 :field="field"
@@ -536,6 +567,7 @@ const supplierHidden = (party: Counterparty) =>
                 data-p="facts.business_activity_id"
                 :value="payload.facts.business_activity_id ?? ''"
                 @input="select('facts.business_activity_id', $event)"
+                :disabled="context.services.readOnly"
               >
                 <option value=""></option>
                 <option
@@ -548,6 +580,7 @@ const supplierHidden = (party: Counterparty) =>
               </select></label
             >
             <WorkflowField
+              :read-only="context.services.readOnly"
               v-for="field in purposeFields"
               :key="field.path"
               :field="field"
@@ -560,11 +593,13 @@ const supplierHidden = (party: Counterparty) =>
                 data-p="decision.document_valid"
                 :checked="payload.decision.document_valid === true"
                 @input="check('decision.document_valid', $event)"
+                :disabled="context.services.readOnly"
               /><span>{{
                 t('workflow.originalIsReadableFactsAndAmountsHaveBeenChecked')
               }}</span></label
             >
             <WorkflowField
+              :read-only="context.services.readOnly"
               v-if="manual"
               :field="{
                 path: 'manual_review_reason',
@@ -576,7 +611,12 @@ const supplierHidden = (party: Counterparty) =>
             <h3>{{ t('workflow.treatmentAndDeductionsEur') }}</h3>
             <label
               ><span>{{ t('workflow.expenseType') }}</span
-              ><select id="wf-kind" :value="payload.asset ? 'asset' : 'ordinary'" @change="setKind">
+              ><select
+                id="wf-kind"
+                :value="payload.asset ? 'asset' : 'ordinary'"
+                @change="setKind"
+                :disabled="context.services.readOnly"
+              >
                 <option value="ordinary">{{ t('workflow.ordinaryExpense') }}</option>
                 <option value="asset">{{ t('workflow.equipment') }}</option>
               </select></label
@@ -587,6 +627,7 @@ const supplierHidden = (party: Counterparty) =>
                 data-p="decision.tax_treatment.tax_code"
                 :value="tax.tax_code ?? ''"
                 @input="select('decision.tax_treatment.tax_code', $event)"
+                :disabled="context.services.readOnly"
               >
                 <option value=""></option>
                 <option v-for="code in allowedTaxes" :key="code" :value="code">
@@ -596,6 +637,7 @@ const supplierHidden = (party: Counterparty) =>
             >
             <div class="wf-grid">
               <WorkflowField
+                :read-only="context.services.readOnly"
                 v-for="field in visibleTaxes"
                 :key="field.path"
                 :field="field"
@@ -612,6 +654,7 @@ const supplierHidden = (party: Counterparty) =>
                   id="wf-rule-select"
                   :value="payload.deduction?.rule_id ?? ''"
                   @change="onRule"
+                  :disabled="context.services.readOnly"
                 >
                   <option value="">{{ t('expenseRules.noRule') }}</option>
                   <option v-for="item in rules" :key="item.id" :value="item.id">
@@ -626,6 +669,7 @@ const supplierHidden = (party: Counterparty) =>
               <div v-if="rule && payload.deduction" class="wf-grid">
                 <template v-for="name in rule.facts" :key="name">
                   <WorkflowField
+                    :read-only="context.services.readOnly"
                     v-if="name === 'area_share'"
                     :field="{
                       path: 'decision.tax_treatment.deductible_ratio',
@@ -646,6 +690,7 @@ const supplierHidden = (party: Counterparty) =>
                       :data-p="`deduction.facts.${name}`"
                       :value="payload.deduction.facts[name] ?? ''"
                       @input="setCount(name, $event)"
+                      :readonly="context.services.readOnly"
                   /></label>
                   <label v-else-if="name === 'evidence_confirmed'" class="wf-check"
                     ><input
@@ -653,6 +698,7 @@ const supplierHidden = (party: Counterparty) =>
                       data-p="deduction.facts.evidence_confirmed"
                       :checked="payload.deduction.facts.evidence_confirmed === true"
                       @input="check('deduction.facts.evidence_confirmed', $event)"
+                      :disabled="context.services.readOnly"
                     /><span>{{ t('expenseRules.fact.evidence_confirmed') }}</span></label
                   >
                   <label v-else
@@ -665,6 +711,7 @@ const supplierHidden = (party: Counterparty) =>
                           : String(payload.deduction.facts[name])
                       "
                       @input="select(`deduction.facts.${name}`, $event, true)"
+                      :disabled="context.services.readOnly"
                     >
                       <option value=""></option>
                       <option value="true">{{ t('expenseRules.yes') }}</option>
@@ -759,7 +806,8 @@ const supplierHidden = (party: Counterparty) =>
                     id="wf-rule-copy"
                     type="button"
                     class="secondary-button"
-                    :disabled="stale || !proposal.suggested"
+                    :disabled="context.services.readOnly || stale || !proposal.suggested"
+                    :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
                     @click="copyIntoFields"
                   >
                     {{ t('expenseRules.copy') }}
@@ -773,6 +821,7 @@ const supplierHidden = (party: Counterparty) =>
                 data-p="decision.tax_treatment.vat_investment_good"
                 :value="tax.vat_investment_good == null ? '' : String(tax.vat_investment_good)"
                 @input="select('decision.tax_treatment.vat_investment_good', $event, true)"
+                :disabled="context.services.readOnly"
               >
                 <option value=""></option>
                 <option value="false">{{ t('workflow.currentPurchaseForIva') }}</option>
@@ -785,6 +834,7 @@ const supplierHidden = (party: Counterparty) =>
               ><h3>{{ t('workflow.equipmentAndSchedule') }}</h3>
               <div class="wf-grid">
                 <WorkflowField
+                  :read-only="context.services.readOnly"
                   v-for="field in assetFields"
                   :key="field.path"
                   :field="field"
@@ -797,6 +847,7 @@ const supplierHidden = (party: Counterparty) =>
                     data-p="asset.aeat_asset_type"
                     :value="payload.asset.aeat_asset_type ?? ''"
                     @input="select('asset.aeat_asset_type', $event)"
+                    :disabled="context.services.readOnly"
                   >
                     <option value=""></option>
                     <option
@@ -821,6 +872,7 @@ const supplierHidden = (party: Counterparty) =>
                     data-p="asset.method"
                     :value="payload.asset.method ?? ''"
                     @input="select('asset.method', $event)"
+                    :disabled="context.services.readOnly"
                   >
                     <option value=""></option>
                     <option value="immediate">
@@ -830,6 +882,7 @@ const supplierHidden = (party: Counterparty) =>
                   </select></label
                 >
                 <WorkflowField
+                  :read-only="context.services.readOnly"
                   v-if="payload.asset.method === 'linear'"
                   :field="{
                     path: 'asset.annual_rate_basis_points',
@@ -847,6 +900,7 @@ const supplierHidden = (party: Counterparty) =>
                   data-p="asset.new_equipment"
                   :checked="payload.asset.new_equipment === true"
                   @input="check('asset.new_equipment', $event)"
+                  :disabled="context.services.readOnly"
                 /><span>{{ t('workflow.equipmentWasAcquiredNew') }}</span></label
               ><small>{{
                 t('workflow.futureDepreciationRemainsPlannedUntilExplicitlyPosted')
@@ -864,8 +918,12 @@ const supplierHidden = (party: Counterparty) =>
               <button
                 id="wf-use-fx"
                 type="button"
-                :disabled="!['exact', 'prior'].includes(draft.fx_suggestion?.status || '')"
+                :disabled="
+                  context.services.readOnly ||
+                  !['exact', 'prior'].includes(draft.fx_suggestion?.status || '')
+                "
                 @click="useFx()"
+                :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
               >
                 {{ t('workflow.confirmSuggestedEcbRate') }}</button
               ><label
@@ -874,11 +932,21 @@ const supplierHidden = (party: Counterparty) =>
                   id="wf-settlement-rate"
                   v-model="settlementRate"
                   type="number"
-                  step="0.000001" /></label
+                  step="0.000001"
+                  :readonly="context.services.readOnly" /></label
               ><label
                 ><span>{{ t('workflow.settlementEvidenceReference') }}</span
-                ><input id="wf-settlement-ref" v-model="settlementReference" /></label
-              ><button id="wf-settlement" type="button" @click="useFx(true)">
+                ><input
+                  id="wf-settlement-ref"
+                  v-model="settlementReference"
+                  :readonly="context.services.readOnly" /></label
+              ><button
+                id="wf-settlement"
+                type="button"
+                @click="useFx(true)"
+                :disabled="context.services.readOnly"
+                :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+              >
                 {{ t('workflow.useSettlementRate') }}</button
               ><small>{{ payload.fx ? t('workflow.rateSelectedCheckTaxAmountsInEur') : '' }}</small>
             </section>
@@ -894,6 +962,7 @@ const supplierHidden = (party: Counterparty) =>
                     data-p="decision.tax_treatment.aeat_invoice_type"
                     :value="tax.aeat_invoice_type ?? ''"
                     @input="select('decision.tax_treatment.aeat_invoice_type', $event)"
+                    :disabled="context.services.readOnly"
                   >
                     <option value=""></option>
                     <option
@@ -905,6 +974,7 @@ const supplierHidden = (party: Counterparty) =>
                     </option>
                   </select></label
                 ><WorkflowField
+                  :read-only="context.services.readOnly"
                   v-for="field in visibleTechnical"
                   :key="field.path"
                   :field="field"
@@ -918,6 +988,7 @@ const supplierHidden = (party: Counterparty) =>
                   data-p="decision.tax_treatment.aeat_reverse_charge"
                   :checked="tax.aeat_reverse_charge === true"
                   @input="check('decision.tax_treatment.aeat_reverse_charge', $event)"
+                  :disabled="context.services.readOnly"
                 /><span>{{ t('workflow.reverseCharge') }}</span></label
               ><label v-for="form in [130, 303, 347]" :key="form" class="wf-check"
                 ><input
@@ -925,8 +996,10 @@ const supplierHidden = (party: Counterparty) =>
                   :data-p="`decision.tax_treatment.include_modelo${form}`"
                   :checked="tax[`include_modelo${form}`] === true"
                   @input="check(`decision.tax_treatment.include_modelo${form}`, $event)"
+                  :disabled="context.services.readOnly"
                 /><span>Modelo {{ form }}</span></label
               ><WorkflowField
+                :read-only="context.services.readOnly"
                 :field="{
                   path: 'decision.tax_treatment.notes',
                   label: 'workflow.decisionNoteAndSource',
@@ -936,9 +1009,21 @@ const supplierHidden = (party: Counterparty) =>
               />
             </details>
             <footer class="wf-actions">
-              <button type="button" id="wf-save" class="secondary-button" @click="saveOnly">
+              <button
+                type="button"
+                id="wf-save"
+                class="secondary-button"
+                @click="saveOnly"
+                :disabled="context.services.readOnly"
+                :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+              >
                 {{ t('workflow.saveDraft') }}</button
-              ><button type="submit" class="primary-button" :disabled="draft.conflict">
+              ><button
+                type="submit"
+                class="primary-button"
+                :disabled="context.services.readOnly || draft.conflict"
+                :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+              >
                 {{ t('workflow.previewResult') }}
               </button>
             </footer>
@@ -998,8 +1083,9 @@ const supplierHidden = (party: Counterparty) =>
           id="wf-confirm"
           class="primary-button"
           type="button"
-          :disabled="busy"
+          :disabled="context.services.readOnly || busy"
           @click="confirm"
+          :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
         >
           {{ t('workflow.confirmAndPost') }}
         </button>

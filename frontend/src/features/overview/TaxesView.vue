@@ -50,6 +50,7 @@ watch(
   { immediate: true },
 );
 async function refresh() {
+  if (props.context.services.readOnly) return;
   if (refreshing.value) return;
   const revision = generation,
     context = props.context;
@@ -151,6 +152,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
     </p>
     <div class="tax-form-grid">
       <TaxFormCard
+        :read-only="context.services.readOnly"
         v-for="code in ['130', '303'] as const"
         :key="code"
         :code="code"

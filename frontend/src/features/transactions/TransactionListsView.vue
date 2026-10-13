@@ -18,6 +18,10 @@ import {
 } from './model.ts';
 const props = defineProps<{ context: TransactionListContext }>();
 const { locale, t } = useLocale();
+function openIntake() {
+  if (props.context.services.readOnly) return;
+  props.context.openIntake();
+}
 const query = ref(props.context.query),
   search = ref<HTMLInputElement>();
 const page = shallowRef<ExpensePage>(),
@@ -129,6 +133,7 @@ const forbidden = computed(
 );
 const reload = () => window.location.reload();
 function copy(row: TransactionRow) {
+  if (props.context.services.readOnly) return;
   if (income.value.includes(row) && copyable(row, props.context.copyTarget))
     props.context.copy(row);
 }
@@ -156,7 +161,13 @@ function copy(row: TransactionRow) {
           :placeholder="t('transactions.search')"
           @input="searchChanged"
         />
-        <button class="primary-button" id="view-add-entry" @click="context.openIntake">
+        <button
+          class="primary-button"
+          id="view-add-entry"
+          :disabled="context.services.readOnly"
+          :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+          @click="openIntake"
+        >
           <span aria-hidden="true">+</span> {{ t('common.add') }}
         </button>
       </div>
@@ -200,6 +211,7 @@ function copy(row: TransactionRow) {
               }}</small>
             </header>
             <ExpenseTable
+              :services="context.services"
               v-if="page.rows.some((row) => row.expense_kind === kind)"
               :rows="page.rows.filter((row) => row.expense_kind === kind)"
               :kind="kind"
@@ -256,6 +268,7 @@ function copy(row: TransactionRow) {
       <p v-if="busy && !income.length" role="status">{{ t('common.loading') }}</p>
       <div id="transactions-table">
         <IncomeTable
+          :services="context.services"
           v-if="!busy || income.length"
           :rows="income"
           :target="context.copyTarget"

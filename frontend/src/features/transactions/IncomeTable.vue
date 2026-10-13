@@ -1,16 +1,22 @@
 <script setup lang="ts">
+import { type ViewServices, documentHref } from '../../vue/services.ts';
 import { useLocale } from '../../vue/locale.ts';
 import { eur, formatDateText } from '../../core/format.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import TermHelp from '../../components/TermHelp.vue';
 import { copyable, type TransactionRow } from './model.ts';
 const props = defineProps<{
+  services?: ViewServices;
   rows: TransactionRow[];
   target: string | null;
   query: string;
   copy: (row: TransactionRow) => void;
 }>();
 const { locale, t } = useLocale();
+function copy(row: TransactionRow) {
+  if (props.services?.readOnly) return;
+  props.copy(row);
+}
 const minor = (value: number | null | undefined) =>
   value == null ? t('help.words.missing') : eur(value / 100, locale.value);
 </script>
@@ -58,7 +64,7 @@ const minor = (value: number | null | undefined) =>
               <a
                 v-if="row.document_id"
                 class="text-button"
-                :href="`/api/document/${encodeURIComponent(row.document_id)}/content`"
+                :href="documentHref(services, row.document_id)"
                 target="_blank"
                 rel="noreferrer"
                 >{{ t('common.file') }}</a
@@ -67,9 +73,14 @@ const minor = (value: number | null | undefined) =>
                 type="button"
                 class="copy-action-button"
                 :data-copy-transaction-id="row.transaction_id"
-                :title="t('common.copyToPeriod', { period: target! })"
+                :disabled="services?.readOnly"
+                :title="
+                  services?.readOnly
+                    ? t('demo.readOnlyReason')
+                    : t('common.copyToPeriod', { period: target! })
+                "
                 :aria-label="t('common.copyToPeriod', { period: target! })"
-                @click="props.copy(row)"
+                @click="copy(row)"
               >
                 <svg
                   class="copy-action-icon"

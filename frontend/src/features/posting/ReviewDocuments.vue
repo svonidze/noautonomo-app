@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { type ViewServices, documentHref } from '../../vue/services.ts';
 import { computed } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { eur, formatDateText } from '../../core/format.ts';
@@ -7,7 +8,11 @@ import type { HelpContext } from '../../vue/help.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import TermHelp from '../../components/TermHelp.vue';
 import type { ReviewDocument } from './model.ts';
-const props = defineProps<{ documents: ReviewDocument[]; issues: { ui_context: HelpContext }[] }>();
+const props = defineProps<{
+  services?: ViewServices;
+  documents: ReviewDocument[];
+  issues: { ui_context: HelpContext }[];
+}>();
 const { locale, t } = useLocale();
 const rows = computed(() =>
   props.documents.filter((row) =>
@@ -58,7 +63,7 @@ const type = (value: string) => {
               <a
                 v-if="row.source_available"
                 class="text-button"
-                :href="`/api/document/${encodeURIComponent(row.document_id)}/content`"
+                :href="documentHref(services, row.document_id)"
                 target="_blank"
                 rel="noreferrer"
                 >{{ t('common.file') }}</a

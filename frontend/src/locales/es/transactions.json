@@ -1,0 +1,11 @@
+{
+  "transactions.amount": "Importe",
+  "transactions.counterpartyDocument": "Contraparte / documento",
+  "transactions.date": "Fecha",
+  "transactions.emptyIncome": "Todavía no hay ingresos en este periodo. Pulsa «Añadir» para recibir una factura.",
+  "transactions.irpfDeduction": "Deducción de IRPF",
+  "transactions.noCounterparty": "Sin contraparte",
+  "transactions.noMatches": "No hay resultados para esta búsqueda.",
+  "transactions.search": "Buscar por contraparte o número",
+  "transactions.status": "Estado"
+}

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { useLocale } from '../../vue/locale.ts';
-import { followSpaLink } from '../../vue/services.ts';
+import { followSpaLink, type ViewServices, viewHref } from '../../vue/services.ts';
 import type { TransactionRow } from './model.ts';
 const props = defineProps<{
+  services?: ViewServices;
   row: TransactionRow;
   period: string;
   returnUrl: string;
@@ -19,7 +20,7 @@ const url = () =>
       ['posted', 'included_in_snapshot'].includes(row.lifecycle_status)
     "
     class="expense-document-link"
-    :href="url()"
+    :href="viewHref(services, url())"
     @click="followSpaLink($event, navigate)"
     >{{ row.document_number || t('expense.open') }}</a
   >

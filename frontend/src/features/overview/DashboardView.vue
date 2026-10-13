@@ -287,6 +287,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
             <small>{{ context.period }}</small>
           </header>
           <RecentTransactions
+            :services="context.services"
             :rows="data.recent_transactions"
             :period="context.period"
             :target="context.copyTarget"

@@ -1,7 +1,12 @@
-import { router } from './router.ts';
+import type { Router } from 'vue-router';
 import { helpAdapter } from '../vue/help.ts';
 export const shellHelp = helpAdapter;
-export function connectHelp(navigate: (url: string) => void) {
+export function connectHelp(
+  navigate: (url: string) => void,
+  router: Router,
+  href?: (url: string) => string,
+  documentUrl?: (id: string) => string,
+) {
   shellHelp().setHistoryAdapter({
     push(id) {
       const current = router.currentRoute.value;
@@ -28,5 +33,7 @@ export function connectHelp(navigate: (url: string) => void) {
       });
     },
     navigate,
+    href,
+    documentUrl,
   });
 }

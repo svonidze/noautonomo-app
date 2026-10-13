@@ -3,10 +3,11 @@ import { expect, test, vi } from 'vitest';
 vi.mock('../../src/shell/router.ts', async () => {
   const { createRouter, createMemoryHistory } = await import('vue-router');
   return {
-    router: createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: '/:pathMatch(.*)*', component: { render: () => null } }],
-    }),
+    createProductionRouter: () =>
+      createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/:pathMatch(.*)*', component: { render: () => null } }],
+      }),
   };
 });
 vi.mock('../../src/shell/request.ts', () => ({
@@ -18,7 +19,11 @@ vi.mock('../../src/shell/request.ts', () => ({
   })),
   refreshCalculation: vi.fn(),
 }));
-import { router } from '../../src/shell/router.ts';
+import { createProductionRouter } from '../../src/shell/router.ts';
+import { appRuntimeKey } from '../../src/shell/runtime.ts';
+import { createProductionRuntime } from '../../src/shell/production-runtime.ts';
+const router = createProductionRouter();
+const productionRuntime = createProductionRuntime(router);
 import { useShell } from '../../src/shell/controller.ts';
 async function flush() {
   for (let i = 0; i < 15; i++) {
@@ -39,6 +44,7 @@ test('a delayed canonical navigation continuation cannot reclaim a newer route',
   );
   const root = document.createElement('div');
   document.body.append(root);
+  app.provide(appRuntimeKey, productionRuntime);
   app.mount(root);
   await vi.waitFor(() => expect(shell.route.value?.view).toBe('dashboard'));
   let release!: () => void,
@@ -82,6 +88,7 @@ test('shell teardown releases help listeners and remount creates a fresh registr
   const root = document.createElement('div');
   document.body.append(root);
   const app = createApp(component);
+  app.provide(appRuntimeKey, productionRuntime);
   app.mount(root);
   await flush();
   const first = helpAdapter(),
@@ -92,6 +99,7 @@ test('shell teardown releases help listeners and remount creates a fresh registr
   expect(dispose).toHaveBeenCalledOnce();
   expect(remove.mock.calls.length).toBeGreaterThanOrEqual(7);
   const next = createApp(component);
+  next.provide(appRuntimeKey, productionRuntime);
   next.mount(root);
   await flush();
   const second = helpAdapter();

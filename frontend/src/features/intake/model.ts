@@ -26,6 +26,7 @@ export interface IntakeResult {
   transaction_id?: string;
 }
 export interface IntakeServices {
+  readOnly?: boolean;
   request: ViewServices['request'];
   notify(value: UiMessage | string, error?: boolean): void;
   locationKey(): string;

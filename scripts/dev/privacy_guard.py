@@ -105,6 +105,8 @@ ALLOWED_SYNTHETIC_FINDINGS: frozenset[tuple[str, str]] = frozenset(
         ("google-drive-link", "c012cc26112d0230f575ed89b62c7ab8f25090eb30ea5a17f4c4a52d3acdb485"),
         ("google-drive-link", "167b789905a7f0dfb52e42c0cf27d60361dcc8c3ae664de8e4e0cb7b63825639"),
         ("google-drive-link", "17f6c6ecf60350361876f9ab2eed4ff2373cee7de27734ae1ac6f9a927979300"),
+        # Invented public demo profile; generated only from an isolated fixture database.
+        ("personal-field", "ec11c9e244a7a02d9b50afadbc5a44babe1a639f16301fd364b215704ebff75d"),
         # Explicit synthetic profile names in mocked settings responses.
         ("personal-field", "96d161b1b7c0054120ca9758eb45684f02dedff646cb1a9e256dcb22c0bb9f6f"),
         ("personal-field", "2bee2dea5521d7ec91ea382bb3dcfec086f5259e3c63e18875cb90393cdf2efe"),

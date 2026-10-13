@@ -1,5 +1,36 @@
 # Design
 
+## Public read-only demo (NOA-19)
+
+- `/demo/` is a separate static Vue entrypoint. Reuse the product palette,
+  typography, table/card treatment, money formatting and `ChartHost` component.
+  Overview, Income, Expenses, record details and synthetic documents are fully
+  available in English (default), Spanish and Russian. A visible language
+  selector remains available on every page, including mobile and detail pages.
+  The explicit external `?lang=en|es|ru` query selects the language; missing or
+  unknown values mean English. Keep hash routes and filters when switching,
+  without browser language detection, cookies or storage.
+- Keep “Демо, вымышленные данные” and “Только для чтения” visible in a sticky
+  banner. No editors, upload, posting, account settings or filing controls.
+  Read-only is enforced through an import boundary and a connection-blocking
+  content security policy, not disabled buttons alone.
+- All fixture names, identifiers, dates and amounts are invented from scratch.
+  Documents are marked invalid teaching examples with deliberately invalid tax
+  identifiers and no payment details. Never copy private source documents.
+- Use integer cents. Period summaries and the monthly chart count only posted
+  rows; unreviewed records remain visible but excluded. Document totals include
+  IVA; income basis and deductible expenses exclude it. The net is before tax
+  and additional deductions, never a tax calculation or payment assertion.
+- Period, search and status filters live in the URL. Record/document links keep
+  the originating filter context. Unknown routes show a read-only empty state.
+  Use labeled native controls, visible focus, keyboard-operable charts and
+  mobile table cards. Test 375px reflow and desktop separately.
+- Bundle complete demo translations, including profile, descriptions, documents,
+  chart/table/tooltip/dialog labels, metadata and locale-specific money/dates.
+  The private app's RU/EN locale registry and defaults remain independent.
+  Reuse `ChartHost` with a prepared `ChartSpec` and translated controls; its
+  ordinary analytics/locale path remains the default for the private app.
+
 ## Source of truth
 - Status: Active; refreshed 2026-10-05 (clarity redesign round 2 proposed, see docs/plans/ui-clarity-redesign.md).
 - Surfaces: Expenses, dashboard expense metrics, recent operations, and the analytics charts documented below.

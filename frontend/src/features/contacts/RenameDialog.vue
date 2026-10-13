@@ -34,6 +34,7 @@ onBeforeUnmount(() => {
 });
 const dirty = computed(() => !!row.value && name.value !== row.value.display_name);
 async function open(value: Counterparty, trigger: HTMLElement) {
+  if (props.services.readOnly) return;
   row.value = { ...value };
   name.value = value.display_name;
   opener = trigger;
@@ -74,6 +75,7 @@ async function loadHistory() {
   }
 }
 function acceptCurrent() {
+  if (props.services.readOnly) return;
   if (!row.value || !conflict.value || busy.value) return;
   row.value = { ...row.value, ...conflict.value };
   conflict.value = undefined;
@@ -82,6 +84,7 @@ function acceptCurrent() {
   void loadHistory();
 }
 async function save() {
+  if (props.services.readOnly) return;
   const owner = row.value,
     revision = sequence;
   if (!owner || busy.value || conflict.value) return;
@@ -164,6 +167,7 @@ defineExpose({
               ref="input"
               id="vue-counterparty-name-input"
               v-model="name"
+              :readonly="services.readOnly"
               type="text"
               required
               :disabled="busy"
@@ -196,7 +200,12 @@ defineExpose({
         <footer class="dialog-actions">
           <button type="button" class="secondary-button" :disabled="busy" @click="close()">
             {{ t('common.cancel') }}</button
-          ><button type="submit" class="primary-button" :disabled="busy || !!conflict">
+          ><button
+            type="submit"
+            class="primary-button"
+            :disabled="services.readOnly || busy || !!conflict"
+            :title="services.readOnly ? t('demo.readOnlyReason') : undefined"
+          >
             {{ t(busy ? 'contacts.savingName' : 'contacts.saveName') }}
           </button>
         </footer>

@@ -16,6 +16,7 @@
     "src/**/*.ts",
     "tests/unit/**/*.ts",
     "tests/e2e/**/*.ts",
+    "tests/demo/**/*.ts",
     "scripts/*.mts",
     "*.mts",
     "src/**/*.vue"

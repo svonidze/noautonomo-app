@@ -7,6 +7,8 @@ export interface HelpNavigation {
   back(): void;
   clear(): void;
   navigate(url: string): void;
+  href?(url: string): string;
+  documentUrl?(id: string): string;
 }
 let registrySequence = 0;
 
@@ -57,6 +59,21 @@ export function createAccountingHelp(doc = document, win = window) {
       navigation?.navigate(url);
     }
   }
+  function renderBody(context: AccountingContext) {
+    const body = element('status-help-body');
+    body.innerHTML = presentation.content(context);
+    if (navigation?.documentUrl) {
+      for (const link of body.querySelectorAll<HTMLAnchorElement>('a[href^="/api/document/"]')) {
+        const match = /^\/api\/document\/([^/]+)\/content$/.exec(link.getAttribute('href') || '');
+        if (match) link.href = navigation.documentUrl(decodeURIComponent(match[1]));
+      }
+    }
+    if (navigation?.href) {
+      for (const link of body.querySelectorAll<HTMLAnchorElement>('[data-help-review]')) {
+        link.href = navigation.href(link.getAttribute('href') || '/review');
+      }
+    }
+  }
   function open(id: string, trigger: HTMLElement | null = null, push = true) {
     const context = records.get(id),
       node = dialog();
@@ -66,7 +83,7 @@ export function createAccountingHelp(doc = document, win = window) {
     scrollY = win.scrollY;
     panelUrl = win.location.href;
     element('status-help-title').textContent = context.title || presentation.label(context);
-    element('status-help-body').innerHTML = presentation.content(context);
+    renderBody(context);
     element('status-help-close').setAttribute('aria-label', presentation.word('close'));
     if (!node.open) node.showModal();
     element('status-help-close').focus();
@@ -123,7 +140,7 @@ export function createAccountingHelp(doc = document, win = window) {
         body = element('status-help-body'),
         scroll = body.scrollTop;
       element('status-help-title').textContent = context.title || presentation.label(context);
-      body.innerHTML = presentation.content(context);
+      renderBody(context);
       body.scrollTop = scroll;
       restoreFocus(node, focus);
     }

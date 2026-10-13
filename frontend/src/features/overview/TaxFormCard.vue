@@ -10,6 +10,7 @@ const props = defineProps<{
   form: FormView;
   summary?: TaxFormSummary;
   refreshing: boolean;
+  readOnly?: boolean;
 }>();
 const emit = defineEmits<{ refresh: [] }>();
 const { locale, t } = useLocale();
@@ -113,8 +114,9 @@ const filing = computed(() =>
         <button
           type="button"
           class="secondary-button"
-          :disabled="refreshing"
-          @click="emit('refresh')"
+          :disabled="readOnly || refreshing"
+          :title="readOnly ? t('demo.readOnlyReason') : undefined"
+          @click="!readOnly && emit('refresh')"
         >
           {{ t('help.words.refresh') }}
         </button></template

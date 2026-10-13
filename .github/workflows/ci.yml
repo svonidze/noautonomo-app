@@ -33,8 +33,15 @@ jobs:
       - run: npm --prefix frontend exec -- playwright install --with-deps chromium
       - run: npm --prefix frontend run test:pseudo
       - run: npm --prefix frontend run test:browser
+      - run: npm --prefix frontend run test:demo
       - run: npm --prefix frontend run test:installed
       - run: python -m pytest -q
+      - name: Validate demo UI build identity
+        run: python ops/demo/test_verify_ui_build.py
+      - name: Build and verify the database-backed demo image
+        run: |
+          docker build --file ops/demo/Dockerfile --build-arg SOURCE_SHA="$(git rev-parse HEAD)" --tag noautonomo-demo:ci .
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --mount "type=bind,source=$PWD/ops/demo/test_image.py,target=/test_image.py,readonly" noautonomo-demo:ci python /test_image.py
       - name: Validate operational shell scripts
         run: |
           find ops -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n

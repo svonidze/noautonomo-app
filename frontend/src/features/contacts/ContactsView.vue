@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { followSpaLink } from '../../vue/services.ts';
+import { followSpaLink, viewHref } from '../../vue/services.ts';
 import { formatDateText } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
@@ -119,6 +119,7 @@ async function toggleMenu(row: Counterparty, event: MouseEvent) {
   menuElement.value.querySelector('button')?.focus({ preventScroll: true });
 }
 function openRename() {
+  if (props.context.services.readOnly) return;
   const selected = menu.value;
   closeMenu(false);
   if (selected) void rename.value?.open(selected.row, selected.trigger);
@@ -317,7 +318,7 @@ defineExpose({
     <a
       v-if="context.contactId"
       class="text-button contact-back-link"
-      href="/contacts"
+      :href="viewHref(context.services, '/contacts')"
       @click="navigate"
       ><span aria-hidden="true">←</span> {{ t('contacts.back') }}</a
     >
@@ -383,7 +384,7 @@ defineExpose({
                 <td class="cell-primary" :data-label="t('contacts.name')">
                   <a
                     class="counterparty-link"
-                    :href="contactUrl(row.counterparty_id)"
+                    :href="viewHref(context.services, contactUrl(row.counterparty_id))"
                     @click="navigate"
                     ><strong>{{ row.display_name }}</strong></a
                   >
@@ -482,6 +483,7 @@ defineExpose({
         </header>
         <div id="contact-operations-results" class="contact-panel-body">
           <ContactOperations
+            :services="context.services"
             v-if="operations.length"
             :rows="operations"
             :contact-id="context.contactId"
@@ -548,7 +550,13 @@ defineExpose({
         :style="menuStyle"
         data-vue-owned
       >
-        <button type="button" role="menuitem" @click="openRename">
+        <button
+          type="button"
+          role="menuitem"
+          :disabled="context.services.readOnly"
+          :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+          @click="openRename"
+        >
           {{ t('contacts.editName') }}
         </button>
       </div></Teleport

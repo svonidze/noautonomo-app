@@ -3,11 +3,11 @@ import { computed } from 'vue';
 import { useShell } from './controller.ts';
 import { routeUrl, views } from './routes.ts';
 import { useLocale } from '../vue/locale.ts';
-import { formatMessage, localeRegistry, messageText } from '../core/i18n.ts';
+import { formatMessage, messageText } from '../core/i18n.ts';
 import { errorMessage } from '../core/error-message.ts';
 import { followSpaLink } from '../vue/services.ts';
-import IntakeDialog from '../features/intake/IntakeDialog.vue';
 const {
+  runtime,
   bootstrap,
   period,
   reviewTab,
@@ -31,6 +31,11 @@ const {
   intakeServices,
 } = useShell();
 const { t } = useLocale();
+const href = (url: string) => runtime.href?.(url) ?? url;
+const publicLinks = computed(() => ({
+  landing: locale.value === 'en' ? '/' : `/${locale.value}/`,
+  blog: locale.value === 'en' ? '/blog/' : `/blog/${locale.value}/`,
+}));
 const icons = ['▦', '↗', '↙', '✓', '◇', '%', '◎', '▤', '⚙'];
 const shellMessageKey = (prefix: 'nav' | 'titles', value: string) =>
   `${prefix}.${value === 'aeat-documents' ? 'aeatDocuments' : value}`;
@@ -47,7 +52,11 @@ const title = computed(() =>
     ? t('contacts.cardTitle')
     : route.value?.view === 'expense-detail'
       ? t('expense.title')
-      : formatMessage(shellMessageKey('titles', route.value?.view || 'dashboard')),
+      : formatMessage(
+          shellMessageKey('titles', route.value?.view || 'dashboard'),
+          {},
+          locale.value,
+        ),
 );
 const refreshLabel = computed(() =>
   t(
@@ -73,7 +82,7 @@ const refreshLabel = computed(() =>
         :key="item"
         class="nav-item"
         :class="{ active: navView === item }"
-        :href="routeUrl(item, period, { tab: reviewTab })"
+        :href="href(routeUrl(item, period, { tab: reviewTab }))"
         :data-view="item"
         data-spa
         @click="followSpaLink($event, navigate)"
@@ -85,13 +94,19 @@ const refreshLabel = computed(() =>
     </nav>
     <a
       class="sidebar-footer storage-settings-link"
-      href="/settings"
+      :href="href('/settings')"
       data-spa
       @click="followSpaLink($event, navigate)"
       ><span aria-hidden="true">⚙</span><span>{{ t('storage.settings') }}</span></a
     >
   </aside>
   <main class="workspace">
+    <aside v-if="runtime.readOnly" class="public-demo-banner" aria-label="Demo">
+      <strong>{{ t('demo.banner') }}</strong>
+      <span id="demo-readonly-reason">{{ t('demo.readOnlyReason') }}</span>
+      <a :href="publicLinks.landing">{{ t('demo.about') }}</a>
+      <a :href="publicLinks.blog">{{ t('demo.blog') }}</a>
+    </aside>
     <header class="topbar">
       <div>
         <h1 id="page-title">{{ title }}</h1>
@@ -100,7 +115,7 @@ const refreshLabel = computed(() =>
       <div class="topbar-actions">
         <div class="locale-control" role="group" :aria-label="t('locale.aria')">
           <button
-            v-for="item in localeRegistry"
+            v-for="item in runtime.locales"
             :key="item.code"
             type="button"
             :data-locale="item.code"
@@ -136,10 +151,12 @@ const refreshLabel = computed(() =>
           id="refresh-button"
           class="icon-button"
           :class="{ busy }"
-          :title="refreshLabel"
+          :title="runtime.readOnly ? t('demo.readOnlyReason') : refreshLabel"
           :aria-label="refreshLabel"
           :hidden="['settings', 'aeat-documents'].includes(route?.view || '')"
-          :disabled="busy || (detail && route?.view !== 'contact-detail' && !resolved)"
+          :disabled="
+            runtime.readOnly || busy || (detail && route?.view !== 'contact-detail' && !resolved)
+          "
           @click="refresh"
         >
           ↻
@@ -148,8 +165,14 @@ const refreshLabel = computed(() =>
           id="new-entry-button"
           class="primary-button"
           :hidden="detail || ['settings', 'aeat-documents'].includes(route?.view || '')"
-          :disabled="!bootstrap?.intake_enabled"
-          :title="bootstrap?.intake_enabled ? '' : t('intake.disabledReason')"
+          :disabled="runtime.readOnly || !bootstrap?.intake_enabled"
+          :title="
+            runtime.readOnly
+              ? t('demo.readOnlyReason')
+              : bootstrap?.intake_enabled
+                ? ''
+                : t('intake.disabledReason')
+          "
           @click="add"
         >
           <span aria-hidden="true">+</span> <span>{{ t('common.add') }}</span>
@@ -174,7 +197,7 @@ const refreshLabel = computed(() =>
         <p>{{ t('routes.unknownHint') }}</p>
         <a
           class="primary-button"
-          href="/dashboard"
+          :href="href('/dashboard')"
           data-spa
           @click="followSpaLink($event, navigate)"
           >{{ t('routes.backToDashboard') }}</a
@@ -182,7 +205,12 @@ const refreshLabel = computed(() =>
       </div>
     </section>
   </main>
-  <IntakeDialog ref="intake" :services="intakeServices" />
+  <component
+    v-if="runtime.intakeComponent && !runtime.readOnly"
+    :is="runtime.intakeComponent"
+    ref="intake"
+    :services="intakeServices"
+  />
   <dialog id="status-help-dialog" class="status-help-dialog" aria-labelledby="status-help-title">
     <header>
       <h2 id="status-help-title"></h2>

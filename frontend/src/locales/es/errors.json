@@ -1,0 +1,10 @@
+{
+  "errors.apiReturnedHtml": "La API devolvió HTML en lugar de datos. Probablemente hay otro servidor en {origin}. Detén ese servidor o ejecuta autonomo-web en otro puerto.",
+  "errors.malformedJson": "Respuesta JSON mal formada de {url} ({status}).",
+  "errors.unexpectedNonJson": "Respuesta inesperada de {url} que no es JSON ({status}).",
+  "errors.deduction_facts_missing": "La regla de deducción seleccionada necesita más datos. Complétalos en la ficha de la regla y guarda el borrador.",
+  "errors.deduction_exceeds_rule": "La deducción de IRPF o IVA supera el límite de la regla. Introduce el importe propuesto o uno menor, o selecciona ninguna regla.",
+  "errors.deduction_rule_unknown": "La regla de deducción seleccionada no está en el catálogo de esta versión. Elige otra regla o ninguna.",
+  "errors.deduction_out_of_scope": "La regla de deducción seleccionada no cubre este gasto. Selecciona ninguna regla e introduce los importes manualmente.",
+  "errors.deduction_rule_conflict": "La regla de deducción cambió sin una nueva fecha de catálogo. La contabilización se ha detenido hasta corregir el catálogo; contacta con el operador."
+}

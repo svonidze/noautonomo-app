@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
-import { followSpaLink } from '../../vue/services.ts';
+import { followSpaLink, documentHref, viewHref } from '../../vue/services.ts';
 import { transactionDetail, type TransactionDetail } from '../expense-detail/model.ts';
 import TaxAttributionDetails from './TaxAttributionDetails.vue';
 import ExpenseWorkflowView from './ExpenseWorkflowView.vue';
@@ -106,7 +106,7 @@ const retry = () => (forbidden.value ? window.location.reload() : void load());
   <div v-if="error" class="empty-state state-error" role="alert">
     <a
       class="secondary-button"
-      :href="back"
+      :href="viewHref(context.services, back)"
       @click="followSpaLink($event, context.services.navigate)"
       >{{ t('review.workspaceBack') }}</a
     >
@@ -126,7 +126,7 @@ const retry = () => (forbidden.value ? window.location.reload() : void load());
     <header class="panel-header">
       <a
         class="secondary-button"
-        :href="back"
+        :href="viewHref(context.services, back)"
         @click="followSpaLink($event, context.services.navigate)"
         >{{ t('review.workspaceBack') }}</a
       >
@@ -134,7 +134,7 @@ const retry = () => (forbidden.value ? window.location.reload() : void load());
       <a
         v-if="savedDetail.document?.document_id"
         class="secondary-button"
-        :href="`/api/document/${encodeURIComponent(savedDetail.document.document_id)}/content`"
+        :href="documentHref(context.services, savedDetail.document.document_id)"
         target="_blank"
         rel="noreferrer"
         >{{ t('common.file') }}</a

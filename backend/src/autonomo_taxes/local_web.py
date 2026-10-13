@@ -31,6 +31,8 @@ from urllib.parse import parse_qs, unquote, urlencode, urlparse
 from uuid import UUID
 
 from .ui_assets import UiAssets
+from .dashboard_service import build_dashboard_from_db
+from .public_demo_runtime import AS_OF as DEMO_AS_OF, PERIODS as DEMO_PERIODS, load_demo_manifest, render_demo_shell
 from . import expense_workflow
 from .expense_workflow import ExpenseWorkflowError
 
@@ -89,6 +91,19 @@ SPA_TOP_LEVEL_ROUTES = {
     "/aeat-documents",
     "/settings",
 }
+
+PUBLIC_DEMO_GET_PATHS = {
+    "/api/bootstrap", "/api/settings", "/api/dashboard", "/api/transactions", "/api/expenses",
+    "/api/documents", "/api/issues", "/api/assets", "/api/taxes", "/api/aeat-documents",
+    "/api/analytics", "/api/reta-check", "/api/review/posting-preview", "/api/counterparties",
+    "/api/review/work-item",
+}
+PUBLIC_DEMO_GET_DETAIL = re.compile(
+    r"/api/(?:transactions/[0-9a-fA-F-]{32,36}|expense-workflows/[0-9a-fA-F-]{32,36}"
+    r"|assets/[0-9a-fA-F-]{32,36}/schedule|counterparties/[0-9a-fA-F-]{32,36}(?:/transactions|/name-history)?"
+    r"|tax-attributions/[0-9a-fA-F-]{32,36}|document/[0-9a-fA-F-]{32,36}/(?:preview|content)"
+    r"|aeat-filings/[0-9a-fA-F-]{32,36}/content)"
+)
 
 MAX_SETTINGS_BYTES = 16 * 1024
 
@@ -226,6 +241,11 @@ class LocalWebConfig:
     google_picker_app_id: str | None = None
     private_root: Path | None = None
     allow_test_ui: bool = False
+    public_demo: bool = False
+    public_demo_as_of: date | None = None
+    public_demo_document: Path | None = None
+    public_demo_pdf_sha256: str | None = None
+    public_demo_allowed_hosts: tuple[str, ...] = ("noautonomo.ai", "127.0.0.1", "localhost", "::1")
 
 
 def load_config(
@@ -331,6 +351,21 @@ def load_config(
     )
 
 
+def load_public_demo_config(root: Path, *, static_root: Path | None = None) -> LocalWebConfig:
+    """An explicit prepared artifact, never a discovered private account configuration."""
+    root, manifest = load_demo_manifest(root)
+    database = root / "demo.sqlite"
+    with open_ledger_db(database, read_only=True) as db:
+        version = db.connection.execute("PRAGMA user_version").fetchone()[0]
+        periods = {row["period_key"] for row in db.list_periods()}
+        if version != manifest["schema_version"] or not set(DEMO_PERIODS) <= periods:
+            raise LocalWebError("Public demo database does not match its manifest")
+    return LocalWebConfig(project_root=root, database=database, inbox_root=None, archive_root=root,
+        cache_root=root / "disabled-cache", static_root=static_root or Path(__file__).resolve().parent / "web_ui",
+        public_demo=True, public_demo_as_of=date.fromisoformat(DEMO_AS_OF),
+        public_demo_document=root / "demo-document.pdf", public_demo_pdf_sha256=manifest["sha256"]["demo-document.pdf"])
+
+
 class LocalAccountingApp:
     def __init__(
         self,
@@ -342,8 +377,16 @@ class LocalAccountingApp:
         if not config.database.is_file():
             raise FileNotFoundError(f"SQLite database does not exist: {config.database}")
         self.config = config
+        if config.public_demo and (
+            config.public_demo_as_of != date.fromisoformat(DEMO_AS_OF) or not config.public_demo_document
+            or not config.public_demo_pdf_sha256 or config.trusted_proxy_mode or config.legacy_path_map_file
+            or config.google_picker_developer_key or config.google_picker_app_id or config.private_root
+        ):
+            raise LocalWebError("Public demo requires its explicit isolated configuration")
         self.ui_assets = UiAssets(config.static_root, allow_test=config.allow_test_ui)
-        self.session_token = session_token or secrets.token_urlsafe(32)
+        if config.public_demo:
+            render_demo_shell(self.ui_assets.path("index.html").read_bytes(), set(self.ui_assets.files))
+        self.session_token = "" if config.public_demo else (session_token or secrets.token_urlsafe(32))
         self.principal_session_secret = (
             _coerce_session_secret(principal_session_secret)
             if self.config.trusted_proxy_mode == "tailscale_serve"
@@ -352,6 +395,10 @@ class LocalAccountingApp:
         self.legacy_path_resolver = LegacyPathResolver.from_json_file(
             self.config.legacy_path_map_file
         )
+
+    @property
+    def today(self) -> date:
+        return self.config.public_demo_as_of if self.config.public_demo else date.today()
 
     @property
     def uses_trusted_proxy(self) -> bool:
@@ -376,6 +423,10 @@ class LocalAccountingApp:
     def resolve_document_path(self, value: str | None) -> Path:
         if value is None or not str(value).strip():
             raise FileNotFoundError("Document source is unavailable")
+        if self.config.public_demo:
+            if str(value) not in {"/data/demo-document.pdf", str(self.config.public_demo_document)}:
+                raise FileNotFoundError("Public demo document source is unavailable")
+            return self.config.public_demo_document
         direct = Path(str(value)).resolve(strict=False)
         if direct.exists():
             return direct
@@ -430,8 +481,10 @@ class LocalAccountingApp:
                     "validation_issues",
                 )
             }
+        if self.config.public_demo:
+            periods = [row for row in periods if row["period_key"] in DEMO_PERIODS]
         period_keys = [row["period_key"] for row in periods]
-        default_period = _current_or_latest_period(period_keys)
+        default_period = ("2026-Q3" if self.config.public_demo else _current_or_latest_period(period_keys))
         return {
             "profile_name": profile["full_name"] if profile else "Autónomo",
             "periods": periods,
@@ -445,7 +498,7 @@ class LocalAccountingApp:
 
     def dashboard(self, period_key: str) -> dict[str, Any]:
         period = _validate_period(period_key)
-        today = date.today()
+        today = self.today
         cached = self._load_cached_dashboard(period)
         with closing(self._connect()) as connection:
             period_row = self._period_row(connection, period)
@@ -611,7 +664,7 @@ class LocalAccountingApp:
         period = _validate_period(period_key)
         if offset < 0 or not 1 <= limit <= 500:
             raise LocalWebError("Expense page requires offset >= 0 and limit between 1 and 500")
-        effective_today = today or date.today()
+        effective_today = self.today if self.config.public_demo else (today or self.today)
         with closing(self._connect()) as connection:
             connection.execute("BEGIN")
             period_row = self._period_row(connection, period)
@@ -840,13 +893,13 @@ class LocalAccountingApp:
 
     def _status_context(self, connection: sqlite3.Connection, *, today: date | None = None) -> StatusContext:
         return StatusContext(connection, inbox_root=self.config.inbox_root,
-                             archive_root=self.config.archive_root, resolve_path=self.resolve_document_path, today=today)
+                             archive_root=self.config.archive_root, resolve_path=self.resolve_document_path, today=self.today if self.config.public_demo else today)
 
     def assets(self, period_key: str | None = None) -> list[dict[str, Any]]:
         with closing(self._connect()) as connection:
             periods = [r[0] for r in connection.execute(
                 "SELECT period_key FROM periods WHERE period_type='quarter' AND period_key LIKE '%-Q_' ORDER BY period_key DESC")]
-            period = _validate_period(period_key) if period_key is not None else _current_or_latest_period(periods)
+            period = _validate_period(period_key) if period_key is not None else ("2026-Q3" if self.config.public_demo else _current_or_latest_period(periods))
             if period is not None and period not in periods:
                 raise LocalWebApiError(HTTPStatus.NOT_FOUND, "period_not_found", "Unknown quarter")
             rows = connection.execute("""
@@ -896,7 +949,7 @@ class LocalAccountingApp:
                 obligations=obligations,
                 tax_forms=tax_forms,
                 cached=cached,
-                as_of=as_of or date.today(),
+                as_of=self.today if self.config.public_demo else (as_of or self.today),
             )
         return {
             "period": period,
@@ -1052,6 +1105,8 @@ class LocalAccountingApp:
             ).fetchone()
         if row is None or not row["source_reference"]:
             raise FileNotFoundError("Filing source is unavailable")
+        if self.config.public_demo:
+            return self.document_file(filing_snapshot_id)
         path = self.resolve_document_path(str(row["source_reference"]))
         if not any(_is_relative_to(path, root.resolve()) for root in self.document_roots):
             raise LocalWebError("Filing source is outside configured evidence roots")
@@ -1061,8 +1116,10 @@ class LocalAccountingApp:
 
     def analytics(self, period_key: str, *, as_of: str | None = None) -> dict[str, Any]:
         period = _validate_period(period_key)
+        if self.config.public_demo and as_of not in {None, DEMO_AS_OF}:
+            raise LocalWebError("Public demo calculation date is fixed")
         if as_of is None:
-            as_of_date = date.today()
+            as_of_date = self.today
         else:
             try:
                 as_of_date = date.fromisoformat(as_of)
@@ -1101,7 +1158,7 @@ class LocalAccountingApp:
         """
         if not re.fullmatch(r"[0-9]{4}", year):
             raise LocalWebError("Year must use YYYY")
-        today = as_of or date.today()
+        today = self.today if self.config.public_demo else (as_of or self.today)
         through_date = None
         if through is not None:
             if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", through):
@@ -1373,7 +1430,7 @@ class LocalAccountingApp:
             rows = expense_workflow.asset_schedule(db, asset_id)
             for row in rows:
                 row["can_post"] = bool(native and not row["recognition_transaction_id"] and row["amount_minor"] > 0
-                    and row["period_status"] == "open" and row["recognition_on"] and row["recognition_on"] <= date.today().isoformat())
+                    and row["period_status"] == "open" and row["recognition_on"] and row["recognition_on"] <= self.today.isoformat())
             return {"asset_id": asset_id, "native": bool(native), "rows": rows}
 
     def depreciation_post(self, entry_id: str, payload: dict[str, Any], actor: str) -> dict[str, Any]:
@@ -1386,7 +1443,7 @@ class LocalAccountingApp:
 
     def refresh_dashboard(self, period_key: str, *, as_of: str | None = None) -> dict[str, Any]:
         period = _validate_period(period_key)
-        effective_as_of = date.fromisoformat(as_of) if as_of else date.today()
+        effective_as_of = date.fromisoformat(as_of) if as_of else self.today
         output_dir = self.config.cache_root / period
         command = [
             sys.executable,
@@ -1703,6 +1760,8 @@ class LocalAccountingApp:
                 str(transaction["transaction_id"]), str(transaction["fx_rate_id"]),
             )
             return build_fx_suggestion(state, provenance=provenance, verification=verification)
+        if self.config.public_demo:
+            return None
         transaction_date = date.fromisoformat(str(transaction["transaction_date"])[:10])
         try:
             ecb_result = fetch_eur_rate(original_currency, transaction_date)
@@ -1774,6 +1833,24 @@ class LocalAccountingApp:
         return work_item
 
     def document_file(self, document_id: str) -> tuple[Path, str]:
+        if self.config.public_demo:
+            with closing(self._connect()) as connection:
+                mapped = connection.execute(
+                    "SELECT 1 FROM document_attachments da JOIN files f ON f.file_id=da.file_id "
+                    "JOIN documents d ON d.document_id=da.document_id "
+                    "WHERE da.document_id=? AND da.attachment_role='source' "
+                    "AND f.content_sha256=? AND f.media_type='application/pdf'",
+                    (document_id, self.config.public_demo_pdf_sha256),
+                ).fetchone()
+            if mapped is None:
+                raise FileNotFoundError("Public demo document was not found")
+            path = self.config.public_demo_document
+            if not path.is_file() or path.is_symlink():
+                raise FileNotFoundError("Public demo document source is unavailable")
+            with path.open("rb") as source:
+                if hashlib.file_digest(source, "sha256").hexdigest() != self.config.public_demo_pdf_sha256:
+                    raise FileNotFoundError("Public demo document integrity check failed")
+            return path, "application/pdf"
         if not UUID_RE.fullmatch(document_id):
             raise LocalWebError("Invalid document id")
         with closing(self._connect()) as connection:
@@ -1817,11 +1894,13 @@ class LocalAccountingApp:
         return path, mime_type or "application/octet-stream"
 
     def _connect(self) -> sqlite3.Connection:
-        uri = f"file:{self.config.database.as_posix()}?mode=ro"
+        uri = self.config.database.resolve().as_uri() + "?mode=ro"
         connection = sqlite3.connect(uri, uri=True)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 5000")
+        if self.config.public_demo:
+            connection.execute("PRAGMA query_only = ON")
         return connection
 
     def _period_row(
@@ -1985,7 +2064,7 @@ class LocalAccountingApp:
             """,
             parameters,
         ).fetchall()
-        effective_today = today or date.today()
+        effective_today = self.today if self.config.public_demo else (today or self.today)
         builder = context_builder or self._status_context(connection, today=effective_today)
         builder.prime_transactions([row["transaction_id"] for row in rows])
         result = [
@@ -2107,6 +2186,10 @@ class LocalAccountingApp:
         return [dict(row) | {"ui_context": simple_context("obligation", dict(row))} for row in rows]
 
     def _load_cached_dashboard(self, period_key: str) -> dict[str, Any]:
+        if self.config.public_demo:
+            with open_ledger_db(self.config.database, read_only=True) as db:
+                value = build_dashboard_from_db(db, period_key=period_key, as_of=self.today)
+            return json.loads(json.dumps(value, default=str))
         from .tax_attribution import attribution_state_hash
         with open_ledger_db(self.config.database, read_only=True) as db:
             attribution_hash = attribution_state_hash(db)
@@ -2129,6 +2212,7 @@ class LocalAccountingApp:
             preview = build_posting_preview(
                 db,
                 period_key=period_key,
+                today=self.today if self.config.public_demo else None,
                 inbox_root=self.config.inbox_root,
                 archive_root=self.config.archive_root,
             )
@@ -2281,11 +2365,41 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
     def _external_default_port(self) -> int:
         return 443 if self.server.app.uses_trusted_proxy else self.server.server_address[1]
 
+    def parse_request(self) -> bool:
+        accepted = super().parse_request()
+        if accepted and self.server.app.config.public_demo and self.command not in {"GET", "HEAD"}:
+            self._deny_public_write()
+            return False
+        return accepted
+
+    def handle_expect_100(self) -> bool:
+        if self.server.app.config.public_demo and self.command not in {"GET", "HEAD"}:
+            self._deny_public_write()
+            return False
+        return super().handle_expect_100()
+
+    def _deny_public_write(self) -> None:
+        self.close_connection = True
+        self._send_error_json(HTTPStatus.METHOD_NOT_ALLOWED, "The public demo is read-only",
+                              code="public_demo_read_only")
+
+    def do_HEAD(self) -> None:  # noqa: N802
+        if self.server.app.config.public_demo:
+            self.do_GET()
+        else:
+            self.send_error(HTTPStatus.NOT_IMPLEMENTED, "Unsupported method ('HEAD')")
+
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
         try:
             principal = self._require_request_principal()
             self._guard_host()
             parsed = urlparse(self.path)
+            if self.server.app.config.public_demo:
+                normalized = parsed.path[5:] if parsed.path.startswith("/demo/") else ("/" if parsed.path == "/demo" else parsed.path)
+                parsed = parsed._replace(path=normalized)
+                if normalized.startswith("/api/") and normalized not in PUBLIC_DEMO_GET_PATHS and not PUBLIC_DEMO_GET_DETAIL.fullmatch(normalized):
+                    self._send_error_json(HTTPStatus.NOT_FOUND, "Unknown API endpoint")
+                    return
             if parsed.path == "/":
                 self._serve_static("index.html", set_cookie=True, principal=principal)
                 return
@@ -2654,10 +2768,16 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
         return principal
 
     def _guard_host(self) -> None:
+        if self.server.app.config.public_demo and len(self.headers.get_all("Host", [])) != 1:
+            raise LocalWebApiError(HTTPStatus.BAD_REQUEST, "invalid_host", "One Host header is required")
         host, _port = _host_header_parts(
             self.headers.get("Host", ""),
             default_port=self._external_default_port(),
         )
+        if self.server.app.config.public_demo:
+            if host not in self.server.app.config.public_demo_allowed_hosts:
+                raise LocalWebApiError(HTTPStatus.FORBIDDEN, "public_demo_host_forbidden", "Host is not allowed")
+            return
         if self.server.app.uses_trusted_proxy:
             return
         if host not in {"127.0.0.1", "localhost", "::1"}:
@@ -2710,6 +2830,8 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
             )
 
     def _require_session(self, principal: str | None) -> None:
+        if self.server.app.config.public_demo:
+            return
         cookie = SimpleCookie(self.headers.get("Cookie", ""))
         value = cookie.get(self.server.app.cookie_name)
         if value is None:
@@ -2736,16 +2858,19 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
     ) -> None:
         path = self.server.app.ui_assets.path(name)
         content = path.read_bytes()
+        if name == "index.html" and self.server.app.config.public_demo:
+            content = render_demo_shell(content, set(self.server.app.ui_assets.files))
         mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         self.send_response(HTTPStatus.OK)
         self._security_headers()
         self.send_header("Content-Type", f"{mime_type}; charset=utf-8")
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")
-        if set_cookie:
+        if set_cookie and not self.server.app.config.public_demo:
             self.send_header("Set-Cookie", self.server.app.session_cookie_header(principal))
         self.end_headers()
-        self.wfile.write(content)
+        if self.command != "HEAD":
+            self.wfile.write(content)
 
     def _serve_document(self, document_id: str, *, preview: bool = False) -> None:
         path, mime_type = self.server.app.document_file(document_id)
@@ -2762,7 +2887,7 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
     def _serve_path(self, path: Path, mime_type: str, *, preview: bool = False) -> None:
         size = path.stat().st_size
         self.send_response(HTTPStatus.OK)
-        self._security_headers(document_preview=preview)
+        self._security_headers(document_preview=preview or (self.server.app.config.public_demo and mime_type == "application/pdf"))
         self.send_header("Content-Type", mime_type)
         self.send_header(
             "Content-Disposition",
@@ -2771,6 +2896,8 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(size))
         self.send_header("Cache-Control", "private, no-store")
         self.end_headers()
+        if self.command == "HEAD":
+            return
         with path.open("rb") as handle:
             for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                 self.wfile.write(chunk)
@@ -2882,8 +3009,12 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")
+        if self.server.app.config.public_demo and status == HTTPStatus.METHOD_NOT_ALLOWED:
+            self.send_header("Allow", "GET, HEAD")
+            self.send_header("Connection", "close")
         self.end_headers()
-        self.wfile.write(content)
+        if self.command != "HEAD":
+            self.wfile.write(content)
 
     def _send_error_json(
         self,
@@ -2930,6 +3061,12 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
             )
         if document_preview:
             policy = "default-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'"
+        elif self.server.app.config.public_demo:
+            policy = (
+                "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+                "connect-src 'self'; frame-src 'self'; object-src 'none'; worker-src 'none'; "
+                "frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+            )
         elif picker_csp:
             policy = (
                 "default-src 'self'; img-src 'self' data:; style-src 'self'; "
@@ -2948,13 +3085,14 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="autonomo-web",
-        description="Run the loopback-only accounting interface.",
+        description="Run the accounting interface or an explicitly prepared read-only public demo.",
     )
     parser.add_argument(
         "--project-root",
         type=Path,
         default=_default_project_root(),
     )
+    parser.add_argument("--public-demo-root", type=Path, help="Explicit prepared, read-only public demo directory")
     parser.add_argument("--config", type=Path, help="Optional private YAML config file")
     parser.add_argument("--db", type=Path)
     parser.add_argument("--inbox-root", type=Path)
@@ -2967,21 +3105,27 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.host not in {"127.0.0.1", "localhost", "::1"}:
-        raise SystemExit("autonomo-web only accepts a loopback --host")
-    config = load_config(
-        args.project_root,
-        config_path=args.config,
-        database=args.db,
-        inbox_root=args.inbox_root,
-        archive_root=args.archive_root,
-        cache_root=args.cache_root,
-    )
-    if os.environ.get("AUTONOMO_REQUIRE_STORAGE_MIGRATION") == "1":
+    if args.public_demo_root is not None:
+        if args.host not in {"127.0.0.1", "localhost", "::1", "0.0.0.0"}:
+            raise SystemExit("Public demo --host must be loopback or 0.0.0.0")
+        if any(value is not None for value in (args.config, args.db, args.inbox_root, args.archive_root, args.cache_root)):
+            raise SystemExit("Public demo mode cannot use private configuration overrides")
         try:
-            assert_storage_startup_ready(config.database)
-        except StorageMigrationError as exc:
+            config = load_public_demo_config(args.public_demo_root)
+        except (OSError, ValueError, LedgerDbError) as exc:
             raise SystemExit(str(exc)) from exc
+    else:
+        if args.host not in {"127.0.0.1", "localhost", "::1"}:
+            raise SystemExit("autonomo-web only accepts a loopback --host")
+        config = load_config(
+            args.project_root, config_path=args.config, database=args.db,
+            inbox_root=args.inbox_root, archive_root=args.archive_root, cache_root=args.cache_root,
+        )
+        if os.environ.get("AUTONOMO_REQUIRE_STORAGE_MIGRATION") == "1":
+            try:
+                assert_storage_startup_ready(config.database)
+            except StorageMigrationError as exc:
+                raise SystemExit(str(exc)) from exc
     app = LocalAccountingApp(config)
     display_host = f"[{args.host}]" if ":" in args.host else args.host
     bind_url = f"http://{display_host}:{args.port}"

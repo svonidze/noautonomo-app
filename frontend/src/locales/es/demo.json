@@ -1,0 +1,11 @@
+{
+  "demo.banner": "Demo · datos ficticios",
+  "demo.readOnlyReason": "No disponible en la demo de solo lectura",
+  "demo.about": "Sobre NoAutonomo.ai",
+  "demo.blog": "Blog",
+  "demo.documentMark": "EJEMPLO FICTICIO: NO VÁLIDO PARA CONTABILIDAD",
+  "demo.language": "Idioma",
+  "demo.documentTitle": "Documento de ejemplo",
+  "demo.back": "Volver a la aplicación",
+  "demo.languageNote": "El idioma forma parte del enlace; no se cambian las preferencias de la cuenta."
+}

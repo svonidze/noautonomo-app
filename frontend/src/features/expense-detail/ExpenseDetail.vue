@@ -2,7 +2,7 @@
 import TaxAttributionDetails from '../review/TaxAttributionDetails.vue';
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { followSpaLink } from '../../vue/services.ts';
+import { followSpaLink, documentHref, viewHref } from '../../vue/services.ts';
 import { eur, formatDateText } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
@@ -72,6 +72,7 @@ watch(
   { immediate: true },
 );
 async function followUp() {
+  if (props.context.services.readOnly) return;
   if (busy.value) return;
   busy.value = true;
   followError.value = undefined;
@@ -152,7 +153,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
     <a
       v-if="loading || error || data?.transaction.entry_type !== 'expense'"
       class="secondary-button"
-      :href="back"
+      :href="viewHref(context.services, back)"
       @click="navigate"
       >{{ backLabel(back) }}</a
     >
@@ -184,20 +185,31 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
     </div>
     <div v-else-if="data && tx.entry_type !== 'expense'" class="empty-state">
       <p>{{ t('expense.wrongType') }}</p>
-      <a class="secondary-button" :href="wrongTypeUrl" @click="navigate">{{
-        backLabel(wrongTypeUrl)
-      }}</a>
+      <a
+        class="secondary-button"
+        :href="viewHref(context.services, wrongTypeUrl)"
+        @click="navigate"
+        >{{ backLabel(wrongTypeUrl) }}</a
+      >
     </div>
     <template v-else-if="data">
       <section v-if="data.workflow_follow_up?.follow_up_pending" class="panel expense-panel-body">
         <p>{{ t('app.inline.postedCalculationRefreshOrInboxCleanupIsPending') }}</p>
-        <button id="expense-follow-up" type="button" :disabled="busy" @click="followUp">
+        <button
+          id="expense-follow-up"
+          type="button"
+          :disabled="context.services.readOnly || busy"
+          :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+          @click="followUp"
+        >
           {{ t('app.inline.retryFollowUp') }}
         </button>
         <p id="expense-follow-up-error" role="alert">{{ errorText(followError) }}</p>
       </section>
       <header class="review-workspace-header">
-        <a class="secondary-button" :href="back" @click="navigate">{{ backLabel(back) }}</a>
+        <a class="secondary-button" :href="viewHref(context.services, back)" @click="navigate">{{
+          backLabel(back)
+        }}</a>
         <div>
           <h2>{{ data.document?.document_number || t('expense.title') }}</h2>
           <p>{{ data.counterparty?.display_name || '—' }}</p>
@@ -243,7 +255,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
           <a
             v-if="data.document?.document_id"
             class="text-button"
-            :href="`/api/document/${encodeURIComponent(data.document.document_id)}/content`"
+            :href="documentHref(context.services, data.document.document_id)"
             target="_blank"
             rel="noreferrer"
             >{{ t('common.file') }}</a

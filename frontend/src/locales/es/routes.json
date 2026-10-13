@@ -1,0 +1,5 @@
+{
+  "routes.backToDashboard": "Volver al resumen",
+  "routes.unknownHint": "Esta sección no existe. Abre el resumen para continuar.",
+  "routes.unknownTitle": "Página no encontrada"
+}

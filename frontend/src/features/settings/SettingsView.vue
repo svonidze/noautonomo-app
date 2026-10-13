@@ -37,6 +37,7 @@ onBeforeUnmount(() => {
 });
 const fingerprint = () => JSON.stringify(draft),
   backupFingerprint = () => JSON.stringify([daily.value, monthly.value]);
+
 const isDirty = () =>
   !loading.value && (fingerprint() !== baseline || backupFingerprint() !== backupBaseline);
 function canLeave() {
@@ -89,6 +90,7 @@ async function load() {
   }
 }
 async function submit(kind: 'profile' | 'backups') {
+  if (props.context.services.readOnly) return;
   if (pending.value || !backups.value) return;
   const payload =
     kind === 'profile'
@@ -158,6 +160,11 @@ async function submit(kind: 'profile' | 'backups') {
     if (active) pending.value = false;
   }
 }
+const availableLocales = computed(
+  () =>
+    props.context.services.locales ??
+    localeRegistry.filter((item) => item.code === 'ru' || item.code === 'en'),
+);
 const activity = computed(() => profile.value.activities || []);
 void load();
 defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
@@ -169,6 +176,7 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
     <button @click="load">{{ t('common.retry') }}</button>
   </div>
   <div v-else class="settings-page">
+    <p v-if="context.services.readOnly" class="settings-hint">{{ t('demo.readOnlyReason') }}</p>
     <p class="settings-intro">{{ t('settings.form.intro') }}</p>
     <div class="settings-grid">
       <section class="settings-panel" aria-labelledby="settings-profile-title">
@@ -193,7 +201,10 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
           <p v-else-if="!profiles.length">{{ t('settings.form.empty') }}</p>
         </div>
         <form id="settings-profile-form" @submit.prevent="submit('profile')">
-          <fieldset :disabled="pending">
+          <fieldset
+            :disabled="pending || context.services.readOnly"
+            :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+          >
             <label
               >{{ t('settings.form.name')
               }}<input
@@ -250,7 +261,10 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
         <template v-if="backups?.available"
           ><p>{{ t('settings.form.backupIntro') }}</p>
           <form id="settings-backup-form" @submit.prevent="submit('backups')">
-            <fieldset :disabled="pending">
+            <fieldset
+              :disabled="pending || context.services.readOnly"
+              :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+            >
               <label
                 >{{ t('settings.form.daily')
                 }}<input
@@ -329,12 +343,14 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
         <label
           >{{ t('settings.form.language')
           }}<select id="settings-locale" :value="locale" @change="chooseLocale">
-            <option v-for="item in localeRegistry" :key="item.code" :value="item.code">
+            <option v-for="item in availableLocales" :key="item.code" :value="item.code">
               {{ item.name }}
             </option>
           </select></label
         >
-        <p class="settings-hint">{{ t('settings.form.languageNote') }}</p>
+        <p class="settings-hint">
+          {{ t(context.services.readOnly ? 'demo.languageNote' : 'settings.form.languageNote') }}
+        </p>
         <button id="settings-reload" class="secondary-button" type="button" @click="context.reload">
           {{ t('settings.form.reload') }}
         </button>
