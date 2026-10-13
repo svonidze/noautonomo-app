@@ -354,12 +354,30 @@ def register_projection(rows: Iterable[TaxRow], *, year: int, through: date,
     rows = list(rows)
     result: dict[str, Any] = {'date_basis': 'separate_reviewed_irpf_iva', 'registers': {}, 'bridge': []}
     for basis in ('irpf', 'iva'):
+        start = iva_starts_on if basis == 'iva' and iva_starts_on else date(year, 1, 1)
+        scope = {'starts_on': start, 'through': through}
         try:
-            start = iva_starts_on if basis == 'iva' and iva_starts_on else date(year, 1, 1)
             projected = project_tax_rows(rows, basis, start, through)
-            result['registers'][basis] = {'blocked': False, 'rows': [asdict(r) for r in projected]}
+            projected.sort(key=lambda row: (row.tax_date, row.transaction_id))
+            result['registers'][basis] = {**scope, 'blocked': False, 'rows': [asdict(r) for r in projected]}
         except CalculationBlocked as exc:
-            result['registers'][basis] = {'blocked': True, 'reason': str(exc), 'rows': []}
+            blocked_rows = []
+            for row in rows:
+                try:
+                    project_tax_rows([row], basis, start, through)
+                except CalculationBlocked as row_error:
+                    day = row.effective_date(basis)
+                    blocked_rows.append({'transaction_id': row.transaction_id,
+                        'source_transaction_id': row.parent_id, 'tax_date': day,
+                        'period': f'{day.year}-Q{(day.month - 1) // 3 + 1}',
+                        'reason': str(row_error)})
+            result['registers'][basis] = {**scope, 'blocked': True, 'reason': str(exc),
+                                         'blocked_rows': blocked_rows, 'rows': []}
+    parent_ids = {r['source_transaction_id'] or r['transaction_id']
+                  for register in result['registers'].values()
+                  for r in [*register['rows'], *register.get('blocked_rows', [])]}
+    result['source_rows'] = [asdict(row) for row in rows
+                             if row.component == 'transaction' and row.transaction_id in parent_ids]
     for row in rows:
         if row.attribution_id:
             result['bridge'].append({

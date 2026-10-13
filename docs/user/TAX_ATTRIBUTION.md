@@ -108,12 +108,42 @@ separate correction remains an independent accounting decision.
 ## Registers and other forms
 
 `period prepare` and accounting-book exports include `irpf-register.csv`,
-`iva-register.csv` and `tax-registers.json` when reviewed attributions are present.
+`iva-register.csv`, `tax-registers.json` and `tax-registers-review.xlsx` when
+reviewed attributions are present.
 IRPF is cumulative from January 1; the IVA register covers the selected period.
 The JSON contains an original-to-reviewed bridge, source document hashes and
 references for the exchange results. The source `income.csv` and `expense.csv`
 remain exports of the preserved transactions and treatments; the manifest labels
 their basis explicitly.
+
+The XLSX is a native review export. Its `REVIEW` sheet gives each tax's date
+window, completeness and totals before relief and form-specific adjustments.
+`IRPF` and `IVA` contain the effective rows used by the calculations. `SOURCES`
+contains each preserved source transaction once; `ATTRIBUTIONS` links reviewed
+dates, bases and FX to that source. Their amounts are traceability values and
+must not be added to the tax register totals. Document identifiers, issue dates,
+hashes and evidence references remain available in the workbook.
+
+`BLOCKERS` shows every affected row's tax date, quarter and reason. A blocked
+register remains empty, its totals stay blank and the other tax can still be
+complete. Pending IVA amounts and stale reviewed amounts stay blank in the
+attribution sheet. An annual export covers January through December for both
+taxes. The filing manifest records the workbook hash, scopes, completeness and
+`aeat_import_supported: false`. It can be regenerated and verified without
+changing the source records or filed snapshots.
+
+Generate the native books with the installed compatible CLI, using a private
+output directory:
+
+```sh
+autonomo-tax books build --db /private-accounting/ledger.sqlite --period 2025-Q4 --out-dir /private-accounting/books
+```
+
+The [AEAT 2026 specification](https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/IVA/Fact_registro/Libros_registro/Formato_Electronico_Comun_Libros_Registro_IVA_IRPF.pdf)
+permits separate official books. Their normalized columns and legal recognition
+rules differ from this native review workbook. Mapping all reviewed dates and FX
+to those columns has not been validated. Do not upload the review workbook as
+an AEAT import file.
 
 The unified AEAT workbook has one operation date and amount set. Its projection
 is blocked with `separate_tax_registers_required` for attributed views; it never

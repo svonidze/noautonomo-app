@@ -147,7 +147,16 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
         attribution_basis = {"book_date_basis": {
             "income": "source_transaction_date", "expense": "source_transaction_date",
             "irpf": "reviewed_irpf_ytd", "iva": "reviewed_iva_period",
-        }, "unified_aeat_import_supported": False}
+            "tax_registers_xlsx": "per_sheet_reviewed_tax_date",
+        }, "unified_aeat_import_supported": False,
+        "tax_register_xlsx": {
+            "format": "native_separate_tax_registers_review",
+            "generation_supported": True,
+            "aeat_import_supported": False,
+            "registers_complete": not any(item['blocked'] for item in registers['registers'].values()),
+            "scope": {basis: {key: register[key] for key in ('starts_on', 'through')}
+                      for basis, register in registers['registers'].items()},
+        }}
 
     return {
         "manifest_version": 2,

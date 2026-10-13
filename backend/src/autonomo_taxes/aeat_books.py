@@ -86,7 +86,7 @@ def build_aeat_book_projection(
     attributed_ids = active_attribution_ids(database)
     candidates = {r['transaction_id'] for r in database.list_tax_rows(year=year)} if attributed_ids else set()
     if attributed_ids & candidates:
-        # shortcut: reject the unified workbook until its exporter supports separate tax bases.
+        # The native review workbook does not establish AEAT import compatibility.
         result = failed_aeat_book_projection(
             period_key=period_key,
             message="Reviewed IRPF/IVA attributions require separate tax registers; unified AEAT XLSX is not supported for this view.",
@@ -97,7 +97,19 @@ def build_aeat_book_projection(
             result['tax_registers'] = register_projection(
                 load_tax_rows(database, year, allow_authoritative_history=allow_authoritative_history),
                 year=year, through=through_date,
+                iva_starts_on=date(year, quarter * 3 - 2, 1),
             )
+            from .tax_register_workbook import REVIEW_XLSX_FILENAME
+            result['separate_register_xlsx'] = {
+                'format': 'native_separate_tax_registers_review',
+                'filename': REVIEW_XLSX_FILENAME,
+                'generation_supported': True,
+                'aeat_import_supported': False,
+                'registers_complete': not any(register['blocked'] for register in
+                                             result['tax_registers']['registers'].values()),
+                'scope': {basis: {key: register[key] for key in ('starts_on', 'through')}
+                          for basis, register in result['tax_registers']['registers'].items()},
+            }
         except CalculationBlocked as exc:
             result['tax_registers'] = {'blocked': True, 'reason': str(exc)}
         return result
