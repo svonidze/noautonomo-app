@@ -84,7 +84,7 @@ intended files before relying on a scan of a new document or fixture.
 | Command | Additional history checked |
 |---|---|
 | `python scripts/dev/privacy_guard.py` | None; index and corresponding working-tree files only. |
-| `python scripts/dev/privacy_guard.py --commit-range origin/master..HEAD` | The specified revision range. Fetch the remote base first when this is intended to represent a PR's new commits. |
+| `python scripts/dev/privacy_guard.py --commit-range origin/main..HEAD` | The specified revision range. Fetch the remote base first when this is intended to represent a PR's new commits. |
 | `python scripts/dev/privacy_guard.py --commit-range HEAD` | History reachable from the current commit, not merely the last commit's diff. |
 | `python scripts/dev/privacy_guard.py --history` | All history reachable through local Git references (`--all`), including other branches, remote-tracking references and tags; annotated tag content is also checked. |
 

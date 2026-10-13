@@ -20,7 +20,7 @@ git -C "$source_repo" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
   || die "AUTONOMO_DEPLOY_REPOSITORY must be a Git checkout: $source_repo"
 root="$(release_root)"
 target="$(release_path "$sha")"
-release_ref="${AUTONOMO_DEPLOY_REF:-master}"
+release_ref="${AUTONOMO_DEPLOY_REF:-main}"
 [[ "$release_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$release_ref" != *..* ]] \
   || die "AUTONOMO_DEPLOY_REF must be a safe remote branch or ref name"
 mkdir -p "$root/releases"

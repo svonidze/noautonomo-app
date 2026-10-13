@@ -81,7 +81,7 @@ def test_wrapper_uses_runtime_path_and_passes_one_shot_overrides(tmp_path: Path)
         [
             str(WRAPPER),
             "--setenv",
-            "AUTONOMO_DEPLOY_REF=master",
+            "AUTONOMO_DEPLOY_REF=main",
             "--setenv",
             "AUTONOMO_ENABLE_STORAGE_MIGRATION=1",
             "--",
@@ -98,7 +98,7 @@ def test_wrapper_uses_runtime_path_and_passes_one_shot_overrides(tmp_path: Path)
     assert result.stdout == (
         "rclone=runtime-rclone\n"
         "stdin=stdin-roundtrip\n"
-        "deploy_ref=master\n"
+        "deploy_ref=main\n"
         "migration=1\n"
         f"runtime_env={runtime}\n"
     )
@@ -112,7 +112,7 @@ def test_wrapper_uses_runtime_path_and_passes_one_shot_overrides(tmp_path: Path)
         f"--property=EnvironmentFile={runtime}",
         "/usr/bin/env",
         f"AUTONOMO_RUNTIME_ENV_PATH={runtime}",
-        "AUTONOMO_DEPLOY_REF=master",
+        "AUTONOMO_DEPLOY_REF=main",
         "AUTONOMO_ENABLE_STORAGE_MIGRATION=1",
         str(consumer),
     ):

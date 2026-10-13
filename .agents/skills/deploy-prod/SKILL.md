@@ -1,6 +1,6 @@
 ---
 name: deploy-prod
-description: Deploy a reviewed Spain autonomo taxes release to the existing production service, with exact-SHA checks, verified backups, migration and rollback. Use for production deployment or rollback requests in this project, including «деплой на прод». For diagnosis or planning requests, perform read-only checks only; do not deploy.
+description: Deploy a reviewed Spain autonomo taxes release to the existing production service, with exact-SHA checks, verified backups, migration and rollback. Use for production deployment or rollback requests in this project, including «деплой на прод». For diagnosis or planning requests, perform read-only checks only; do not deploy. Public landing, blog and synthetic demo deployments use noautonomo-deploy-public instead.
 ---
 
 # Deploy the existing production service
