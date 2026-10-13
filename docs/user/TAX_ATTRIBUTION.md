@@ -142,6 +142,7 @@ An existing final snapshot does not establish that the current attributed view
 matches the filed return. Such packages remain `draft_review` with
 `tax_attribution_snapshot_review_required`: the exporter does not bind the
 current attributed state to that snapshot, so it requires independent review.
+This includes corrections that remove an operation from the selected tax window.
 Complete registers and successful package verification certify export
 reproducibility, not replacement of the filed snapshot.
 

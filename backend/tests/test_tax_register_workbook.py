@@ -301,7 +301,8 @@ def test_blocked_iva_preserves_all_selected_sources_and_bridges(tmp_path):
     assert review_values(book)['IVA Income base (EUR)'] is None
 
 
-def test_old_filed_snapshot_does_not_make_corrected_package_submission_ready(tmp_path):
+@pytest.mark.parametrize('moved_out', [False, True])
+def test_old_filed_snapshot_does_not_make_corrected_package_submission_ready(tmp_path, moved_out):
     with initialize(tmp_path / 'db.sqlite') as db:
         identifier = source(db, tmp_path)
         db.connection.execute("UPDATE periods SET status='closed' WHERE period_key='2025-Q1'")
@@ -309,6 +310,9 @@ def test_old_filed_snapshot_does_not_make_corrected_package_submission_ready(tmp
                                  payload={'form': '130', 'values': {'19': '88.00'}})
         before = [tuple(r) for r in db.connection.execute('SELECT * FROM filing_snapshots')]
         p = decision(db, identifier, irpf_date='2025-01-20')
+        if moved_out:
+            p['decision']['irpf']['date'] = '2024-12-20'
+            p['decision']['iva']['date'] = '2024-12-20'
         p['decision']['fx'] = []
         p['historical_correction'] = True
         apply_attribution(db, p, actor='test-operator')
@@ -318,5 +322,9 @@ def test_old_filed_snapshot_does_not_make_corrected_package_submission_ready(tmp
         assert manifest['submission_ready'] is False
         assert manifest['package_stage'] == 'draft_review'
         assert 'tax_attribution_snapshot_review_required' in manifest['readiness_blockers']
+        if moved_out:
+            registers = json.loads((manifest_path.parent / 'tax-registers.json').read_text())
+            assert registers['source_rows'] == [] and registers['selected_row_ids'] == []
+            assert len(registers['bridge']) == 1
         assert [tuple(r) for r in db.connection.execute('SELECT * FROM filing_snapshots')] == before
         assert verify_filing_package(db, manifest_path)['ok'] is True
