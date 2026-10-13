@@ -25,6 +25,9 @@ Once it is running, add your taxpayer details in
 [accounting workflow](docs/user/ACCOUNTING_WORKFLOW.md) to add a document, check its
 details and post the reviewed entry.
 
+See [How Google Drive integration works](docs/user/GOOGLE_DRIVE.md) (Russian) for
+existing-file links, local uploads, folder selection, and independent cloud copies.
+
 Routine review and posting happen in the application, without administrator
 scripts or a terminal.
 
