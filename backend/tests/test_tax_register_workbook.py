@@ -10,7 +10,7 @@ from autonomo_taxes.aeat_books import build_aeat_book_projection
 from autonomo_taxes.books import write_accounting_books
 from autonomo_taxes.filing_package import write_filing_package, verify_filing_package
 from autonomo_taxes.ledger_db import initialize
-from autonomo_taxes.tax_attribution import apply_attribution, register_projection
+from autonomo_taxes.tax_attribution import apply_attribution, prepare_attribution, register_projection
 from autonomo_taxes.tax_engine import (
     CalculationBlocked, TaxBasis, TaxRow, calculate_modelo390, calculate_modelo100_business_support,
 )
@@ -328,3 +328,44 @@ def test_old_filed_snapshot_does_not_make_corrected_package_submission_ready(tmp
             assert len(registers['bridge']) == 1
         assert [tuple(r) for r in db.connection.execute('SELECT * FROM filing_snapshots')] == before
         assert verify_filing_package(db, manifest_path)['ok'] is True
+
+
+@pytest.mark.parametrize('recognition', ['taxes', 'fx'])
+@pytest.mark.parametrize('withdraw', [False, True])
+def test_removed_prior_year_attribution_blocks_snapshot_readiness_without_current_exports(tmp_path, recognition, withdraw):
+    with initialize(tmp_path / 'db.sqlite') as db:
+        identifier = source(db, tmp_path)
+        p = decision(db, identifier, irpf_date='2025-01-20', iva_date='2025-01-12')
+        if recognition == 'taxes':
+            p['decision']['irpf']['date'] = p['decision']['iva']['date'] = '2024-12-20'
+            p['decision']['fx'] = []
+        else:
+            p['decision']['fx'] = [dict(p['decision']['fx'][0], date='2024-12-20')]
+        apply_attribution(db, p, actor='test-operator')
+        db.ensure_period('2024-Q4')
+        db.connection.execute("UPDATE periods SET status='closed' WHERE period_key='2024-Q4'")
+        db.create_filing_snapshot('2024-Q4', status='filed', filed_on='2025-01-22',
+                                 payload={'form': '130', 'values': {'19': '88.00'}})
+        before = [tuple(r) for r in db.connection.execute('SELECT * FROM filing_snapshots')]
+        revised = prepare_attribution(db, identifier)
+        revised['historical_correction'] = True
+        if withdraw:
+            revised['decision'] = {'irpf': None, 'iva': None, 'fx': []}
+        else:
+            revised['decision']['irpf']['date'] = '2025-01-20'
+            revised['decision']['iva']['date'] = '2025-01-12'
+            revised['decision']['fx'] = []
+        apply_attribution(db, revised, actor='test-operator')
+        assert load_tax_rows(db, 2024) == []
+        manifest_path = write_filing_package(db, tmp_path / 'old', period_key='2024-Q4')
+        manifest = json.loads(manifest_path.read_text())
+        assert {artifact['book'] for artifact in manifest['artifacts']} == {'income', 'expense', 'assets', 'payments'}
+        assert manifest['submission_ready'] is False
+        assert manifest['readiness_blockers'] == ['tax_attribution_snapshot_review_required']
+        assert [tuple(r) for r in db.connection.execute('SELECT * FROM filing_snapshots')] == before
+        assert verify_filing_package(db, manifest_path)['ok'] is True
+        db.ensure_period('2023-Q4')
+        db.connection.execute("UPDATE periods SET status='closed' WHERE period_key='2023-Q4'")
+        db.create_filing_snapshot('2023-Q4', status='filed', filed_on='2024-01-22', payload={'synthetic': True})
+        unaffected = write_filing_package(db, tmp_path / 'unaffected', period_key='2023-Q4')
+        assert json.loads(unaffected.read_text())['submission_ready'] is True
