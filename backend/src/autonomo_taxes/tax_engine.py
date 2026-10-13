@@ -80,6 +80,7 @@ class TaxBasis:
     deductible_vat_eur: Decimal = ZERO
     withholding_eur: Decimal = ZERO
     error: str | None = None
+    evidence_ref: str = ""
 
 
 @dataclass(frozen=True)

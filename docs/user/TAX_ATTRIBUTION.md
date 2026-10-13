@@ -123,14 +123,27 @@ contains each preserved source transaction once; `ATTRIBUTIONS` links reviewed
 dates, bases and FX to that source. Their amounts are traceability values and
 must not be added to the tax register totals. Document identifiers, issue dates,
 hashes and evidence references remain available in the workbook.
+The attribution sheet retains the separate IRPF and IVA evidence references,
+alongside the common review reference and evidence for each FX event.
 
 `BLOCKERS` shows every affected row's tax date, quarter and reason. A blocked
 register remains empty, its totals stay blank and the other tax can still be
 complete. Pending IVA amounts and stale reviewed amounts stay blank in the
-attribution sheet. An annual export covers January through December for both
+attribution sheet. IVA completeness also requires the same classification and
+rate validation as Modelo 303, including ordinary rows mixed into the export.
+Sources and attribution bridges retain every selected operation even when a
+different row blocks that tax's monetary register. An annual export covers
+January through December for both
 taxes. The filing manifest records the workbook hash, scopes, completeness and
 `aeat_import_supported: false`. It can be regenerated and verified without
 changing the source records or filed snapshots.
+
+An existing final snapshot does not establish that the current attributed view
+matches the filed return. Such packages remain `draft_review` with
+`tax_attribution_snapshot_review_required`: the exporter does not bind the
+current attributed state to that snapshot, so it requires independent review.
+Complete registers and successful package verification certify export
+reproducibility, not replacement of the filed snapshot.
 
 Generate the native books with the installed compatible CLI, using a private
 output directory:

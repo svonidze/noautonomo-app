@@ -144,6 +144,10 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
         registers = json.loads(export.files["tax_registers"].read_text(encoding="utf-8"))
         if any(item["blocked"] for item in registers["registers"].values()):
             readiness_reasons.append("tax_attribution_pending")
+        if (any(row['status'] in FINAL_SNAPSHOT_STATUSES for row in snapshot_refs)
+                and any(row['attribution_id'] for row in registers['source_rows'])):
+            # Snapshot existence does not bind a corrected view to that filed return.
+            readiness_reasons.append('tax_attribution_snapshot_review_required')
         attribution_basis = {"book_date_basis": {
             "income": "source_transaction_date", "expense": "source_transaction_date",
             "irpf": "reviewed_irpf_ytd", "iva": "reviewed_iva_period",

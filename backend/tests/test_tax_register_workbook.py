@@ -11,7 +11,9 @@ from autonomo_taxes.books import write_accounting_books
 from autonomo_taxes.filing_package import write_filing_package, verify_filing_package
 from autonomo_taxes.ledger_db import initialize
 from autonomo_taxes.tax_attribution import apply_attribution, register_projection
-from autonomo_taxes.tax_engine import calculate_modelo390, calculate_modelo100_business_support
+from autonomo_taxes.tax_engine import (
+    CalculationBlocked, TaxBasis, TaxRow, calculate_modelo390, calculate_modelo100_business_support,
+)
 from autonomo_taxes.tax_register_workbook import write_tax_register_review_xlsx
 from autonomo_taxes.tax_row_loader import load_tax_rows
 from test_tax_attribution import source, decision, calc130, calculate_modelo303_rows
@@ -211,3 +213,110 @@ def test_workbook_is_deterministic_literal_text_and_atomically_rejects_invalid_x
         with pytest.raises(ET.ParseError):
             write_tax_register_review_xlsx(path, projection)
         assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize('period', ['2025-Q1', '2025'])
+@pytest.mark.parametrize('tax_code,vat_minor', [('unknown', 0), ('not_subject', 0),
+                                             ('domestic_input', 0), ('domestic_output', 2300)])
+def test_mixed_iva_calculator_blockers_are_visible_in_review_exports(tmp_path, period, tax_code, vat_minor):
+    with initialize(tmp_path / 'db.sqlite') as db:
+        identifier = source(db, tmp_path)
+        p = decision(db, identifier, irpf_date='2025-01-20')
+        p['decision']['fx'] = []
+        apply_attribution(db, p, actor='test-operator')
+        ordinary = db.add_transaction(period_key='2025-Q1', transaction_date='2025-02-02',
+            booking_date='2025-02-02', entry_type='income', description='Synthetic unclassified income',
+            amount_minor=10000, currency='EUR', lifecycle_status='posted')
+        db.add_detailed_tax_treatment(transaction_id=ordinary['transaction_id'],
+            treatment_type='invoice_review', tax_code=tax_code, taxable_base_minor=10000,
+            vat_minor=vat_minor, include_modelo130=True, include_modelo303=True)
+        db.ensure_period(period)
+        with pytest.raises(CalculationBlocked) as failure:
+            calculate_modelo303_rows(load_tax_rows(db, 2025), year=2025, quarter=1)
+        manifest_path = write_filing_package(db, tmp_path / 'books', period_key=period)
+        book = read_workbook(tmp_path / 'books/tax-registers-review.xlsx')
+        assert review_values(book)['IVA status'] == 'Blocked'
+        assert review_values(book)['IVA Income base (EUR)'] is None
+        assert review_values(book)['IRPF status'] == 'Complete'
+        assert book['IVA'] == []
+        assert len(book['BLOCKERS']) == 1
+        blocker = book['BLOCKERS'][0]
+        assert blocker['Row ID'] == ordinary['transaction_id']
+        assert blocker['Tax date'] == date(2025, 2, 2) and blocker['Affected period'] == '2025-Q1'
+        assert blocker['Reason'] == str(failure.value)
+        manifest = json.loads(manifest_path.read_text())
+        assert manifest['tax_register_xlsx']['registers_complete'] is False
+        assert manifest['submission_ready'] is False
+
+
+@pytest.mark.parametrize('pending', [False, True])
+def test_separate_tax_evidence_survives_json_and_workbook(tmp_path, pending):
+    with initialize(tmp_path / 'db.sqlite') as db:
+        identifier = source(db, tmp_path)
+        p = decision(db, identifier, irpf_date='2025-01-20')
+        p['decision']['fx'] = []
+        if pending:
+            p['decision']['iva'].update(base_minor=None, vat_minor=None, deductible_minor=None,
+                                       pending_reason='Await reviewed currency observation')
+        apply_attribution(db, p, actor='test-operator')
+        before = [tuple(r) for r in db.connection.execute('SELECT * FROM transaction_tax_attributions')]
+        export = write_accounting_books(db, tmp_path / 'books', period_key='2025-Q1')
+        projection = json.loads(export.files['tax_registers'].read_text())
+        bridge = projection['bridge'][0]
+        assert bridge['irpf']['evidence_ref'] == 'document:synthetic-accrual'
+        assert bridge['iva']['evidence_ref'] == 'document:synthetic-vat'
+        row = read_workbook(export.files['tax_registers_xlsx'])['ATTRIBUTIONS'][0]
+        assert row['Evidence'] == 'document:synthetic-proof'
+        assert row['IRPF evidence'] == 'document:synthetic-accrual'
+        assert row['IVA evidence'] == 'document:synthetic-vat'
+        if pending:
+            assert row['IVA base (EUR)'] is None
+        assert [tuple(r) for r in db.connection.execute('SELECT * FROM transaction_tax_attributions')] == before
+
+
+def test_blocked_iva_preserves_all_selected_sources_and_bridges(tmp_path):
+    pending = TaxRow('TEST-PENDING', date(2025, 10, 12), 'income', Decimal('940'),
+        taxable_base_eur=Decimal('940'), tax_code='outside_scope', include_modelo130=True,
+        include_modelo303=True, attribution_id='TEST-ATTRIBUTION-01',
+        irpf_basis=TaxBasis(date(2024, 12, 20), Decimal('920'), Decimal('920')),
+        iva_basis=TaxBasis(date(2025, 11, 10), error='IVA amounts pending: synthetic observation'),
+        document_id='TEST-DOCUMENT-PENDING')
+    ordinary = TaxRow('TEST-ORDINARY', date(2025, 11, 22), 'income', Decimal('100'),
+        taxable_base_eur=Decimal('100'), tax_code='outside_scope', include_modelo303=True,
+        document_id='TEST-DOCUMENT-ORDINARY')
+    reviewed = TaxRow('TEST-REVIEWED', date(2025, 11, 23), 'income', Decimal('200'),
+        taxable_base_eur=Decimal('200'), tax_code='outside_scope', include_modelo303=True,
+        attribution_id='TEST-ATTRIBUTION-02',
+        iva_basis=TaxBasis(date(2025, 11, 24), Decimal('210'), Decimal('210')),
+        document_id='TEST-DOCUMENT-REVIEWED')
+    excluded = TaxRow('TEST-CUTOFF', date(2025, 11, 25), 'income', Decimal('300'),
+        tax_code='outside_scope', include_modelo303=True, cutoff=date(2025, 9, 30))
+    projection = register_projection([pending, ordinary, reviewed, excluded], year=2025,
+        through=date(2025, 12, 31), iva_starts_on=date(2025, 10, 1))
+    book = read_workbook(write_tax_register_review_xlsx(tmp_path / 'review.xlsx', projection))
+    assert {row['Source transaction ID'] for row in book['SOURCES']} == {
+        'TEST-PENDING', 'TEST-ORDINARY', 'TEST-REVIEWED'}
+    assert {row['Row ID'] for row in book['ATTRIBUTIONS']} == {'TEST-PENDING', 'TEST-REVIEWED'}
+    assert len(book['BLOCKERS']) == 1 and book['IVA'] == []
+    assert review_values(book)['IVA Income base (EUR)'] is None
+
+
+def test_old_filed_snapshot_does_not_make_corrected_package_submission_ready(tmp_path):
+    with initialize(tmp_path / 'db.sqlite') as db:
+        identifier = source(db, tmp_path)
+        db.connection.execute("UPDATE periods SET status='closed' WHERE period_key='2025-Q1'")
+        db.create_filing_snapshot('2025-Q1', status='filed', filed_on='2025-04-11',
+                                 payload={'form': '130', 'values': {'19': '88.00'}})
+        before = [tuple(r) for r in db.connection.execute('SELECT * FROM filing_snapshots')]
+        p = decision(db, identifier, irpf_date='2025-01-20')
+        p['decision']['fx'] = []
+        p['historical_correction'] = True
+        apply_attribution(db, p, actor='test-operator')
+        manifest_path = write_filing_package(db, tmp_path / 'books', period_key='2025-Q1')
+        manifest = json.loads(manifest_path.read_text())
+        assert manifest['tax_register_xlsx']['registers_complete'] is True
+        assert manifest['submission_ready'] is False
+        assert manifest['package_stage'] == 'draft_review'
+        assert 'tax_attribution_snapshot_review_required' in manifest['readiness_blockers']
+        assert [tuple(r) for r in db.connection.execute('SELECT * FROM filing_snapshots')] == before
+        assert verify_filing_package(db, manifest_path)['ok'] is True

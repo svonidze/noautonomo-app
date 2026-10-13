@@ -46,8 +46,8 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
               ['Amounts', 'EUR; source and attribution sheets are traceability only'],
               ['Calculations', 'Registers precede difficult-expense relief and form-specific adjustments']]
     blockers = []
-    visible_ids = set()
-    parent_ids = set()
+    visible_ids = set(projection['selected_row_ids'])
+    parent_ids = {row['transaction_id'] for row in projection['source_rows']}
     sheets = []
     for basis in ('irpf', 'iva'):
         register = registers[basis]
@@ -55,9 +55,6 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
                        [basis.upper() + ' through', register['through']],
                        [basis.upper() + ' status', 'Blocked' if register['blocked'] else 'Complete'],
                        [basis.upper() + ' rows', len(register['rows']) if not register['blocked'] else None]])
-        for row in [*register['rows'], *register.get('blocked_rows', [])]:
-            visible_ids.add(row['transaction_id'])
-            parent_ids.add(row['source_transaction_id'] or row['transaction_id'])
         for row in register.get('blocked_rows', []):
             blockers.append([basis.upper(), row['tax_date'], row['period'],
                              row['transaction_id'], row['source_transaction_id'], row['reason']])
@@ -81,7 +78,7 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
     bridge = [['Row ID', 'Source transaction ID', 'Component', 'Attribution ID',
                'IRPF date', 'IRPF base (EUR)', 'IRPF expense (EUR)', 'IRPF error',
                'IVA date', 'IVA base (EUR)', 'IVA (EUR)', 'Deductible IVA (EUR)', 'IVA error',
-               'Evidence', 'FX evidence', 'Reason']]
+               'Evidence', 'FX evidence', 'Reason', 'IRPF evidence', 'IVA evidence']]
     for row in projection['bridge']:
         if row['transaction_id'] not in visible_ids and row['transaction_id'] not in parent_ids:
             continue
@@ -92,7 +89,7 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
             _confirmed(irpf, 'deductible_irpf_eur'), irpf.get('error'), iva.get('date'),
             _confirmed(iva, 'taxable_base_eur'), _confirmed(iva, 'vat_eur'),
             _confirmed(iva, 'deductible_vat_eur'), iva.get('error'), row['evidence_ref'],
-            row['fx_evidence_ref'], row['reason']])
+            row['fx_evidence_ref'], row['reason'], irpf.get('evidence_ref'), iva.get('evidence_ref')])
     sheets.extend([('ATTRIBUTIONS', bridge), ('BLOCKERS',
         [['Tax', 'Tax date', 'Affected period', 'Row ID', 'Source transaction ID', 'Reason'], *blockers])])
     sheets.insert(0, ('REVIEW', review))
@@ -151,7 +148,7 @@ def _sheet(rows: list[list[Any]], *, summary: bool = False) -> bytes:
     for index in range(1, width + 1):
         label = str(rows[0][index - 1])
         size = (34 if index == 1 else 100) if summary else min(64, max(18, len(label) + 3))
-        if not summary and any(word in label for word in ('ID', 'SHA-256', 'Evidence', 'Reason', 'error')):
+        if not summary and any(word in label for word in ('ID', 'SHA-256', 'Evidence', 'evidence', 'Reason', 'error')):
             size = 64
         ET.SubElement(columns, 'col', min=str(index), max=str(index), width=str(size), customWidth='1')
         sizes.append(size)
