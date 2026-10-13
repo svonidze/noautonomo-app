@@ -3,11 +3,12 @@ import { computed } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { eur, formatDateText } from '../../core/format.ts';
 import { localeTag, quarterNumber } from '../../core/i18n.ts';
-import { followSpaLink } from '../../vue/services.ts';
+import { followSpaLink, type ViewServices, documentHref, viewHref } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import DocumentLabel from './DocumentLabel.vue';
 import { hasAmount, type TransactionRow, type ExpenseKind } from './model.ts';
 const props = defineProps<{
+  services?: ViewServices;
   rows: TransactionRow[];
   kind: ExpenseKind;
   period: string;
@@ -89,6 +90,7 @@ const matched = (row: TransactionRow) => row.asset_match_count === 1 && row.asse
                 ><small>{{ row.counterparty_name || row.description || '' }}</small
                 ><small
                   ><DocumentLabel
+                    :services="services"
                     :row="row"
                     :period="period"
                     :return-url="returnUrl"
@@ -121,6 +123,7 @@ const matched = (row: TransactionRow) => row.asset_match_count === 1 && row.asse
                 }}</strong
                 ><small
                   ><DocumentLabel
+                    :services="services"
                     :row="row"
                     :period="period"
                     :return-url="returnUrl"
@@ -138,14 +141,14 @@ const matched = (row: TransactionRow) => row.asset_match_count === 1 && row.asse
                 <a
                   v-if="row.document_id"
                   class="text-button"
-                  :href="`/api/document/${encodeURIComponent(row.document_id)}/content`"
+                  :href="documentHref(services, row.document_id)"
                   target="_blank"
                   rel="noreferrer"
                   >{{ t('expense.source') }}</a
                 ><a
                   v-if="matched(row)"
                   class="text-button"
-                  href="/assets"
+                  :href="viewHref(services, '/assets')"
                   @click="followSpaLink($event, navigate)"
                   >{{ t('nav.assets') }}</a
                 >

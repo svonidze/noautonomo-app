@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { type ViewServices, documentHref } from '../../vue/services.ts';
 import { useLocale } from '../../vue/locale.ts';
 import { eur, formatDateText } from '../../core/format.ts';
 import { quarterNumber } from '../../core/i18n.ts';
@@ -7,6 +8,7 @@ import TermHelp from '../../components/TermHelp.vue';
 import DocumentLabel from '../transactions/DocumentLabel.vue';
 import { copyable, hasAmount, type TransactionRow } from '../transactions/model.ts';
 const props = defineProps<{
+  services?: ViewServices;
   rows: TransactionRow[];
   period: string;
   target: string | null;
@@ -14,6 +16,10 @@ const props = defineProps<{
   copy: (row: TransactionRow) => void;
 }>();
 const { locale, t } = useLocale();
+function copy(row: TransactionRow) {
+  if (props.services?.readOnly) return;
+  props.copy(row);
+}
 const date = (value?: string) => formatDateText(value, locale.value);
 const minor = (value?: number | null) =>
   value == null ? t('help.words.missing') : eur(value / 100, locale.value);
@@ -63,6 +69,7 @@ const sourceUrl = () => `/dashboard?period=${encodeURIComponent(props.period)}`;
               ><small>{{ row.counterparty_name || row.description || '' }}</small
               ><small
                 ><DocumentLabel
+                  :services="services"
                   :row="row"
                   :period="period"
                   :return-url="sourceUrl()"
@@ -93,6 +100,7 @@ const sourceUrl = () => `/dashboard?period=${encodeURIComponent(props.period)}`;
               }}</strong
               ><small
                 ><DocumentLabel
+                  :services="services"
                   :row="row"
                   :period="period"
                   :return-url="sourceUrl()"
@@ -132,7 +140,7 @@ const sourceUrl = () => `/dashboard?period=${encodeURIComponent(props.period)}`;
               <a
                 v-if="row.document_id"
                 class="text-button"
-                :href="`/api/document/${encodeURIComponent(row.document_id)}/content`"
+                :href="documentHref(services, row.document_id)"
                 target="_blank"
                 rel="noreferrer"
                 >{{ t('common.file') }}</a
@@ -141,7 +149,12 @@ const sourceUrl = () => `/dashboard?period=${encodeURIComponent(props.period)}`;
                 type="button"
                 class="copy-action-button"
                 :data-copy-transaction-id="row.transaction_id"
-                :title="t('common.copyToPeriod', { period: target! })"
+                :disabled="services?.readOnly"
+                :title="
+                  services?.readOnly
+                    ? t('demo.readOnlyReason')
+                    : t('common.copyToPeriod', { period: target! })
+                "
                 :aria-label="t('common.copyToPeriod', { period: target! })"
                 @click="copy(row)"
               >

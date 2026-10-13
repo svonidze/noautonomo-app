@@ -16,5 +16,11 @@
     "name": "English",
     "intl": "en-GB",
     "direction": "ltr"
+  },
+  {
+    "code": "es",
+    "name": "Español",
+    "intl": "es-ES",
+    "direction": "ltr"
   }
 ]

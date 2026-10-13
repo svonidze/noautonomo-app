@@ -15,7 +15,7 @@ import {
 } from '../../core/i18n.ts';
 import { readReviewDraft, writeReviewDraft, removeReviewDraft } from '../../core/drafts.ts';
 import { transactionDetail } from '../expense-detail/model.ts';
-import { followSpaLink } from '../../vue/services.ts';
+import { followSpaLink, documentHref, viewHref } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import DecisionField, { type DecisionFieldSpec } from './DecisionField.vue';
 import FxCard from './FxCard.vue';
@@ -59,6 +59,7 @@ onBeforeUnmount(() => {
   generation++;
 });
 function persist(packet: ReviewPacket, factsOnly = false) {
+  if (props.context.services.readOnly) return;
   writeReviewDraft(() => localStorage, {
     review_id: packet.review_id,
     transaction_id: packet.state.transaction.transaction_id,
@@ -104,11 +105,17 @@ async function load(factsOnly = false) {
       !props.context.knownPeriods.includes(packet.state.period.period_key)
     )
       throw new Error('review.invalidWorkItem');
-    if (packet.state.transaction.entry_type === 'expense' && packet.state.assets?.length === 1) {
+    if (
+      !context.services.readOnly &&
+      packet.state.transaction.entry_type === 'expense' &&
+      packet.state.assets?.length === 1
+    ) {
       packet.decision.asset_decision = 'asset';
       packet.decision.asset_id = packet.state.assets[0].asset_id;
     }
-    const draft = readReviewDraft(() => localStorage, context.transactionId);
+    const draft = context.services.readOnly
+      ? null
+      : readReviewDraft(() => localStorage, context.transactionId);
     if (draft)
       packet.decision = merge(
         packet.decision,
@@ -150,7 +157,9 @@ const packet = computed(() => item.value!.packet),
   decision = computed(() => packet.value.decision),
   state = computed(() => packet.value.state);
 const evaluation = computed(() => (item.value ? evaluate(item.value) : null));
-const disabled = computed(() => busy.value || !evaluation.value?.canApply);
+const disabled = computed(
+  () => props.context.services.readOnly || busy.value || !evaluation.value?.canApply,
+);
 const status = computed(() =>
   evaluation.value?.category === 'later'
     ? t('review.postingLater', { date: formatDateText(evaluation.value.availableOn, locale.value) })
@@ -417,6 +426,7 @@ const issueRows = computed(() =>
   }),
 );
 async function submit(outcome: 'approve' | 'reject') {
+  if (props.context.services.readOnly) return;
   if (!item.value || busy.value || (outcome === 'approve' && !evaluation.value?.canApply)) return;
   const context = props.context,
     revision = generation,
@@ -517,7 +527,7 @@ const retry = () =>
       <div class="review-workspace-header">
         <a
           class="secondary-button review-back-link"
-          :href="backUrl"
+          :href="viewHref(context.services, backUrl)"
           @click="followSpaLink($event, context.services.navigate)"
           >{{ t('review.workspaceBack') }}</a
         >
@@ -583,6 +593,7 @@ const retry = () =>
         :source-date="state.transaction.transaction_date"
         :entry-type="state.transaction.entry_type"
       />
+      <p v-if="context.services.readOnly" class="review-alert">{{ t('demo.readOnlyReason') }}</p>
       <form id="review-form" class="review-form" @submit.prevent="submit('approve')">
         <section class="panel review-panel">
           <header class="panel-header">
@@ -641,7 +652,7 @@ const retry = () =>
             <a
               v-if="state.document?.document_id"
               class="text-button"
-              :href="`/api/document/${encodeURIComponent(state.document.document_id)}/content`"
+              :href="documentHref(context.services, state.document.document_id)"
               target="_blank"
               rel="noreferrer"
               >{{ t('review.documentLink') }}</a
@@ -774,7 +785,8 @@ const retry = () =>
                 ><select
                   id="review-reject-document-valid"
                   v-model="ui.rejectDocumentValid"
-                  :disabled="busy"
+                  :disabled="context.services.readOnly || busy"
+                  :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
                 >
                   <option value=""></option>
                   <option value="true">{{ t('common.yes') }}</option>
@@ -786,7 +798,8 @@ const retry = () =>
                   id="review-reject-reason"
                   v-model="ui.rejectReason"
                   rows="2"
-                  :disabled="busy"
+                  :disabled="context.services.readOnly || busy"
+                  :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
                 ></textarea>
               </label>
               <p v-if="inline('reject')" class="review-inline-error" role="alert">
@@ -797,8 +810,9 @@ const retry = () =>
                   type="button"
                   class="danger-button"
                   id="review-reject-button"
-                  :disabled="busy"
+                  :disabled="context.services.readOnly || busy"
                   @click="submit('reject')"
+                  :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
                 >
                   {{ t(busy ? 'review.submitting' : 'review.rejectConfirm') }}
                 </button>
@@ -818,8 +832,9 @@ const retry = () =>
               type="submit"
               class="primary-button"
               id="review-primary-button"
-              :disabled="disabled"
+              :disabled="context.services.readOnly || disabled"
               :data-locked="!evaluation.canApply || undefined"
+              :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
             >
               {{ t(busy ? 'review.submitting' : 'review.confirmAction') }}
             </button>

@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { eur, formatDateText } from '../../core/format.ts';
 import { formatMessage, messageIds } from '../../core/i18n.ts';
-import { followSpaLink } from '../../vue/services.ts';
+import { followSpaLink, documentHref, viewHref } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import ChartHost from '../../charts/ChartHost.vue';
 import type { ReviewRow, ReviewOverviewContext } from './model.ts';
@@ -121,14 +121,19 @@ const tax = (row: ReviewRow) =>
               <a
                 v-if="row.document_id"
                 class="text-button"
-                :href="`/api/document/${encodeURIComponent(row.document_id)}/content`"
+                :href="documentHref(context.services, row.document_id)"
                 target="_blank"
                 rel="noreferrer"
                 >{{ t('review.documentLink') }}</a
               ><a
                 v-if="row.lifecycle_status === 'needs_review'"
                 class="secondary-button compact-button"
-                :href="`/review/${encodeURIComponent(row.transaction_id)}?period=${encodeURIComponent(context.period)}`"
+                :href="
+                  viewHref(
+                    context.services,
+                    `/review/${encodeURIComponent(row.transaction_id)}?period=${encodeURIComponent(context.period)}`,
+                  )
+                "
                 :data-open-review-id="`transaction:${row.transaction_id}`"
                 @click="followSpaLink($event, context.services.navigate)"
                 >{{ t('review.openWorkspace') }}</a

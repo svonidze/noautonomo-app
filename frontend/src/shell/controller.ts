@@ -8,7 +8,7 @@ import {
   watch,
   type Component,
 } from 'vue';
-import { router } from './router.ts';
+import { useAppRuntime } from './runtime.ts';
 import {
   parseRoute,
   routeUrl,
@@ -19,13 +19,10 @@ import {
   type Period,
   type ScreenRoute,
 } from './routes.ts';
-import { request, refreshCalculation } from './request.ts';
 import { connectHelp, shellHelp } from './help-history.ts';
 import {
   getLocale,
   setLocale,
-  loadLocale,
-  storeLocale,
   message,
   localeRegistry,
   formatMessage,
@@ -78,8 +75,10 @@ interface Position {
   id: string | null;
 }
 export function useShell() {
+  const runtime = useAppRuntime();
+  const { router, request, refreshCalculation } = runtime;
   const { locale } = useLocale();
-  setLocale(loadLocale(() => localStorage));
+  setLocale(runtime.initialLocale());
   const bootstrap = shallowRef<Bootstrap>(),
     period = ref(''),
     route = shallowRef<ScreenRoute | null>(),
@@ -102,7 +101,7 @@ export function useShell() {
   // Screen identity for late intake callbacks: path and period only, so a list
   // filter typed while an upload runs does not orphan the accepted document.
   const locationKey = () =>
-    `${window.location.pathname}|${new URLSearchParams(window.location.search).get('period') || ''}`;
+    `${router.currentRoute.value.path}|${router.currentRoute.value.query.period || ''}`;
   const canLeave = () => view.value?.canLeave?.() ?? true;
   const notify = (value: UiMessage | string, error = false) => {
     toast.value = { value, error };
@@ -146,6 +145,10 @@ export function useShell() {
   function navigate(url: string, replace = false) {
     const target = new URL(url, window.location.origin);
     if (target.origin !== window.location.origin) return;
+    if (runtime.readOnly && target.pathname === '/demo/' && target.hash.startsWith('#/')) {
+      navigate(target.hash.slice(1), replace);
+      return;
+    }
     void router[replace ? 'replace' : 'push']({
       path: target.pathname,
       query: Object.fromEntries(target.searchParams),
@@ -189,9 +192,10 @@ export function useShell() {
     if (bootstrap.value) void showRoute();
   });
   function changeLocale(value: string) {
+    if (!runtime.locales.some((item) => item.code === value)) return;
     if (route.value?.view === 'settings' && !canLeave()) return;
     setLocale(value);
-    storeLocale(() => localStorage, value);
+    runtime.saveLocale(value);
   }
   watch(
     locale,
@@ -199,12 +203,15 @@ export function useShell() {
       document.documentElement.lang = value;
       document.documentElement.dir =
         localeRegistry.find((item) => item.code === value)?.direction || 'ltr';
-      document.title = formatMessage('app.title', {}, value);
+      document.title =
+        (runtime.readOnly ? `${formatMessage('demo.banner', {}, value)} · ` : '') +
+        formatMessage('app.title', {}, value);
       shellHelp().setLocale(value);
     },
     { immediate: true },
   );
   function copy(row: TransactionRow, sourcePeriod: string) {
+    if (runtime.readOnly) return;
     const target = copyTarget(bootstrap.value?.periods || [], !!bootstrap.value?.intake_enabled);
     if (!copyable(row, target) || !target) return;
     const result = buildIncomeCopy(row, {
@@ -217,6 +224,7 @@ export function useShell() {
     void intake.value?.focusDocumentNumber();
   }
   function add() {
+    if (runtime.readOnly) return;
     if (!bootstrap.value?.intake_enabled || !period.value) return;
     void intake.value?.open(route.value?.view === 'income' ? 'income_invoice' : 'expense_invoice', {
       targetPeriodKey: period.value,
@@ -281,8 +289,15 @@ export function useShell() {
       return;
     }
     const sourcePeriod = period.value,
-      target = copyTarget(data.periods, data.intake_enabled);
-    const services = { request, navigate: (url: string) => navigate(url) };
+      target = copyTarget(data.periods, data.intake_enabled || runtime.readOnly);
+    const services = {
+      request,
+      navigate: (url: string) => navigate(url),
+      readOnly: runtime.readOnly,
+      locales: runtime.locales,
+      href: runtime.href,
+      documentUrl: runtime.documentUrl,
+    };
     const settled = () => {
       if (active && version === generation) loading.value = false;
     };
@@ -401,13 +416,13 @@ export function useShell() {
       mount(TransactionLists, {
         kind: next.view === 'expenses' ? 'expense' : 'income',
         period: sourcePeriod,
-        query: next.view === 'expenses' ? query.get('q') || '' : '',
+        query: next.view === 'expenses' || runtime.readOnly ? query.get('q') || '' : '',
         copyTarget: target,
         services,
         settled,
         queryChanged(value) {
-          if (owns() && next.view === 'expenses')
-            void replacePresentation(routeUrl('expenses', sourcePeriod, { q: value }));
+          if (owns() && (next.view === 'expenses' || runtime.readOnly))
+            void replacePresentation(routeUrl(next.view, sourcePeriod, { q: value }));
         },
         openIntake: add,
         copy: (row) => copy(row, sourcePeriod),
@@ -425,6 +440,7 @@ export function useShell() {
       } satisfies OverviewContext);
   }
   async function refresh() {
+    if (runtime.readOnly) return;
     if (!canLeave() || busy.value) return;
     const version = generation,
       captured = period.value;
@@ -486,7 +502,7 @@ export function useShell() {
     }
   };
   onMounted(() => {
-    connectHelp((url) => navigate(url));
+    connectHelp((url) => navigate(url), router, runtime.href, runtime.documentUrl);
     window.addEventListener('beforeunload', beforeUnload);
     void init();
   });
@@ -500,6 +516,7 @@ export function useShell() {
     disposeHelp();
   });
   return {
+    runtime,
     bootstrap,
     period,
     reviewTab,

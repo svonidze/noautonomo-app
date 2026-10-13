@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useLocale } from '../../vue/locale.ts';
 import { eur, formatDateText } from '../../core/format.ts';
-import { followSpaLink } from '../../vue/services.ts';
+import { followSpaLink, type ViewServices, documentHref, viewHref } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import { contactUrl, type ContactOperation } from './model.ts';
 const props = defineProps<{
+  services?: ViewServices;
   rows: ContactOperation[];
   contactId: string;
   period: string;
@@ -48,15 +49,17 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.navigate);
             }}
           </td>
           <td class="cell-primary" :data-label="t(keys[2])">
-            <a v-if="row.entry_type === 'expense'" :href="expenseUrl(row)" @click="navigate">{{
-              row.description || t('expense.title')
-            }}</a
+            <a
+              v-if="row.entry_type === 'expense'"
+              :href="viewHref(services, expenseUrl(row))"
+              @click="navigate"
+              >{{ row.description || t('expense.title') }}</a
             ><template v-else>{{ row.description || '—' }}</template>
           </td>
           <td :data-label="t(keys[3])">
             <a
               v-if="sourceAvailable(row)"
-              :href="`/api/document/${encodeURIComponent(row.document_id!)}/content`"
+              :href="documentHref(services, row.document_id!)"
               target="_blank"
               rel="noreferrer"
               >{{ row.document_number || t('common.file') }}</a

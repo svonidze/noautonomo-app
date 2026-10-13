@@ -1,0 +1,9 @@
+{
+  "app.inline.depreciationPosted": "Amortización contabilizada.",
+  "app.inline.enGb": "es-ES",
+  "app.inline.equipmentSchedule": "Calendario de equipos",
+  "app.inline.postedCalculationRefreshNeedsRetry": "Contabilizado; hay que reintentar la actualización del cálculo.",
+  "app.inline.postedCalculationRefreshOrInboxCleanupIsPending": "Contabilizado; queda pendiente actualizar el cálculo o limpiar la bandeja de entrada.",
+  "app.inline.retryFollowUp": "Reintentar tareas posteriores",
+  "app.title": "Contabilidad de autónomos"
+}

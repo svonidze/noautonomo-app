@@ -57,6 +57,10 @@ explains what is sent and when.
 
 ## More guidance
 
+The [public read-only demo](docs/development/PUBLIC_DEMO.md) runs the same application
+screens and backend against an isolated synthetic SQLite database. It cannot
+upload, edit, post or submit anything. Document links open one blank sample PDF.
+
 Browse the [documentation](docs/README.md) for help with statuses, exchange rates,
 VAT checks and accounting corrections.
 

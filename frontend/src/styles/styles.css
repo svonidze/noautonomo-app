@@ -226,7 +226,8 @@ button {
 
 .locale-control {
   display: inline-grid;
-  grid-template-columns: repeat(2, 34px);
+  grid-auto-flow: column;
+  grid-auto-columns: 34px;
   gap: 2px;
   min-height: 38px;
   padding: 3px;
@@ -2787,3 +2788,20 @@ textarea:focus {
   .aeat-documents-table td { display: grid; grid-template-columns: minmax(7rem, 35%) 1fr; gap: .75rem; border: 0; }
   .aeat-documents-table td::before { content: attr(data-label); color: var(--muted); font-weight: 600; }
 }
+
+/* Only the disclosure belongs to the demo. Product layouts use shared styles. */
+.public-demo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 12px 24px;
+  background: #e8f2eb;
+  color: #17442d;
+  border-bottom: 1px solid #b7d2c1;
+  font-size: 13px;
+}
+.public-demo-banner a { color: inherit; text-decoration: underline; }
+.public-demo-banner a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.public-demo-banner strong { font-weight: 700; }
+@media (max-width: 760px) { .public-demo-banner { padding: 10px 16px; } }

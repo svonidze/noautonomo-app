@@ -1,0 +1,6 @@
+{
+  "toolbar.period": "Periodo",
+  "toolbar.periodAria": "Periodo fiscal",
+  "toolbar.periodLocked": "El periodo está bloqueado mientras hay una ficha abierta.",
+  "toolbar.refresh": "Actualizar cálculo"
+}

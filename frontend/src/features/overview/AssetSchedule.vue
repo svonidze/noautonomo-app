@@ -8,6 +8,7 @@ import type { ViewServices } from '../../vue/services.ts';
 import type { AssetScheduleData, ScheduleRow } from './model.ts';
 const props = defineProps<{
   assetId: string;
+  readOnly?: boolean;
   request: ViewServices['request'];
   refreshAssets: () => Promise<void>;
 }>();
@@ -52,6 +53,7 @@ watch(
   { immediate: true },
 );
 async function post(row: ScheduleRow) {
+  if (props.readOnly) return;
   if (busy.value || postedButStale.value) return;
   const revision = generation;
   busy.value = true;
@@ -102,6 +104,7 @@ const money = (value: number) =>
 <template>
   <section class="panel wf-fields">
     <h3>{{ t('workflow.scheduleAndRecognizedDepreciation') }}</h3>
+    <p v-if="readOnly">{{ t('demo.readOnlyReason') }}</p>
     <div role="status" id="wf-schedule-status">{{ messageText(status, locale) }}</div>
     <p v-if="error && !data" role="alert">{{ errorMessage(error, locale) }}</p>
     <p v-else-if="!data" role="status">{{ t('common.loading') }}</p>
@@ -135,7 +138,8 @@ const money = (value: number) =>
                 v-if="row.can_post"
                 :data-recognize="row.amortization_entry_id"
                 type="button"
-                :disabled="busy || postedButStale"
+                :disabled="readOnly || busy || postedButStale"
+                :title="readOnly ? t('demo.readOnlyReason') : undefined"
                 @click="post(row)"
               >
                 {{ t('workflow.post') }} {{ row.period_key }}</button

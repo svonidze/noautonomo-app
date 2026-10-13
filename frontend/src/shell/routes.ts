@@ -54,7 +54,7 @@ export function routeUrl(
   const query = new URLSearchParams();
   if (period && !['settings', 'contacts', 'aeat-documents'].includes(view))
     query.set('period', period);
-  if (view === 'expenses' && options.q) query.set('q', options.q);
+  if ((view === 'expenses' || view === 'income') && options.q) query.set('q', options.q);
   if (view === 'review' && !options.id && options.tab && options.tab !== 'queue')
     query.set('tab', options.tab);
   if (options.id && options.returnTo) query.set('returnTo', options.returnTo);

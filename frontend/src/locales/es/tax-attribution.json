@@ -1,0 +1,12 @@
+{
+  "taxAttribution.title": "Imputación fiscal",
+  "taxAttribution.irpfDate": "Fecha de imputación al IRPF",
+  "taxAttribution.ivaDate": "Fecha de imputación al IVA",
+  "taxAttribution.income": "Ingreso de IRPF",
+  "taxAttribution.ivaBase": "Base imponible de IVA",
+  "taxAttribution.pending": "Importe pendiente de confirmación",
+  "taxAttribution.fx": "Ganancias y pérdidas de cambio realizadas",
+  "taxAttribution.history": "Cálculo corregido; se conservan las declaraciones presentadas.",
+  "taxAttribution.stale": "Los datos de origen han cambiado. Revisa de nuevo esta imputación fiscal.",
+  "taxAttribution.documentBasis": "Los totales de documentos usan las fechas de operación. Los cálculos fiscales usan las fechas de IRPF e IVA revisadas."
+}

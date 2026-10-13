@@ -22,6 +22,7 @@ REVIEWED_UI_VALUES = (
     ("personal-field", "Synthetic profile"),
     ("personal-field", "Synthetic other"),
     ("personal-field", "Synthetic saved"),
+    ("personal-field", "Marina Example (demo)"),
 )
 
 

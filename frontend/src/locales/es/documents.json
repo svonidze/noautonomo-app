@@ -1,0 +1,11 @@
+{
+  "documents.counterparty": "Contraparte",
+  "documents.type": "Tipo",
+  "documents.types.bank_statement": "extracto bancario",
+  "documents.types.expense_invoice": "factura de proveedor",
+  "documents.types.income_invoice": "factura emitida",
+  "documents.types.other": "otro documento",
+  "documents.types.other_document": "otro documento",
+  "documents.types.receipt": "recibo",
+  "documents.types.tax_report": "informe fiscal"
+}

@@ -104,6 +104,7 @@ const counts = computed(() => ({
 }));
 const canPost = computed(
   () =>
+    !props.context.services.readOnly &&
     !!data.value &&
     !loading.value &&
     !error.value &&
@@ -178,6 +179,7 @@ function closed() {
   opener = undefined;
 }
 async function retryRefresh() {
+  if (props.context.services.readOnly) return;
   if (refreshing.value) return;
   refreshing.value = true;
   const period = props.context.period,
@@ -195,6 +197,7 @@ async function retryRefresh() {
   }
 }
 async function submit() {
+  if (props.context.services.readOnly) return;
   if (
     submitting.value ||
     !frozen.value?.rows.length ||
@@ -301,6 +304,7 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
       >
         <ReviewQueue v-if="selected === 'queue'" :rows="data.rows" :context="context" />
         <ReviewDocuments
+          :services="context.services"
           v-else-if="selected === 'documents'"
           :documents="data.documents"
           :issues="data.issues"
@@ -320,7 +324,8 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
                 type="button"
                 class="secondary-button"
                 data-posting-action="retry-refresh"
-                :disabled="refreshing"
+                :disabled="context.services.readOnly || refreshing"
+                :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
                 @click="retryRefresh"
               >
                 {{ t('review.postingRetryRefresh') }}
@@ -355,12 +360,15 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
                 class="primary-button"
                 data-posting-action="open-confirm"
                 :disabled="!canPost"
+                :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
                 @click="open"
               >
                 {{ t('review.postConfirmAction') }}
               </button>
             </div>
-            <p class="posting-action-hint">{{ hint }}</p>
+            <p class="posting-action-hint">
+              {{ context.services.readOnly ? t('demo.readOnlyReason') : hint }}
+            </p>
             <PostingRows
               :title="t('review.postingDeferred')"
               :rows="data.preview.deferred"
@@ -436,7 +444,8 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
               id="vue-confirm-posting"
               type="submit"
               class="primary-button"
-              :disabled="submitting || !frozen?.rows.length"
+              :disabled="context.services.readOnly || submitting || !frozen?.rows.length"
+              :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
             >
               {{ t('review.postConfirmAction') }}
             </button>

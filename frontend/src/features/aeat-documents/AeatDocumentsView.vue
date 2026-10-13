@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { viewHref } from '../../vue/services.ts';
 import { computed, onBeforeUnmount, reactive, ref, shallowRef } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { formatDateText } from '../../core/format.ts';
@@ -126,6 +127,7 @@ function invalidatePreview() {
   preview.value = undefined;
 }
 async function submit(dryRun: boolean) {
+  if (props.context.services.readOnly) return;
   if (saving.value) return;
   saving.value = true;
   try {
@@ -146,10 +148,12 @@ async function submit(dryRun: boolean) {
   }
 }
 function chooseFile(event: Event) {
+  if (props.context.services.readOnly) return;
   file.value = (event.target as HTMLInputElement).files?.[0];
   invalidatePreview();
 }
 function chooseCase() {
+  if (props.context.services.readOnly) return;
   const row = existingCases.value.find((value) => value.aeat_case_id === upload.case_id);
   if (!row) return invalidatePreview();
   Object.assign(upload, {
@@ -165,6 +169,7 @@ function chooseCase() {
   invalidatePreview();
 }
 function openStatus(row: AeatDocumentRow) {
+  if (props.context.services.readOnly) return;
   if (!row.aeat_case_id || row.case_row_version == null) return;
   selected.value = row;
   statusForm.status = statusTransitions[row.status]?.[0] || 'closed';
@@ -174,6 +179,7 @@ function openStatus(row: AeatDocumentRow) {
   statusDialog.value?.showModal();
 }
 async function saveStatus() {
+  if (props.context.services.readOnly) return;
   const row = selected.value;
   if (!row?.aeat_case_id || row.case_row_version == null || saving.value) return;
   saving.value = true;
@@ -331,7 +337,7 @@ async function saveStatus() {
                 <a
                   v-if="row.content_url && row.source_available"
                   class="text-button"
-                  :href="row.content_url"
+                  :href="viewHref(context.services, row.content_url)"
                   target="_blank"
                   rel="noreferrer"
                   >{{ t('common.file') }}</a
@@ -343,6 +349,8 @@ async function saveStatus() {
                   "
                   type="button"
                   class="text-button"
+                  :disabled="context.services.readOnly"
+                  :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
                   @click="openStatus(row)"
                 >
                   {{ t('aeatDocuments.addStatus') }}
@@ -359,6 +367,7 @@ async function saveStatus() {
 
     <details class="panel aeat-upload-panel">
       <summary>{{ t('aeatDocuments.add') }}</summary>
+      <p v-if="context.services.readOnly">{{ t('demo.readOnlyReason') }}</p>
       <form
         class="form-grid"
         @submit.prevent="submit(false)"
@@ -367,7 +376,11 @@ async function saveStatus() {
       >
         <label
           ><span>{{ t('aeatDocuments.existingCase') }}</span
-          ><select v-model="upload.case_id" @change="chooseCase">
+          ><select
+            v-model="upload.case_id"
+            @change="chooseCase"
+            :disabled="context.services.readOnly"
+          >
             <option value="">{{ t('aeatDocuments.newCase') }}</option>
             <option
               v-for="row in existingCases"
@@ -380,15 +393,20 @@ async function saveStatus() {
         >
         <label
           ><span>{{ t('aeatDocuments.pdf') }}</span
-          ><input type="file" accept="application/pdf,.pdf" required @change="chooseFile"
+          ><input
+            type="file"
+            accept="application/pdf,.pdf"
+            required
+            @change="chooseFile"
+            :disabled="context.services.readOnly"
         /></label>
         <label
           ><span>{{ t('aeatDocuments.caseTitle') }}</span
-          ><input v-model="upload.title"
+          ><input v-model="upload.title" :readonly="context.services.readOnly"
         /></label>
         <label
           ><span>{{ t('aeatDocuments.procedure') }}</span
-          ><select v-model="upload.procedure_kind">
+          ><select v-model="upload.procedure_kind" :disabled="context.services.readOnly">
             <option value="roi_registration">ROI</option>
             <option value="periodic_filing">{{ t('aeatDocuments.procedure.periodic') }}</option>
             <option value="rectification">{{ t('aeatDocuments.procedure.rectification') }}</option>
@@ -397,15 +415,19 @@ async function saveStatus() {
         >
         <label
           ><span>{{ t('aeatDocuments.procedureCode') }}</span
-          ><input v-model="upload.procedure_code"
+          ><input v-model="upload.procedure_code" :readonly="context.services.readOnly"
         /></label>
         <label
           ><span>Modelo</span
-          ><input v-model="upload.form_code" inputmode="numeric" pattern="[0-9]{3}"
+          ><input
+            v-model="upload.form_code"
+            inputmode="numeric"
+            pattern="[0-9]{3}"
+            :readonly="context.services.readOnly"
         /></label>
         <label
           ><span>{{ t('aeatDocuments.kind') }}</span
-          ><select v-model="upload.document_kind">
+          ><select v-model="upload.document_kind" :disabled="context.services.readOnly">
             <option
               v-for="value in [
                 'submission_receipt',
@@ -424,7 +446,7 @@ async function saveStatus() {
         >
         <label
           ><span>{{ t('aeatDocuments.status') }}</span
-          ><select v-model="upload.status">
+          ><select v-model="upload.status" :disabled="context.services.readOnly">
             <option
               v-for="value in [
                 'submitted',
@@ -443,29 +465,49 @@ async function saveStatus() {
         >
         <label
           ><span>{{ t('aeatDocuments.occurredAt') }}</span
-          ><input v-model="upload.occurred_at" type="datetime-local" step="1"
+          ><input
+            v-model="upload.occurred_at"
+            type="datetime-local"
+            step="1"
+            :readonly="context.services.readOnly"
         /></label>
         <label
           ><span>{{ t('aeatDocuments.requestedEffective') }}</span
-          ><input v-model="upload.requested_effective_on" type="date"
+          ><input
+            v-model="upload.requested_effective_on"
+            type="date"
+            :readonly="context.services.readOnly"
         /></label>
-        <label><span>Referencia</span><input v-model="upload.submission_reference" /></label>
-        <label><span>Justificante</span><input v-model="upload.justificante" /></label>
-        <label><span>CSV</span><input v-model="upload.verification_code" /></label>
+        <label
+          ><span>Referencia</span
+          ><input v-model="upload.submission_reference" :readonly="context.services.readOnly"
+        /></label>
+        <label
+          ><span>Justificante</span
+          ><input v-model="upload.justificante" :readonly="context.services.readOnly"
+        /></label>
+        <label
+          ><span>CSV</span
+          ><input v-model="upload.verification_code" :readonly="context.services.readOnly"
+        /></label>
         <label class="full-width"
           ><span>{{ t('aeatDocuments.notes') }}</span
-          ><textarea v-model="upload.notes"></textarea>
+          ><textarea v-model="upload.notes" :readonly="context.services.readOnly"></textarea>
         </label>
         <div class="dialog-actions full-width">
           <button
             type="button"
             class="secondary-button"
-            :disabled="saving || !file"
+            :disabled="context.services.readOnly || saving || !file"
             @click.stop="submit(true)"
           >
             {{ t('aeatDocuments.preview') }}
           </button>
-          <button type="submit" class="primary-button" :disabled="saving || !preview">
+          <button
+            type="submit"
+            class="primary-button"
+            :disabled="context.services.readOnly || saving || !preview"
+          >
             {{ t('aeatDocuments.save') }}
           </button>
         </div>
@@ -491,7 +533,7 @@ async function saveStatus() {
         <div class="form-grid">
           <label
             ><span>{{ t('aeatDocuments.status') }}</span
-            ><select v-model="statusForm.status">
+            ><select v-model="statusForm.status" :disabled="context.services.readOnly">
               <option v-for="value in nextStatuses" :key="value" :value="value">
                 {{ label(`aeatDocuments.status.${value}`) }}
               </option>
@@ -499,21 +541,32 @@ async function saveStatus() {
           >
           <label
             ><span>{{ t('aeatDocuments.occurredAt') }}</span
-            ><input v-model="statusForm.occurred_at" type="datetime-local" required
+            ><input
+              v-model="statusForm.occurred_at"
+              type="datetime-local"
+              required
+              :readonly="context.services.readOnly"
           /></label>
           <label class="full-width"
             ><span>{{ t('aeatDocuments.evidenceReference') }}</span
-            ><input v-model="statusForm.evidence_reference" required
+            ><input
+              v-model="statusForm.evidence_reference"
+              required
+              :readonly="context.services.readOnly"
           /></label>
           <label class="full-width"
             ><span>{{ t('aeatDocuments.notes') }}</span
-            ><textarea v-model="statusForm.notes"></textarea>
+            ><textarea v-model="statusForm.notes" :readonly="context.services.readOnly"></textarea>
           </label>
         </div>
         <footer class="dialog-actions">
           <button type="button" class="secondary-button" @click="statusDialog?.close()">
             {{ t('common.cancel') }}</button
-          ><button type="submit" class="primary-button" :disabled="saving">
+          ><button
+            type="submit"
+            class="primary-button"
+            :disabled="context.services.readOnly || saving"
+          >
             {{ t('common.save') }}
           </button>
         </footer>

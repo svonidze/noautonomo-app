@@ -1,5 +1,6 @@
 import { expect, test, vi } from 'vitest';
-import { router } from '../../src/shell/router.ts';
+import { createProductionRouter } from '../../src/shell/router.ts';
+const router = createProductionRouter();
 import { connectHelp, shellHelp } from '../../src/shell/help-history.ts';
 import type { HelpNavigation } from '../../src/help/registry.ts';
 test('same-URL help cleanup preserves Router and contact custom state', async () => {
@@ -11,7 +12,7 @@ test('same-URL help cleanup preserves Router and contact custom state', async ()
     path: '/contacts/11111111-1111-4111-8111-111111111111',
     state: { contactGlobalPeriod: '2026-Q2' },
   });
-  connectHelp(vi.fn());
+  connectHelp(vi.fn(), router);
   navigation.push('synthetic-help');
   await vi.waitFor(() => expect(history.state.accountingHelp).toBe('synthetic-help'));
   const position = history.state.position;

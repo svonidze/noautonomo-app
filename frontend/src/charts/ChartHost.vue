@@ -13,6 +13,8 @@ const props = defineProps<{
   analytics?: Analytics;
   failed?: boolean;
   revision?: number;
+  spec?: ChartSpec;
+  labels?: { expand: string; close: string; loadError: string };
 }>();
 const { locale, t } = useLocale();
 const host = ref<HTMLElement>(),
@@ -33,8 +35,10 @@ const render = computed(() =>
       ? renderHorizontalBars
       : renderCartesian,
 );
-const spec = computed(() =>
-  source.value ? createChartBuilders(locale.value)[props.kind](source.value) : null,
+const spec = computed(
+  () =>
+    props.spec ??
+    (source.value ? createChartBuilders(locale.value)[props.kind](source.value) : null),
 );
 function paint(container: HTMLElement | undefined, expanded = false) {
   if (!container || !spec.value) return;
@@ -42,7 +46,8 @@ function paint(container: HTMLElement | undefined, expanded = false) {
     details = container.querySelector('details');
   const width = Math.round(container.getBoundingClientRect().width) - 28;
   const value: ChartSpec = { ...spec.value, ...(width > 0 ? { width } : {}) };
-  if (!expanded) value.expandAction = { label: t('charts.expand'), handler: open };
+  if (!expanded)
+    value.expandAction = { label: props.labels?.expand ?? t('charts.expand'), handler: open };
   render.value(container, value);
   if (!expanded && opened.value)
     opener = container.querySelector<HTMLElement>('.chart-expand-button') || undefined;
@@ -126,7 +131,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="chart-slot">
     <div v-if="failure || failed" class="empty-state chart-empty-state">
-      {{ t('charts.loadError') }}
+      {{ labels?.loadError ?? t('charts.loadError') }}
     </div>
     <div ref="host" v-show="!failure && !failed"></div>
     <Teleport to="body"
@@ -142,7 +147,12 @@ onBeforeUnmount(() => {
       >
         <header class="dialog-header">
           <h2 :id="`vue-chart-title-${kind}`">{{ spec?.title || '' }}</h2>
-          <button type="button" class="icon-button" :aria-label="t('common.close')" @click="close">
+          <button
+            type="button"
+            class="icon-button"
+            :aria-label="labels?.close ?? t('common.close')"
+            @click="close"
+          >
             ×
           </button>
         </header>

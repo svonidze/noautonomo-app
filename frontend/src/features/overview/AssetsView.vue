@@ -172,6 +172,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
         >
         <div id="asset-plan-detail">
           <AssetSchedule
+            :read-only="context.services.readOnly"
             v-if="selected"
             :key="selected"
             :asset-id="selected"

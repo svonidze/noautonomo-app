@@ -36,7 +36,7 @@ const kind = ref<IntakeKind>('expense_invoice'),
   pickerEnabled = ref(false),
   dragging = ref(false);
 const accepted = ref(false),
-  locked = computed(() => busy.value || accepted.value);
+  locked = computed(() => props.services.readOnly || busy.value || accepted.value);
 const selectedFile = shallowRef<File>(),
   folder = shallowRef<Folder>(),
   status = shallowRef<UiMessage | string>(''),
@@ -69,10 +69,12 @@ function deliver() {
     props.services.accepted(pending.result);
 }
 function flushDraft(force = false) {
+  if (props.services.readOnly) return;
   clearTimeout(draftTimer);
   if (form.value && (touched || force)) saveDraft(readValues(form.value.elements));
 }
 async function open(value: IntakeKind, options: IntakeOptions) {
+  if (props.services.readOnly) return;
   if (busy.value) {
     await nextTick();
     if (!dialog.value?.open) dialog.value?.showModal();
