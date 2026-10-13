@@ -164,12 +164,35 @@ def test_period_preparation_writes_calculations_cash_and_calendar(tmp_path) -> N
         ("130", {"values": {"result": "137.25"}}, "review required"),
         ("130", {"blocked": True, "reason": "Synthetic review pending"}, "review required"),
         ("130", {"blocked": True, "values": {"19": "137.25"}}, "review required"),
-        ("303", {"values": {"71": "999.00", "result": Decimal("-23.45")}}, "-23.45"),
-        ("303", {"values": {"71": "999.00", "result": Decimal("0.00")}}, "0.00"),
-        ("303", {"values": {"71": "137.25"}}, "review required"),
-        ("111", {"values": {"withholding": "999.00", "result": "137.25"}}, "137.25"),
-        ("115", {"values": {"withholding": "999.00", "result": "137.25"}}, "137.25"),
-        ("216", {"values": {"withholding": "999.00", "result": "137.25"}}, "137.25"),
+        ("303", {"values": {"71": Decimal("137.25"), "result": Decimal("137.25")}}, "137.25"),
+        ("303", {"values": {"71": Decimal("-23.45"), "result": Decimal("-23.45")}}, "-23.45"),
+        ("303", {"values": {"71": Decimal("0.00"), "result": Decimal("0.00")}}, "0.00"),
+        pytest.param(
+            "303", {"values": {"71": "999.00", "result": Decimal("-23.45")}}, "-23.45",
+            id="303-preserves-result-precedence",
+        ),
+        pytest.param(
+            "303", {"values": {"71": "999.00", "result": Decimal("0.00")}}, "0.00",
+            id="303-preserves-zero-result-precedence",
+        ),
+        pytest.param(
+            "303", {"values": {"71": "137.25"}}, "review required",
+            id="303-preserves-missing-result-review",
+        ),
+        pytest.param(
+            "111", {"values": {"base": "999.00", "recipient_count": "1", "withholding": "137.25"}},
+            "review required", id="111-preserves-withholding-only-output",
+        ),
+        pytest.param(
+            "115", {"values": {"base": "999.00", "recipient_count": "1", "withholding": "137.25"}},
+            "review required", id="115-preserves-withholding-only-output",
+        ),
+        pytest.param(
+            "216", {"values": {
+                "base": "999.00", "recipient_count": "1", "withholding": "137.25",
+                "income_count": "1", "negative_return": "no",
+            }}, "review required", id="216-preserves-withholding-only-output",
+        ),
         ("349", {"values": {}}, "review required"),
     ],
 )
