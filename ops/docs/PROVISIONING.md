@@ -108,6 +108,10 @@ before relying on a private-root archive to recover this config.
 
 ## Google Drive storage choices
 
+The [user guide](../../docs/user/GOOGLE_DRIVE.md) describes the current intake
+behavior. Keep installation-specific folder IDs, URLs, account identities and
+verification receipts in the private installation record, outside Git.
+
 ### Existing originals and URL adoption
 
 Leave existing files in their understandable archive folders. The Google
@@ -147,12 +151,41 @@ as a shape, not a command to recreate the old managed archive. Keep the token
 in a `file:` credential reference and use `drive.file`, not broad `drive`.
 Do not use a service-account writer for My Drive.
 
-Picker allows a folder override for an upload. New objects use original names
-and period/document-type structure. Without a configured upload destination,
-keep local primary plus a verified Yandex mirror; do not silently fall back to
-the retired managed folder. A backend's name does not promote it to primary:
-the particular replica must be verified. Do not run a broad Google reconcile
-as an authentication smoke test; it can upload files.
+The web upload handler requires an enabled `read_write` Google backend whose
+configuration explicitly contains `credential_mode: oauth`. An adapter's OAuth
+default alone does not satisfy that handler's writer-selection query.
+
+For an existing archive, first select the intended folder through Picker with
+the configured writer, then verify that same folder ID through the writer's
+Drive API credentials and confirm `capabilities.canAddChildren`. Update the
+writer's `config.root_folder_id` through the supported storage backend interface
+only after that check succeeds, retaining the previous configuration privately.
+The archive reader and OAuth writer can point to the same folder; keep their
+credentials and access modes separate. Verify their access independently.
+Do not create a second archive merely because the writer cannot see the first.
+
+In the current web form, selecting a folder sends `google_folder_id` with the
+upload. Only that explicit selection triggers synchronous Google and Yandex
+copy verification after local intake. New Google objects use original names
+and period/document-type structure. Without a selected folder, the web handler
+keeps the accepted local copy and does not synchronously invoke those cloud
+copies. The configured backup/evidence-copy and reconciliation job supplies
+Yandex protection separately; verify its coverage before relying on it.
+
+The backend's `root_folder_id` is the destination used by storage operations
+without an explicit folder override. Configuring it does not preselect a folder
+in the web form or enable automatic Google copying of every upload. Do not
+silently fall back to a retired managed folder. A backend's name does not
+promote it to primary: the particular replica must be verified. Do not run a
+broad Google reconcile as an authentication smoke test; it can upload files.
+
+After an authorized configuration change, verify a small explicitly identified
+synthetic file through the production adapter in the intended folder, download
+it and compare SHA-256 and size. Record the file ID, parent folder ID, test time
+and the verification boundary privately. A provider upload test is not a web
+intake test. Do not create or post an accounting test document merely to test
+storage. Backend configuration is read from SQLite for these operations; changing
+only the destination does not require an application deployment or web restart.
 
 ## Google Picker configuration
 
@@ -208,6 +241,9 @@ Picker config response or network HAR. Those contain usable credentials.
 | Symptom | Check and action |
 |---|---|
 | `invalid_grant` while refreshing OAuth | Confirm the account/client and consent status, then reauthorize below. Changing the Picker key does not repair a revoked/expired refresh grant. |
+| Folder lookup returns HTTP 404 | Check the exact intended folder with the failing credential. A reader's successful lookup does not establish writer access. Select the existing folder through Picker and verify writer access before changing the destination; a 404 does not by itself establish deletion. |
+| Picker works but the upload reports no configured Google writer | Check enabled state, `access_mode: read_write`, and an explicit `credential_mode: oauth` in the writer's configuration. Picker's default OAuth handling does not satisfy the upload handler's stricter query. |
+| Upload reports `storage_sync_failed` | Local intake may already have accepted the document. Check that record and the selected Google/Yandex copies, then repair the specific storage failure. Do not reimport merely to retry archival. |
 | Picker is disabled or has an invalid App ID | Both config fields must be present; use the numeric project number belonging to the OAuth client/key, and confirm an enabled OAuth writer exists. |
 | Picker opens but access is denied | Confirm Picker API is enabled in that project and the key allows only the actual requesting HTTPS website and Picker API. Check the signed-in account and folder access. |
 | Restricted key rejected despite correct website entries | Inspect the document's `Referrer-Policy` and request referrer privately. With Picker enabled, this app sends `strict-origin-when-cross-origin`; a proxy forcing `no-referrer` prevents origin verification. Do not remove key restrictions to compensate. |
