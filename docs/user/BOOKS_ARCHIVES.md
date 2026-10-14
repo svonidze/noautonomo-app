@@ -96,6 +96,21 @@ fields. `TOTALS` separates income, expenses and adjustments by quarter and for
 the selected scope; blocked calculations have blank totals, never invented zeroes.
 These checks do not certify source completeness or AEAT import compatibility.
 
+The AEAT attribution fallback uses the same books scope: invoice rows stay visible
+even when their tax-return inclusion flags are false. Use those preserved flags
+when reconciling book totals to filed returns.
+
+For separate official imports, AEAT's V.18.02.2026 specification defines a C file
+for IVA (`EXPEDIDAS`, `RECIBIDAS`) and a D file for IRPF (`INGRESOS`, `GASTOS`).
+Both import files must cover January through the selected quarter and preserve
+the shared column positions, leaving only the other tax's exclusive fields blank.
+Common invoice base and VAT fields are not automatically blank in the IRPF file.
+The native review workbook's quarter-only IVA view and review sheet layout do not
+implement this import contract. Separate asset mapping, mandatory content and
+date/amount reconciliation require their own acceptance; merely renaming tabs is
+insufficient. See the [official specification](https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/IVA/Fact_registro/Libros_registro/Formato_Electronico_Comun_Libros_Registro_IVA_IRPF.pdf)
+and [AEAT import FAQ](https://sede.agenciatributaria.gob.es/Sede/iva/facturacion-registro/preguntas-frecuentes.html).
+
 For operational retention, archive original documents, a consistent database
 copy, exporter source/release, dependency versions and reproduction instructions
 alongside the package in a new private archive object. Verify an isolated restore.

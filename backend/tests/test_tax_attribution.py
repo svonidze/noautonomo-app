@@ -218,6 +218,38 @@ def test_additive_migration_keeps_all_existing_financial_rows(tmp_path):
         assert not db.connection.execute('PRAGMA foreign_key_check').fetchall()
 
 
+def test_aeat_separate_fallback_preserves_invoices_excluded_from_returns(tmp_path):
+    from autonomo_taxes.aeat_books import build_aeat_book_projection
+    with initialize(tmp_path / 'db.sqlite') as db:
+        identifier = source(db, tmp_path)
+        apply_attribution(db, decision(db, identifier, irpf_date='2025-01-20'), actor='test-operator')
+        doc = db.upsert_document(external_key='synthetic-excluded-invoice',
+            document_type='expense_invoice', document_number='SYNTH-EXCLUDED-1',
+            issued_on='2025-02-01', period_key='2025-Q1', currency='EUR',
+            total_minor=12100, lifecycle_status='approved', source_hash='synthetic-excluded-hash')
+        tx = db.add_transaction(period_key='2025-Q1', transaction_date='2025-02-01',
+            booking_date='2025-02-01', entry_type='expense', description='Synthetic excluded expense',
+            amount_minor=12100, direction='debit', lifecycle_status='posted', document_id=doc['document_id'])
+        db.add_detailed_tax_treatment(transaction_id=tx['transaction_id'], treatment_type='expense',
+            tax_code='domestic_input', taxable_base_minor=10000, vat_minor=2100,
+            deductible_irpf_minor=12100, deductible_vat_minor=0, withholding_minor=0,
+            rate_basis_points=2100, aeat_invoice_type='F1', aeat_operation_key='01',
+            include_modelo130=False, include_modelo303=False)
+        before = db.connection.total_changes
+        projection = build_aeat_book_projection(db, period_key='2025-Q1')
+        assert projection['tax_registers']['scope_type'] == 'accounting_books'
+        for basis in ('irpf', 'iva'):
+            register = projection['tax_registers']['registers'][basis]
+            assert register['blocked'] is False
+            row = next(r for r in register['rows'] if r['transaction_id'] == tx['transaction_id'])
+            assert row['amount_eur'] == Decimal('121')
+            assert row['include_modelo130'] is False
+            assert row['include_modelo303'] is False
+        assert projection['data_projection_ready'] is False
+        assert projection['separate_register_xlsx']['aeat_import_supported'] is False
+        assert db.connection.total_changes == before
+
+
 def test_reset_returns_to_source_basis_and_exports_are_consistent(tmp_path):
     from autonomo_taxes.books import write_accounting_books
     from autonomo_taxes.filing_package import write_filing_package, verify_filing_package

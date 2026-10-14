@@ -101,6 +101,7 @@ def build_aeat_book_projection(
                 load_tax_rows(database, year, allow_authoritative_history=allow_authoritative_history),
                 year=year, through=through_date,
                 iva_starts_on=date(year, quarter * 3 - 2, 1),
+                for_books=True,
             )
             from .tax_register_workbook import REVIEW_XLSX_FILENAME
             result['separate_register_xlsx'] = {
