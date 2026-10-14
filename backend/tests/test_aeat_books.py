@@ -232,6 +232,13 @@ def test_reverse_charge_keeps_expense_concept_and_uses_primary_identity() -> Non
                 notes="reason_code=G19",
             )
 
+            from autonomo_taxes.receipt_register import create_series, register_receipt
+            series = create_series(db, business_activity_id=activity["business_activity_id"],
+                tax_year=2026, code="RECEIVED", first_number=1,
+                reason="Synthetic register", evidence_ref="synthetic:register")
+            register_receipt(db, document_id=document["document_id"], series_id=series["series_id"],
+                registered_on="2026-06-30", receipt_number="ORIGINAL-0001", evidence_ref="synthetic:original-number")
+
             projection = build_aeat_book_projection(db, period_key="2026-Q2")
 
         assert projection["data_projection_ready"] is True
@@ -248,6 +255,7 @@ def test_reverse_charge_keeps_expense_concept_and_uses_primary_identity() -> Non
         assert row["expedidor_id_tipo"] == "04"
         assert row["expedidor_pais"] == "US"
         assert row["expedidor_identificacion"] == "TEST-TAX-ID-003"
+        assert row["numero_recepcion"] == "ORIGINAL-0001"
         payload = build_aeat_workbook_payload(
             projection,
             template_check={
@@ -819,3 +827,69 @@ def test_asset_book_row_reconciles_annual_evidence_to_amortizable_base() -> None
         assert row["inicio_tipo_iva_percent"] == "21.00"
         assert row["inicio_prorrata_definitiva_percent"] == "100.00"
         assert row["inicio_cuota_deducible_eur"] == "288.97"
+
+
+@pytest.mark.parametrize("deductible_vat, acquisition_cost", [(2100, "100.00"), (1050, "110.50"), (0, "121.00")])
+def test_imported_asset_exports_allocated_basis_and_reviewed_cost(tmp_path, deductible_vat, acquisition_cost):
+    from test_asset_lifecycle import legacy_free_asset
+    from autonomo_taxes.ledger_db import open as open_db
+    from autonomo_taxes.receipt_register import create_series, register_receipt
+    fixture, asset_id = legacy_free_asset(tmp_path)
+    with open_db(fixture["database"]) as db:
+        db.connection.execute("UPDATE counterparties SET tax_id='TEST-TAX-ID-001'")
+        db.connection.execute("DELETE FROM amortization_entries WHERE asset_id=?", (asset_id,))
+        db.connection.execute("""UPDATE assets SET depreciation_method='xolo_annual_evidence_active_day_schedule',
+            cost_minor=?,amortizable_base_minor=12500,business_use_ratio=0.8,
+            acquisition_deductible_vat_minor=?,aeat_amortization_method='01' WHERE asset_id=?""",
+            (int(Decimal(acquisition_cost)*100),deductible_vat,asset_id))
+        db.add_amortization_entry(asset_id=asset_id, period_key="2024", amount_minor=2000,
+            entry_kind="annual_evidence", include_in_books=False, source_hash="synthetic:prior")
+        db.add_amortization_entry(asset_id=asset_id, period_key="2025", amount_minor=2600,
+            entry_kind="annual_evidence", include_in_books=False, source_hash="synthetic:current")
+        asset = dict(db.connection.execute("SELECT * FROM assets WHERE asset_id=?", (asset_id,)).fetchone())
+        series = create_series(db, business_activity_id=asset["business_activity_id"], tax_year=2024,
+            code="ORIGINAL", first_number=1, reason="Synthetic source register", evidence_ref="synthetic:register")
+        register_receipt(db, document_id=asset["document_id"], series_id=series["series_id"],
+            registered_on="2024-01-02", receipt_number="000001", evidence_ref="synthetic:source")
+        annual_document = db.upsert_document(document_type="xolo_annual_asset_evidence",
+            document_number="ANNUAL-CONTROL", counterparty_id=db.connection.execute(
+                "SELECT counterparty_id FROM documents WHERE document_id=?", (asset["document_id"],)).fetchone()[0],
+            issued_on="2024-01-02", total_minor=10000, lifecycle_status="approved", source_hash="synthetic:annual-book")
+        db.connection.execute("UPDATE assets SET document_id=? WHERE asset_id=?", (annual_document["document_id"],asset_id))
+        before = "\n".join(db.connection.iterdump())
+        projection = build_aeat_book_projection(db, period_key="2025-Q1")
+        assert projection["data_projection_ready"], projection["blockers"]
+        row = projection["asset_rows"][0]
+        assert row["valor_adquisicion_eur"] == acquisition_cost
+        assert row["valor_amortizable_eur"] == "100.00"
+        assert row["amortizacion_pendiente_eur"] == "54.00"
+        assert row["numero_recepcion"] == "000001"
+        assert "\n".join(db.connection.iterdump()) == before
+        db.connection.execute("UPDATE documents SET source_hash='changed' WHERE document_id=?", (asset["document_id"],))
+        stale = build_aeat_book_projection(db, period_key="2025-Q1")
+        assert stale["asset_rows"][0]["numero_recepcion"] == ""
+        payload = build_aeat_workbook_payload(stale, template_check={"valid": True})
+        assert not payload["xlsx_write_ready"]
+        assert any(x["code"] == "receipt_registration_missing" for x in payload["blockers"])
+
+
+@pytest.mark.parametrize("actual_vat", [2099, 2101])
+def test_asset_export_preserves_exact_reviewed_cost_with_vat_rounding(tmp_path, actual_vat):
+    from autonomo_test_support.expense_workflow import setup_draft
+    from autonomo_taxes.expense_workflow import get_draft, save_draft
+    from autonomo_taxes.ledger_db import open as open_db
+    from test_expense_workflow import commit
+    fixture, draft = setup_draft(tmp_path, method="immediate")
+    with open_db(fixture["database"]) as db:
+        payload = draft["payload"]
+        payload["decision"]["tax_treatment"].update(vat_minor=actual_vat, deductible_vat_minor=0)
+        payload["facts"]["gross_minor"] = 10000 + actual_vat
+        payload["asset"]["basis_minor"] = 10000 + actual_vat
+        payload["change_reason"] = "Synthetic exact invoice VAT rounding"
+        draft = save_draft(db, fixture["transaction_id"], payload=payload,
+            expected_version=draft["draft_version"], source_snapshot_hash=draft["current_snapshot_hash"], actor="synthetic-user")
+        result = commit(db, fixture, draft, tmp_path)
+        db.connection.execute("UPDATE counterparties SET tax_id='TEST-TAX-ID-001'")
+        projection = build_aeat_book_projection(db, period_key=fixture["period"])
+        assert projection["data_projection_ready"], projection["blockers"]
+        assert projection["asset_rows"][0]["valor_adquisicion_eur"] == f"{Decimal(10000+actual_vat)/100:.2f}"

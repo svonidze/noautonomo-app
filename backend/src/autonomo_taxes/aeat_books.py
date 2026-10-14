@@ -266,6 +266,7 @@ def _transaction_rows(
         SELECT t.*, p.period_key,
                d.document_number, d.issued_on, d.document_type,
                d.lifecycle_status AS document_lifecycle,
+               CASE WHEN rr.document_source_hash=d.source_hash THEN rr.receipt_number END AS receipt_number,
                c.display_name AS counterparty_name, c.country_code,
                c.tax_id AS counterparty_tax_id, c.vat_id AS counterparty_vat_id,
                ci.aeat_id_type AS counterparty_aeat_id_type,
@@ -281,6 +282,7 @@ def _transaction_rows(
         FROM transactions t
         JOIN periods p ON p.period_id = t.period_id
         LEFT JOIN documents d ON d.document_id = t.document_id
+        LEFT JOIN receipt_registrations rr ON rr.document_id = d.document_id
         LEFT JOIN counterparties c ON c.counterparty_id = t.counterparty_id
         LEFT JOIN counterparty_identities ci
           ON ci.counterparty_id = c.counterparty_id AND ci.is_primary = 1
@@ -436,6 +438,7 @@ def _expense_rows(
         "fecha_expedicion": _date_es(transaction["issued_on"]),
         "fecha_operacion": _date_es(transaction["transaction_date"]),
         "factura_expedidor_serie_numero": transaction["document_number"],
+        "numero_recepcion": transaction.get("receipt_number") or "",
         "fecha_recepcion": _date_es(transaction["booking_date"]),
         "expedidor_id_tipo": id_type,
         "expedidor_pais": country_code,
@@ -732,6 +735,7 @@ def _asset_book_rows(
     rows = database.connection.execute(
         """
         SELECT a.*, d.issued_on, d.lifecycle_status AS document_lifecycle,
+               CASE WHEN rr.document_source_hash=receipt_document.source_hash THEN rr.receipt_number END AS receipt_number,
                c.display_name AS counterparty_name, c.country_code,
                c.tax_id AS counterparty_tax_id, c.vat_id AS counterparty_vat_id,
                ci.aeat_id_type AS counterparty_aeat_id_type,
@@ -739,6 +743,9 @@ def _asset_book_rows(
                ci.identifier AS counterparty_identity_identifier
         FROM assets a
         LEFT JOIN documents d ON d.document_id = a.document_id
+        LEFT JOIN transactions acquisition ON acquisition.transaction_id = a.acquisition_transaction_id
+        LEFT JOIN documents receipt_document ON receipt_document.document_id = COALESCE(acquisition.document_id, a.document_id)
+        LEFT JOIN receipt_registrations rr ON rr.document_id = receipt_document.document_id
         LEFT JOIN counterparties c ON c.counterparty_id = d.counterparty_id
         LEFT JOIN counterparty_identities ci
           ON ci.counterparty_id = c.counterparty_id AND ci.is_primary = 1
@@ -794,6 +801,7 @@ def _asset_row(
         "acquisition_deductible_vat_minor",
         "book_profile_source_reference",
         "book_profile_source_hash",
+        "business_use_ratio",
     )
     missing = [field for field in required_fields if asset.get(field) in {None, ""}]
     if missing:
@@ -843,10 +851,11 @@ def _asset_row(
     accumulated_start = int(native["prior_minor"] if native is not None else prior)
     current_amount = int(annual["amount_minor"])
     accumulated_end = accumulated_start + current_amount
-    amortizable_base = int(asset["amortizable_base_minor"])
-    if native is not None:
-        from .depreciation import minor
-        amortizable_base = minor(Decimal(amortizable_base) * Decimal(str(asset["business_use_ratio"])))
+    from .depreciation import minor
+    ratio = Decimal(str(asset["business_use_ratio"]))
+    if not ratio.is_finite() or not 0 <= ratio <= 1:
+        raise AeatBookProjectionError("Asset basis allocation must be between zero and one")
+    amortizable_base = minor(Decimal(asset["amortizable_base_minor"]) * ratio)
     pending = amortizable_base - accumulated_end
     if pending < 0:
         raise AeatBookProjectionError("Asset amortization exceeds its amortizable base")
@@ -866,6 +875,9 @@ def _asset_row(
         raise AeatBookProjectionError(
             "Asset acquisition deductible IVA is outside the reviewed IVA quota"
         )
+    acquisition_cost = int(asset["cost_minor"])
+    if amortizable_base > acquisition_cost:
+        raise AeatBookProjectionError("Asset effective basis exceeds its reviewed acquisition cost")
     acquisition_prorata = (
         ""
         if acquisition_vat == 0
@@ -879,7 +891,7 @@ def _asset_row(
         "descripcion_identificador": asset["aeat_asset_identifier"],
         "descripcion_literal": asset["description"],
         "fecha_inicio_utilizacion": _date_es(asset["placed_in_service_on"]),
-        "valor_adquisicion_eur": _money(int(asset["cost_minor"])),
+        "valor_adquisicion_eur": _money(acquisition_cost),
         "valor_amortizable_eur": _money(amortizable_base),
         "metodo_amortizacion": asset["aeat_amortization_method"],
         "porcentaje_amortizacion": _rate_percent(rate_basis_points),
@@ -889,6 +901,7 @@ def _asset_row(
         "amortizacion_pendiente_eur": _money(pending),
         "fecha_expedicion": _date_es(asset.get("issued_on") or asset["placed_in_service_on"]),
         "factura_expedidor_serie_numero": asset["source_invoice_number"],
+        "numero_recepcion": asset.get("receipt_number") or "",
         "factura_expedidor_numero_final": "",
         "expedidor_id_tipo": id_type,
         "expedidor_pais": country_code,

@@ -460,6 +460,15 @@ def build_aeat_workbook_payload(
     template_check: Mapping[str, Any],
 ) -> dict[str, Any]:
     blockers = [dict(row) for row in projection.get("blockers", [])]
+    for book, rows in (("expense", projection.get("expense_rows", [])),
+                       ("asset", projection.get("asset_rows", []))):
+        for row in rows:
+            if book == "expense" and row.get("tipo_factura") in {"SF", "AJ"}:
+                continue
+            if not str(row.get("numero_recepcion") or "").strip():
+                blockers.append({"code": "receipt_registration_missing",
+                    "subject": str(row.get("transaction_id") or row.get("asset_id") or book),
+                    "message": "An evidenced receipt registration number is required for this book row."})
     if not template_check.get("valid"):
         blockers.append(
             {

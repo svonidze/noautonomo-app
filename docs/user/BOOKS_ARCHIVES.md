@@ -81,6 +81,11 @@ The supplier's invoice number and a generated source-row ID are not evidence of
 a receipt registration number. Unknown historical numbers remain blank for
 review. A changed source-document hash invalidates its registration in exports.
 
+The normalized AEAT workbook also requires these evidenced receipt numbers for
+invoice expenses and assets; non-invoice SF/AJ expenses are exempt. Asset receipt
+numbers follow the linked acquisition invoice, even when the asset's own document
+is an annual source-book record. Missing or stale numbers block XLSX generation.
+
 Separate review registers are produced for ordinary transactions as well as
 explicit tax-date attributions. Invoices remain in books even when excluded from
 both declarations; their original inclusion flags remain visible and IVA validation
@@ -135,6 +140,12 @@ the allocation of a multi-item purchase to one asset. Compare the effective basi
 (stored basis multiplied by the ratio) with the source asset book before assuming
 a mismatch. That importer-derived ratio alone does not establish personal versus
 business use. Preserve the original invoice and the source-book allocation.
+
+The normalized AEAT asset export uses this effective basis for inherited assets
+as well as native plans. Acquisition value remains the explicitly stored cost;
+the exporter does not reconstruct it from a rounded VAT rate. An incorrect legacy
+cost requires a separately evidenced accounting correction, not an export-time
+substitution. Effective basis above that stored cost blocks the row.
 
 ## Complete retained archive
 

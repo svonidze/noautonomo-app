@@ -185,6 +185,7 @@ def test_payload_maps_projection_to_official_36_42_42_column_contract() -> None:
                 "fecha_expedicion": "02/04/2026",
                 "fecha_operacion": "02/04/2026",
                 "factura_expedidor_serie_numero": "SUP-1",
+                "numero_recepcion": "0001",
                 "fecha_recepcion": "03/04/2026",
                 "expedidor_id_tipo": "04",
                 "expedidor_pais": "GE",
@@ -225,6 +226,7 @@ def test_payload_maps_projection_to_official_36_42_42_column_contract() -> None:
                 "amortizacion_pendiente_eur": "611.57",
                 "fecha_expedicion": "08/04/2026",
                 "factura_expedidor_serie_numero": "ASSET-1",
+                "numero_recepcion": "ASSET-0001",
                 "expedidor_identificacion": "B00000000",
                 "expedidor_nombre": "Example Asset Supplier",
                 "inicio_base_imponible_eur": "826.45",
@@ -997,6 +999,24 @@ def _with_markup_compatibility(
 def _xml_declaration(document: bytes) -> bytes:
     declaration_end = document.find(b"?>")
     return document[: declaration_end + 2] if declaration_end >= 0 else b""
+
+
+@pytest.mark.parametrize("book", ["expense_rows", "asset_rows"])
+def test_workbook_rejects_unknown_receipt_numbers(book):
+    projection = _writer_projection()
+    projection[book][0]["numero_recepcion"] = ""
+    payload = build_aeat_workbook_payload(projection, template_check={"valid": True})
+    assert not payload["payload_ready"]
+    assert not payload["xlsx_write_ready"]
+    assert any(x["code"] == "receipt_registration_missing" for x in payload["blockers"])
+
+
+@pytest.mark.parametrize("kind", ["SF", "AJ"])
+def test_non_invoice_rows_do_not_require_receipt_number(kind):
+    projection = _writer_projection()
+    projection["expense_rows"][0].update(tipo_factura=kind, numero_recepcion="")
+    payload = build_aeat_workbook_payload(projection, template_check={"valid": True})
+    assert payload["xlsx_write_ready"]
 
 
 def _writer_projection() -> dict[str, object]:
