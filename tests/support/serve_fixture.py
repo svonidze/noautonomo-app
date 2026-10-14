@@ -5,6 +5,7 @@ import os
 import signal
 import tempfile
 
+from autonomo_taxes.ui_assets import default_ui_root
 from autonomo_taxes import local_web
 from autonomo_taxes.ledger_db import LedgerDB
 from autonomo_taxes.local_web import LocalAccountingApp, LocalAccountingServer, LocalWebConfig
@@ -64,7 +65,7 @@ def main() -> None:
             raise RuntimeError("Installed browser check imported the source checkout")
         config = LocalWebConfig(project_root=root, database=root / "autonomo.sqlite",
             inbox_root=root / "Inbox", archive_root=root / "Evidence", cache_root=root / "cache",
-            static_root=package / "web_ui", private_root=root, allow_test_ui=os.environ.get("AUTONOMO_PSEUDO") == "1")
+            static_root=default_ui_root(), private_root=root, allow_test_ui=os.environ.get("AUTONOMO_PSEUDO") == "1")
         with LedgerDB.initialize(config.database) as db:
             # AUTONOMO_FIXTURE_EMPTY=1 is a first run straight after `db init`: no quarter, no record,
             # no profile.

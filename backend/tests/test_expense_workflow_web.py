@@ -18,7 +18,7 @@ from autonomo_test_support.local_web_guided import _Server
 def test_authenticated_http_expense_workflow_and_follow_up_failure(tmp_path,monkeypatch):
     fixture,draft=setup_draft(tmp_path)
     root=REPO_ROOT
-    config=LocalWebConfig(project_root=root,database=fixture['database'],inbox_root=tmp_path/'inbox',archive_root=tmp_path/'archive',cache_root=tmp_path/'cache',static_root=root/'backend/src/autonomo_taxes/web_ui',read_only_document_roots=(tmp_path,))
+    config=LocalWebConfig(project_root=root,database=fixture['database'],inbox_root=tmp_path/'inbox',archive_root=tmp_path/'archive',cache_root=tmp_path/'cache',static_root=root/'packages/ui/src/autonomo_taxes_ui/dist',read_only_document_roots=(tmp_path,))
     server=_Server(config,monkeypatch,ecb=None)
     base='/api/expense-workflows/'+fixture['transaction_id']
     origin=f'http://127.0.0.1:{server.port}'
@@ -49,7 +49,7 @@ def test_authenticated_http_expense_workflow_and_follow_up_failure(tmp_path,monk
 def test_preview_embedding_is_restricted_to_verified_binary_types(tmp_path,monkeypatch):
     fixture,draft=setup_draft(tmp_path)
     root=REPO_ROOT
-    config=LocalWebConfig(project_root=root,database=fixture['database'],inbox_root=tmp_path/'inbox',archive_root=tmp_path/'archive',cache_root=tmp_path/'cache',static_root=root/'backend/src/autonomo_taxes/web_ui',read_only_document_roots=(tmp_path,))
+    config=LocalWebConfig(project_root=root,database=fixture['database'],inbox_root=tmp_path/'inbox',archive_root=tmp_path/'archive',cache_root=tmp_path/'cache',static_root=root/'packages/ui/src/autonomo_taxes_ui/dist',read_only_document_roots=(tmp_path,))
     with open_db(config.database) as db:
         source=db.connection.execute('SELECT source_path FROM documents').fetchone()[0]
         Path(source).write_bytes(b'%PDF-1.4\nSynthetic PDF fixture')
@@ -75,7 +75,7 @@ def test_corrected_period_cleans_only_the_original_inbox_file(tmp_path,monkeypat
     first=date(date.today().year,1,1)
     fixture,_=setup_draft(tmp_path,transaction_date=first.isoformat())
     root=REPO_ROOT
-    config=LocalWebConfig(project_root=root,database=fixture['database'],inbox_root=tmp_path/'inbox',archive_root=tmp_path/'archive',cache_root=tmp_path/'cache',static_root=root/'backend/src/autonomo_taxes/web_ui')
+    config=LocalWebConfig(project_root=root,database=fixture['database'],inbox_root=tmp_path/'inbox',archive_root=tmp_path/'archive',cache_root=tmp_path/'cache',static_root=root/'packages/ui/src/autonomo_taxes_ui/dist')
     with open_db(config.database) as db:
         document=dict(db.connection.execute('SELECT * FROM documents').fetchone())
         original=Path(document['source_path']).read_bytes()
@@ -110,7 +110,7 @@ def test_deduction_rule_failure_carries_a_translation_key(tmp_path,monkeypatch):
         payload=deepcopy(draft['payload']);payload['deduction']={'rule_id':'fine_or_surcharge','facts':dict.fromkeys(FACT_NAMES)}
         saved=save_draft(db,fixture['transaction_id'],payload=payload,expected_version=draft['draft_version'],source_snapshot_hash=draft['source_snapshot_hash'],actor='test')
     root=REPO_ROOT
-    config=LocalWebConfig(project_root=root,database=fixture['database'],inbox_root=tmp_path/'inbox',archive_root=tmp_path/'archive',cache_root=tmp_path/'cache',static_root=root/'backend/src/autonomo_taxes/web_ui',read_only_document_roots=(tmp_path,))
+    config=LocalWebConfig(project_root=root,database=fixture['database'],inbox_root=tmp_path/'inbox',archive_root=tmp_path/'archive',cache_root=tmp_path/'cache',static_root=root/'packages/ui/src/autonomo_taxes_ui/dist',read_only_document_roots=(tmp_path,))
     server=_Server(config,monkeypatch,ecb=None)
     try:
         status,_,body=server.request('POST','/api/expense-workflows/'+fixture['transaction_id']+'/preview',
@@ -118,3 +118,6 @@ def test_deduction_rule_failure_carries_a_translation_key(tmp_path,monkeypatch):
         error=json.loads(body)
         assert (status,error['code'],error['message_code'])==(400,'deduction_exceeds_rule','errors.deduction_exceeds_rule')
     finally:server.close()
+
+
+pytestmark = pytest.mark.web

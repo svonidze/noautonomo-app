@@ -56,7 +56,7 @@ def demo_app(root: Path) -> LocalAccountingApp:
     config = LocalWebConfig(
         project_root=root, database=root / "autonomo.sqlite", inbox_root=root / "Inbox",
         archive_root=root / "Evidence", cache_root=root / "cache",
-        static_root=REPO_ROOT / "backend/src/autonomo_taxes/web_ui",
+        static_root=REPO_ROOT / "packages/ui/src/autonomo_taxes_ui/dist",
     )
     with LedgerDB.initialize(config.database) as db:
         for index, (amount, deduction) in enumerate(((120000, 6000), (88000, 4400), (64000, 3200), (48000, 2400))):
@@ -215,3 +215,6 @@ def test_expense_http_endpoint_is_session_protected_and_validates_paging(tmp_pat
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+pytestmark = pytest.mark.web

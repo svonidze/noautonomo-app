@@ -273,6 +273,7 @@ def test_effective_forecast_and_accepted_history_do_not_duplicate_rows(tmp_path)
         assert accepted['approved_forecast_delta']['transaction_count'] == 0
 
 
+@pytest.mark.web
 def test_http_auth_scope_cache_invalidation_and_failure_after_write(tmp_path, monkeypatch):
     from threading import Thread
     from http.client import HTTPConnection
@@ -284,7 +285,7 @@ def test_http_auth_scope_cache_invalidation_and_failure_after_write(tmp_path, mo
         packet = decision(db, identifier)
     config = LocalWebConfig(project_root=REPO_ROOT, database=database, inbox_root=None,
                             archive_root=tmp_path, cache_root=tmp_path / 'cache',
-                            static_root=REPO_ROOT / 'backend/src/autonomo_taxes/web_ui')
+                            static_root=REPO_ROOT / 'packages/ui/src/autonomo_taxes_ui/dist')
     app = LocalAccountingApp(config)
     app.refresh_dashboard('2025-Q1')
     assert app._load_cached_dashboard('2025-Q1')

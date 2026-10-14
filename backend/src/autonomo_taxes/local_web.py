@@ -30,7 +30,7 @@ from typing import Any, Mapping
 from urllib.parse import parse_qs, unquote, urlencode, urlparse
 from uuid import UUID
 
-from .ui_assets import UiAssets
+from .ui_assets import UiAssets, default_ui_root
 from .services.application import AccountingService
 from .services.common import (ServiceError as LocalWebError, ServiceApiError as LocalWebApiError, PostingOperationError as LocalWebPostingCommandError, _validated_counterparty_id, _counterparty_api_state, _validate_period, _quarter_key, _current_or_latest_period, _row_dict, _empty_scope, _review_summary, _minor_to_text, _ratio_percent, _basis_points_percent, _posting_preview_summary, _store_upload, _safe_filename, _file_sha256, _is_relative_to, _exact_object_fields, normalize_google_drive_url, _validated_intake_fields, _require_intake_quarter)
 
@@ -292,7 +292,7 @@ def load_config(
             or _configured_path(values.get("cache_root"), private_config)
             or private_paths.cache / "web" / "dashboard"
         ).resolve(),
-        static_root=(Path(__file__).resolve().parent / "web_ui").resolve(),
+        static_root=default_ui_root(),
         trusted_proxy_mode=trusted_proxy_mode,
         allowed_tailscale_logins=allowed_tailscale_logins,
         read_only_document_roots=read_only_document_roots,
@@ -313,7 +313,7 @@ def load_public_demo_config(root: Path, *, static_root: Path | None = None) -> L
         if version != manifest["schema_version"] or not set(DEMO_PERIODS) <= periods:
             raise LocalWebError("Public demo database does not match its manifest")
     return LocalWebConfig(project_root=root, database=database, inbox_root=None, archive_root=root,
-        cache_root=root / "disabled-cache", static_root=static_root or Path(__file__).resolve().parent / "web_ui",
+        cache_root=root / "disabled-cache", static_root=static_root or default_ui_root(),
         public_demo=True, public_demo_as_of=date.fromisoformat(DEMO_AS_OF),
         public_demo_document=root / "demo-document.pdf", public_demo_pdf_sha256=manifest["sha256"]["demo-document.pdf"])
 
@@ -1373,8 +1373,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, static_root: Path | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if static_root is None:
+        try:
+            static_root = default_ui_root()
+        except RuntimeError as exc:
+            raise SystemExit(str(exc)) from exc
+        from importlib.metadata import PackageNotFoundError, version
+        try:
+            if version("spain-autonomo-taxes") != version("spain-autonomo-taxes-ui"):
+                raise SystemExit("Core and optional UI package versions must match")
+        except PackageNotFoundError:
+            # Source checkouts can run the explicitly built optional UI directly.
+            if not (Path(__file__).resolve().parents[3] / "backend/pyproject.toml").is_file():
+                raise SystemExit("Install the optional spain-autonomo-taxes-ui package with matching core version") from None
     if args.public_demo_root is not None:
         if args.host not in {"127.0.0.1", "localhost", "::1", "0.0.0.0"}:
             raise SystemExit("Public demo --host must be loopback or 0.0.0.0")
@@ -1396,6 +1409,8 @@ def main(argv: list[str] | None = None) -> int:
                 assert_storage_startup_ready(config.database)
             except StorageMigrationError as exc:
                 raise SystemExit(str(exc)) from exc
+    from dataclasses import replace
+    config = replace(config, static_root=static_root)
     app = LocalAccountingApp(config)
     display_host = f"[{args.host}]" if ":" in args.host else args.host
     bind_url = f"http://{display_host}:{args.port}"

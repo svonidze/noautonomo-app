@@ -3,6 +3,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 from autonomo_taxes import local_web
 
 
@@ -31,6 +33,7 @@ def test_installed_package_never_injects_a_checkout_path(tmp_path, monkeypatch):
     assert local_web._cli_environment()["PYTHONPATH"] == "/synthetic/existing"
 
 
+@pytest.mark.web
 def test_source_http_to_cli_refresh_outside_checkout(tmp_path):
     env = dict(os.environ, PYTHONPATH=str(REPO_ROOT / "backend/src"))
     result = subprocess.run(

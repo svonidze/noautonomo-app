@@ -37,9 +37,7 @@ def _config(tmp_path: Path) -> LocalWebConfig:
         cache_root=tmp_path / "cache",
         static_root=(
             REPO_ROOT
-            / "backend/src"
-            / "autonomo_taxes"
-            / "web_ui"
+            / "packages/ui/src/autonomo_taxes_ui/dist"
         ),
     )
 

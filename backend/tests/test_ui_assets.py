@@ -44,7 +44,7 @@ def test_build_cannot_serve_symlink_escape(tmp_path):
 
 
 def test_packaged_resource_contract_is_complete():
-    assets = UiAssets(REPO_ROOT / "backend/src/autonomo_taxes/web_ui")
+    assets = UiAssets(REPO_ROOT / "packages/ui/src/autonomo_taxes_ui/dist")
     assert assets.manifest["source_sha"]
     assert any(name.endswith(".css") for name in assets.files)
     assert all(name == "index.html" or name.startswith("ui-assets/") for name in assets.files)
@@ -59,3 +59,6 @@ def test_pseudolocale_requires_the_explicit_synthetic_test_host(tmp_path):
     with pytest.raises(RuntimeError, match="test-only"):
         UiAssets(tmp_path)
     assert UiAssets(tmp_path, allow_test=True).files
+
+
+pytestmark = pytest.mark.web

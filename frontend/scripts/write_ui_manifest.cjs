@@ -4,7 +4,7 @@ const {execFileSync} = require('node:child_process');
 const path = require('node:path');
 const frontendRoot = path.resolve(__dirname, '..');
 const repositoryRoot = path.resolve(frontendRoot, '..');
-const root = path.resolve(repositoryRoot, 'backend/src/autonomo_taxes/web_ui/dist');
+const root = path.resolve(repositoryRoot, 'packages/ui/src/autonomo_taxes_ui/dist');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const files = {};
 for (const name of ['index.html', ...readdirSync(path.join(root, 'ui-assets')).map(name => `ui-assets/${name}`)].sort()) {

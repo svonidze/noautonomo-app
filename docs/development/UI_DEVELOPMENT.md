@@ -58,7 +58,7 @@ environment, then run the checks in this order:
 python -m pip install pytest build
 npm --prefix frontend ci --include=dev --no-audit --no-fund
 npm --prefix frontend run build
-python -m pip install -e ./backend
+python -m pip install -e ./backend -e ./packages/ui
 npm --prefix frontend run check:runtime
 npm --prefix frontend run format:check
 npm --prefix frontend run test:coverage-map
@@ -121,3 +121,9 @@ See [the twelve-stage execution record](../plans/ui-modularization.md),
 [adding interface languages](UI_LOCALIZATION.md), and
 [release build/install compatibility](../../ops/docs/FRONTEND_BUILD.md). The twelve-stage record is historical. Current changes follow the repository
 review and release process; production rollout still requires separate authorization.
+
+The frontend build writes only `packages/ui/src/autonomo_taxes_ui/dist`. The
+optional `spain-autonomo-taxes-ui` wheel includes the validated assets and launcher;
+its version and exact core dependency must match `spain-autonomo-taxes`.
+Core verification runs independently with `python tests/packaging/installed_core_runner.py`
+and `python -m pytest -q -m "not web"`; browser adapters run with `-m web`.

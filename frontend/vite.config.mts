@@ -7,14 +7,14 @@ import { localizeShell } from './scripts/shell_locales.mts';
 
 const frontendRoot = fileURLToPath(new URL('.', import.meta.url));
 const repositoryRoot = resolve(frontendRoot, '..');
-const packageRoot = resolve(repositoryRoot, 'backend/src/autonomo_taxes');
-const webUiRoot = resolve(packageRoot, 'web_ui');
+const packageRoot = resolve(repositoryRoot, 'packages/ui/src/autonomo_taxes_ui');
+const webUiRoot = packageRoot;
 const generatedUiRoot = resolve(webUiRoot, 'dist');
 
 function clearGeneratedUiRoot() {
   const canonicalRepositoryRoot = realpathSync(repositoryRoot);
   const canonicalPackageRoot = realpathSync(packageRoot);
-  if (canonicalPackageRoot !== resolve(canonicalRepositoryRoot, 'backend/src/autonomo_taxes')) {
+  if (canonicalPackageRoot !== resolve(canonicalRepositoryRoot, 'packages/ui/src/autonomo_taxes_ui')) {
     throw new Error(
       `Refusing UI output outside the expected source package: ${canonicalPackageRoot}`,
     );
@@ -24,7 +24,7 @@ function clearGeneratedUiRoot() {
     throw new Error(`Refusing symlinked UI output parent: ${webUiRoot}`);
   }
   const canonicalWebUiRoot = realpathSync(webUiRoot);
-  if (relative(canonicalPackageRoot, canonicalWebUiRoot) !== 'web_ui') {
+  if (canonicalPackageRoot !== canonicalWebUiRoot) {
     throw new Error(`Refusing unexpected UI output parent: ${canonicalWebUiRoot}`);
   }
   if (existsSync(generatedUiRoot)) {

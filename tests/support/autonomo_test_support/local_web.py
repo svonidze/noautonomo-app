@@ -44,9 +44,7 @@ def _config(
 ) -> LocalWebConfig:
     static_root = (
         REPO_ROOT
-        / "backend/src"
-        / "autonomo_taxes"
-        / "web_ui"
+        / "packages/ui/src/autonomo_taxes_ui/dist"
     )
     return LocalWebConfig(
         project_root=tmp_path,

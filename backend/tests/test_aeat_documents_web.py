@@ -161,3 +161,6 @@ def test_periodic_filing_source_cannot_escape_configured_roots(tmp_path: Path) -
     assert row["source_available"] is False
     with pytest.raises(LocalWebError, match="outside configured evidence roots"):
         app.filing_file(snapshot["filing_snapshot_id"])
+
+
+pytestmark = pytest.mark.web

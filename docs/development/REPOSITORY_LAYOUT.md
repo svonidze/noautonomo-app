@@ -6,6 +6,7 @@ The repository has two application roots:
 | --- | --- |
 | `frontend/` | Node manifest and lockfile, Vite configuration, TypeScript source, and frontend unit and browser tests. |
 | `backend/` | Python package metadata, `backend/src/autonomo_taxes`, and application tests. |
+| `packages/ui/` | Optional Python UI distribution, launcher and compiled frontend assets. |
 | `tests/` | Cross-stack support, fixtures, contracts, operations tests, and packaging tests. |
 | `ops/` | Installed operational helpers, systemd templates, and operator runbooks in `ops/docs/`. |
 | `examples/` | Safe configuration and import examples. |
@@ -13,8 +14,9 @@ The repository has two application roots:
 | `reference/reta/` | Versioned RETA contribution tables (tramos, bases, rates, generic deduction) with their BOE sources. |
 
 These are ownership and tooling boundaries within one release. The frontend
-build writes verified assets into `backend/src/autonomo_taxes/web_ui/dist`; the
-Python wheel embeds those assets, so frontend build precedes Python packaging.
+build writes verified assets into `packages/ui/src/autonomo_taxes_ui/dist`; the optional UI wheel embeds those
+assets. The core wheel builds independently of frontend state and owns only
+`autonomo-tax`; the matching UI wheel owns `autonomo-web`.
 
 From the repository root, install and verify the application with the current
 project roots:
@@ -22,7 +24,7 @@ project roots:
 ```sh
 npm --prefix frontend ci --include=dev --no-audit --no-fund
 npm --prefix frontend run build
-python -m pip install -e ./backend
+python -m pip install -e ./backend -e ./packages/ui
 npm --prefix frontend run check:runtime
 npm --prefix frontend run test:coverage-map
 python -m pytest -q

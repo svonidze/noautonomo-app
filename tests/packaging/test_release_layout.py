@@ -152,5 +152,17 @@ def test_installation_checks_the_selected_lock_digest(tmp_path, monkeypatch, ver
 @pytest.mark.parametrize("script", ["ops/deploy.sh", "ops/sops/deploy.sh"])
 def test_deploy_installs_the_selected_python_project(script):
     source = (ROOT / script).read_text()
-    assert source.index('prepare_ui_release.py" python-project-path') < source.index('-m pip install')
-    assert '--no-input "$python_project"' in source
+    assert 'prepare_ui_release.py" install "$source_repo" "$sha" "$target"' in source
+    assert source.index('prepare_ui_release.py" build') < source.index('prepare_ui_release.py" install') < source.index('prepare_ui_release.py" receipt')
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_optional_ui_contract_uses_selected_layout(tmp_path, version):
+    source = tmp_path / "source"
+    metadata = files(version)
+    project = "backend/pyproject.toml" if version == 2 else "pyproject.toml"
+    metadata[project] = metadata[project].replace("build-contract = 1", "build-contract = 2")
+    sha = commit(source, metadata)
+    assert gate.contract(source, sha) == 2
+    assert gate.layout(source, sha).python_root == Path("backend" if version == 2 else ".")
+    assert gate.expected_tools(source, sha) == ENGINES

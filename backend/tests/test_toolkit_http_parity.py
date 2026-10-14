@@ -7,10 +7,13 @@ from uuid import uuid4
 import pytest
 
 from autonomo_taxes.local_web import LocalWebConfig
+from autonomo_taxes.ui_assets import default_ui_root
 from autonomo_taxes.toolkit_cli import public_value
 from test_expense_workflow import setup_draft
 from test_local_web_guided import _Server
 from test_toolkit_cli import invoke
+
+pytestmark = pytest.mark.web
 
 
 def test_expense_http_cli_preview_errors_and_replay_share_one_action(
@@ -25,7 +28,7 @@ def test_expense_http_cli_preview_errors_and_replay_share_one_action(
         inbox_root=tmp_path / "private/inbox",
         archive_root=tmp_path / "private/evidence",
         cache_root=tmp_path / "private/cache",
-        static_root=root / "backend/src/autonomo_taxes/web_ui",
+        static_root=default_ui_root(),
         read_only_document_roots=(tmp_path,),
     )
     server = _Server(config, monkeypatch, ecb=None)

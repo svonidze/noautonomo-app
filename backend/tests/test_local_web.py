@@ -2119,3 +2119,6 @@ def test_host_header_parts_requires_a_valid_same_origin_target() -> None:
     ) == ("ubuntu-16gb-nbg1-2.tail6c29f3.ts.net", 443)
     with pytest.raises(LocalWebApiError, match="Host header is invalid"):
         _host_header_parts("localhost:not-a-port", default_port=8876)
+
+
+pytestmark = pytest.mark.web

@@ -8,6 +8,7 @@ import signal
 import sys
 import tempfile
 
+from autonomo_taxes.ui_assets import default_ui_root
 from autonomo_taxes import local_web
 from autonomo_taxes.ledger_db import LedgerDB
 from autonomo_taxes.local_web import LocalAccountingApp, LocalAccountingServer, LocalWebConfig
@@ -117,7 +118,7 @@ def main() -> None:
         package = Path(local_web.__file__).resolve().parent
         config = LocalWebConfig(project_root=root, database=root / "autonomo.sqlite",
             inbox_root=root / "Inbox", archive_root=root / "Evidence", cache_root=root / "cache",
-            static_root=package / "web_ui", private_root=root, allow_test_ui=False)
+            static_root=default_ui_root(), private_root=root, allow_test_ui=False)
         with LedgerDB.initialize(config.database) as db:
             seed(db, config.archive_root)
         if SEED_ONLY:
