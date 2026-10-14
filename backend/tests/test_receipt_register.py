@@ -226,3 +226,30 @@ def test_depreciation_is_an_irpf_charge_not_a_new_received_invoice(tmp_path, nat
                                                 year=2024, through=date(2024, 3, 31), for_books=True)
             assert contradictory["registers"]["iva"]["blocked"] is True
             assert check_register_content(contradictory)["checked_fields_ready"] is False
+
+
+def test_imported_reta_requires_consistent_non_invoice_evidence(tmp_path):
+    from dataclasses import replace
+    from datetime import date
+    from decimal import Decimal
+    from autonomo_taxes.register_content_check import check_register_content
+    from autonomo_taxes.tax_attribution import register_projection
+
+    with initialize(tmp_path / "ledger.sqlite") as db:
+        aid = activity(db); expense(db, "SOCIAL-SECURITY-PAYMENT", aid)
+        charge = replace(load_tax_rows(db, 2024)[0], document_type="gastos_book",
+                         tax_code="historical_g45", aeat_expense_concept="G45",
+                         vat_eur=Decimal(0), deductible_vat_eur=Decimal(0), include_modelo303=False)
+        def project(row):
+            return register_projection([row], year=2024, through=date(2024, 3, 31), for_books=True)
+        valid = project(charge)
+        assert len(valid["registers"]["irpf"]["rows"]) == 1
+        assert valid["registers"]["iva"]["rows"] == []
+        assert check_register_content(valid)["checked_fields_ready"] is True
+        for change in ({"vat_eur": Decimal(21)}, {"deductible_vat_eur": Decimal(21)},
+                       {"aeat_expense_concept": "G19"}, {"document_type": "expense_invoice"}):
+            invalid = project(replace(charge, **change))
+            assert invalid["registers"]["iva"]["blocked"] is True
+            assert check_register_content(invalid)["checked_fields_ready"] is False
+        missing_source = project(replace(charge, document_source_hash=""))
+        assert check_register_content(missing_source)["blockers"][0]["missing_fields"] == ["document_source_hash"]

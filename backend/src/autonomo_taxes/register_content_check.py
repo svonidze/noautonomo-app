@@ -28,6 +28,9 @@ def check_register_content(projection: dict[str, Any]) -> dict[str, Any]:
                     (row.get("asset_id") and row["tax_code"] == "historical_g03"
                      and row["document_type"] == "gastos_book"))
                    and row["vat_eur"] == 0 and row["deductible_vat_eur"] == 0) or
+                  (row["document_type"] == "gastos_book" and row["tax_code"] == "historical_g45"
+                   and row["aeat_expense_concept"] == "G45"
+                   and row["vat_eur"] == 0 and row["deductible_vat_eur"] == 0) or
                   row["document_type"] in {"social_security_evidence", "bank_fee_evidence"}):
                 missing.extend(field for field in ("document_number", "document_source_hash") if not row[field])
             elif row["document_type"] in {"invoice", "income_invoice", "expense_invoice", "ingresos_book", "gastos_book"}:

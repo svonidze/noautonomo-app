@@ -378,7 +378,10 @@ def register_projection(rows: Iterable[TaxRow], *, year: int, through: date,
                                     (row.asset_id and row.tax_code == 'historical_g03'
                                      and row.document_type == 'gastos_book'))
                 depreciation = depreciation and row.vat_eur == 0 and row.deductible_vat_eur == 0
-                book_invoice = not depreciation and row.document_type in {'invoice', 'income_invoice', 'expense_invoice', 'ingresos_book', 'gastos_book'} and row.invoice_type not in {'SF','AJ'}
+                imported_reta = (row.document_type == 'gastos_book' and row.tax_code == 'historical_g45'
+                                 and row.aeat_expense_concept == 'G45'
+                                 and row.vat_eur == 0 and row.deductible_vat_eur == 0)
+                book_invoice = not (depreciation or imported_reta) and row.document_type in {'invoice', 'income_invoice', 'expense_invoice', 'ingresos_book', 'gastos_book'} and row.invoice_type not in {'SF','AJ'}
                 candidate = replace(row, include_modelo130=True,
                     include_modelo303=row.include_modelo303 or (book_invoice and row.component == 'transaction')) if for_books else row
                 resolved = project_tax_rows([candidate], basis, start, through)
