@@ -16,6 +16,13 @@ REGISTER_COLUMNS = (
     ('vat_eur', 'VAT (EUR)'), ('deductible_vat_eur', 'Deductible VAT (EUR)'),
     ('withholding_eur', 'Withholding (EUR)'), ('amount_eur', 'Amount (EUR)'),
     ('document_number', 'Document number'), ('issued_on', 'Issue date'),
+    ('receipt_number', 'Receipt registration number'), ('registered_on', 'Registration date'),
+    ('receipt_series', 'Receipt series'), ('receipt_year', 'Receipt year'),
+    ('operation_date', 'Operation date'), ('document_type', 'Document type'),
+    ('correction_of_transaction_id', 'Corrected transaction ID'), ('correction_kind', 'Correction kind'),
+    ('vat_rate_percent', 'VAT rate (%)'), ('invoice_type', 'Invoice type'),
+    ('operation_key', 'Operation key'), ('operation_qualification', 'Operation qualification'),
+    ('exempt_operation', 'Exemption'), ('reverse_charge', 'Reverse charge'),
     ('counterparty_name', 'Counterparty'), ('transaction_id', 'Row ID'),
     ('counterparty_tax_id', 'Counterparty tax ID'), ('vat_id', 'Counterparty VAT ID'),
     ('country_code', 'Counterparty country'),
@@ -44,11 +51,15 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
     if target.suffix.lower() != '.xlsx':
         raise ValueError('Tax register review output must use the .xlsx suffix')
     registers = projection['registers']
+    from .register_content_check import AMOUNTS, check_register_content
+    content_check = check_register_content(projection)
     review = [['Tax registers for review', 'AEAT import unsupported'],
               ['Scope', 'IRPF year to date; IVA selected period'],
               ['Amounts', 'EUR; source and attribution sheets are traceability only'],
               ['Calculations', 'Registers precede difficult-expense relief and form-specific adjustments']]
     blockers = []
+    review.extend([['Required fields', 'Checked fields ready' if content_check['checked_fields_ready'] else 'Review required'],
+                   ['Source completeness', 'Not verified by this export']])
     visible_ids = set(projection['selected_row_ids'])
     parent_ids = {row['transaction_id'] for row in projection['source_rows']}
     sheets = []
@@ -56,7 +67,7 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
         register = registers[basis]
         review.extend([[basis.upper() + ' from', register['starts_on']],
                        [basis.upper() + ' through', register['through']],
-                       [basis.upper() + ' status', 'Blocked' if register['blocked'] else 'Complete'],
+                       [basis.upper() + ' status', 'Blocked' if register['blocked'] else 'Amounts ready'],
                        [basis.upper() + ' rows', len(register['rows']) if not register['blocked'] else None]])
         for row in register.get('blocked_rows', []):
             blockers.append([basis.upper(), row['tax_date'], row['period'],
@@ -95,6 +106,17 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
             row['fx_evidence_ref'], row['reason'], irpf.get('evidence_ref'), iva.get('evidence_ref')])
     sheets.extend([('ATTRIBUTIONS', bridge), ('BLOCKERS',
         [['Tax', 'Tax date', 'Affected period', 'Row ID', 'Source transaction ID', 'Reason'], *blockers])])
+    sheets.append(('REQUIRED_FIELDS', [['Register', 'Row ID', 'Missing fields'],
+        *[[item['register'], item['transaction_id'], ', '.join(item['missing_fields'])]
+          for item in content_check['blockers']]]))
+    total_rows = [['Register', 'Scope', 'Kind', *AMOUNTS]]
+    for basis, totals in content_check['totals'].items():
+        for quarter, kinds in sorted(totals['quarters'].items()):
+            for kind, amounts in sorted(kinds.items()):
+                total_rows.append([basis, quarter, kind, *[amounts[key] for key in AMOUNTS]])
+        for kind, amounts in sorted(totals['scope_total'].items()):
+            total_rows.append([basis, 'Selected scope', kind, *[amounts[key] for key in AMOUNTS]])
+    sheets.append(('TOTALS', total_rows))
     sheets.insert(0, ('REVIEW', review))
     parts = _package(sheets)
     target.parent.mkdir(parents=True, exist_ok=True)

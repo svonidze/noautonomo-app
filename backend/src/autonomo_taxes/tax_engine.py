@@ -121,6 +121,20 @@ class TaxRow:
     attribution_reason: str = ""
     fx_evidence_ref: str = ""
     counterparty_tax_id: str = ""
+    receipt_number: str = ""
+    receipt_series: str = ""
+    receipt_year: int | None = None
+    registered_on: date | None = None
+    document_type: str = ""
+    operation_date: date | None = None
+    correction_of_transaction_id: str = ""
+    correction_kind: str = ""
+    vat_rate_percent: Decimal | None = None
+    invoice_type: str = ""
+    operation_key: str = ""
+    operation_qualification: str = ""
+    exempt_operation: str = ""
+    reverse_charge: bool | None = None
 
     def __post_init__(self) -> None:
         if self.kind not in {"income", "expense", "adjustment"}:

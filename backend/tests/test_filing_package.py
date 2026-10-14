@@ -93,9 +93,13 @@ class FilingPackageTests(unittest.TestCase):
         self.assertFalse(manifest["submission_ready"])
         self.assertFalse(manifest["mandatory_books_ready"])
         self.assertEqual(manifest["readiness_blockers"], [
-            "provisiones_suplidos_confirmation_missing", "mandatory_book_content_validation_pending"])
+            "provisiones_suplidos_confirmation_missing", "register_required_fields_missing",
+            "mandatory_book_content_validation_pending"])
         self.assertEqual(manifest["period"]["period_key"], "2026-Q2")
-        self.assertEqual([artifact["filename"] for artifact in manifest["artifacts"]], ["assets.csv", "expense.csv", "income.csv", "payments.csv", "supplemental-book-status.json"])
+        self.assertEqual({artifact["filename"] for artifact in manifest["artifacts"]}, {
+            "assets.csv", "expense.csv", "income.csv", "payments.csv", "supplemental-book-status.json",
+            "irpf-register.csv", "iva-register.csv", "register-content-check.json", "tax-registers.json",
+            "tax-registers-review.xlsx"})
         self.assertEqual(len(manifest["rule_versions"]), 2)
         self.assertEqual([row["rule_name"] for row in manifest["rule_versions"]], ["modelo130-expense", "modelo130-income"])
         self.assertEqual(len(manifest["snapshot_refs"]), 1)

@@ -83,6 +83,7 @@ def load_tax_rows(
             "deductible_irpf_minor",
             "deductible_vat_minor",
             "withholding_minor",
+            "rate_basis_points",
         ):
             value = raw.get(key)
             if value is None:
@@ -169,6 +170,20 @@ def _to_tax_row(row: dict[str, Any]) -> TaxRow:
         aeat_expense_concept=row.get("aeat_expense_concept") or "",
         document_id=row.get("document_id") or "",
         document_number=row.get("document_number") or "",
+        receipt_number=(row.get("receipt_number") or "") if row.get("registration_source_hash") == row.get("document_source_hash") else "",
+        receipt_series=row.get("receipt_series") or "",
+        receipt_year=row.get("receipt_year"),
+        registered_on=date.fromisoformat(row["registered_on"]) if row.get("registered_on") else None,
+        document_type=row.get("document_type") or "",
+        operation_date=date.fromisoformat(row["transaction_date"]),
+        correction_of_transaction_id=row.get("correction_of_transaction_id") or "",
+        correction_kind=row.get("correction_kind") or "",
+        vat_rate_percent=Decimal(row["rate_basis_points"]) / 100 if row.get("rate_basis_points") is not None else None,
+        invoice_type=row.get("aeat_invoice_type") or "",
+        operation_key=row.get("aeat_operation_key") or "",
+        operation_qualification=row.get("aeat_operation_qualification") or "",
+        exempt_operation=row.get("aeat_exemption_code") or "",
+        reverse_charge=bool(row["aeat_reverse_charge"]) if row.get("aeat_reverse_charge") is not None else None,
         issued_on=date.fromisoformat(row["issued_on"]) if row.get("issued_on") else None,
         document_source_hash=row.get("document_source_hash") or "",
     )

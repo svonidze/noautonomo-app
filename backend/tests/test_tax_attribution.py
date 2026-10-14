@@ -205,6 +205,8 @@ def test_additive_migration_keeps_all_existing_financial_rows(tmp_path):
         before = {table: [tuple(r) for r in db.connection.execute('SELECT * FROM ' + table)]
                   for table in ('transactions', 'documents', 'tax_treatments', 'payments', 'filing_snapshots')}
         db.connection.execute('DROP TABLE tax_attribution_fx_events')
+        db.connection.execute('DROP TABLE receipt_registrations')
+        db.connection.execute('DROP TABLE receipt_registration_series')
         db.connection.execute('DROP TABLE transaction_tax_attributions')
         db.connection.execute('PRAGMA user_version=27')
     with open_database(path, apply_migrations=True) as db:

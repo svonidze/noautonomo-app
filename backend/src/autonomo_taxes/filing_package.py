@@ -214,6 +214,9 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
             readiness_reasons.append('tax_attribution_snapshot_review_required')
     supplemental = json.loads(export.files["supplemental_book_status"].read_text(encoding="utf-8"))
     readiness_reasons.extend(supplemental["blockers"])
+    content_check = json.loads(export.files["register_content_check"].read_text(encoding="utf-8"))
+    if not content_check["checked_fields_ready"]:
+        readiness_reasons.append("register_required_fields_missing")
     # Hashes and filed snapshots cannot certify the legal content of every book.
     readiness_reasons.append("mandatory_book_content_validation_pending")
     attribution_basis = {}

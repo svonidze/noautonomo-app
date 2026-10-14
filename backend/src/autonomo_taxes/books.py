@@ -147,33 +147,38 @@ def write_accounting_books(database: LedgerDB, output_dir: str | Path, *, period
     counts = {"income": len(income_rows), "expense": len(expense_rows),
               "assets": len(asset_rows), "payments": len(payment_rows)}
     from .tax_row_loader import load_tax_rows
-    from .tax_attribution import register_projection, active_attribution_ids
-    attributed_ids = active_attribution_ids(database)
-    candidates = {r['transaction_id'] for r in database.list_tax_rows(year=int(period_key[:4]))} if attributed_ids else set()
-    tax_rows = (load_tax_rows(database, int(period_key[:4]), allow_authoritative_history=True)
-                if attributed_ids & candidates else [])
-    if any(row.attribution_id for row in tax_rows):
-        from .tax_register_workbook import REVIEW_XLSX_FILENAME, write_tax_register_review_xlsx
-        projection = register_projection(
-            tax_rows, year=int(period_key[:4]), through=date.fromisoformat(period["ends_on"]),
-            iva_starts_on=date.fromisoformat(period["starts_on"]),
-        )
-        files["tax_registers"] = root / "tax-registers.json"
-        files["tax_registers"].write_text(json.dumps(projection, default=str, sort_keys=True,
-                                                     ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        counts["tax_registers"] = len(projection["bridge"])
-        fields = ("transaction_id", "source_transaction_id", "component", "attribution_id", "tax_date",
-                  "document_id", "document_number", "issued_on", "document_source_hash", "counterparty_name",
-                  "counterparty_tax_id", "vat_id", "country_code",
-                  "kind", "amount_eur", "taxable_base_eur", "vat_eur", "deductible_irpf_eur",
-                  "deductible_vat_eur", "withholding_eur")
-        for basis, register in projection["registers"].items():
-            files[basis] = root / f"{basis}-register.csv"
-            _write_csv(files[basis], fields, [{k: str(row[k]) if row[k] is not None else '' for k in fields}
-                                              for row in register["rows"]])
-            counts[basis] = len(register["rows"])
-        files['tax_registers_xlsx'] = write_tax_register_review_xlsx(root / REVIEW_XLSX_FILENAME, projection)
-        counts['tax_registers_xlsx'] = sum(len(register['rows']) for register in projection['registers'].values())
+    from .tax_attribution import register_projection
+    tax_rows = load_tax_rows(database, int(period_key[:4]), allow_authoritative_history=True)
+    from .tax_register_workbook import REVIEW_XLSX_FILENAME, write_tax_register_review_xlsx
+    projection = register_projection(
+        tax_rows, year=int(period_key[:4]), through=date.fromisoformat(period["ends_on"]),
+        iva_starts_on=date.fromisoformat(period["starts_on"]),
+    )
+    from .register_content_check import check_register_content
+    content_check = check_register_content(projection)
+    files["register_content_check"] = root / "register-content-check.json"
+    files["register_content_check"].write_text(json.dumps(content_check, default=str, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    counts["register_content_check"] = len(content_check["blockers"])
+    files["tax_registers"] = root / "tax-registers.json"
+    files["tax_registers"].write_text(json.dumps(projection, default=str, sort_keys=True,
+                                                 ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    counts["tax_registers"] = len(projection["bridge"])
+    fields = ("transaction_id", "source_transaction_id", "component", "attribution_id", "tax_date",
+              "document_id", "document_number", "issued_on", "document_source_hash", "counterparty_name",
+              "counterparty_tax_id", "vat_id", "country_code",
+              "receipt_number", "receipt_series", "receipt_year", "registered_on", "operation_date", "document_type",
+              "correction_of_transaction_id", "correction_kind",
+              "vat_rate_percent", "invoice_type", "operation_key", "operation_qualification",
+              "exempt_operation", "reverse_charge",
+              "kind", "amount_eur", "taxable_base_eur", "vat_eur", "deductible_irpf_eur",
+              "deductible_vat_eur", "withholding_eur")
+    for basis, register in projection["registers"].items():
+        files[basis] = root / f"{basis}-register.csv"
+        _write_csv(files[basis], fields, [{k: str(row[k]) if row[k] is not None else '' for k in fields}
+                                          for row in register["rows"]])
+        counts[basis] = len(register["rows"])
+    files['tax_registers_xlsx'] = write_tax_register_review_xlsx(root / REVIEW_XLSX_FILENAME, projection)
+    counts['tax_registers_xlsx'] = sum(len(register['rows']) for register in projection['registers'].values())
     return BookExportResult(
         period_key=period_key,
         output_dir=root,

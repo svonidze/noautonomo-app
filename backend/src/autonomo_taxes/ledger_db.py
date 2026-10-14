@@ -34,7 +34,7 @@ from .tax_rules import ALL_FORM_CODES, ANNUAL_FORM_CODES, FORM_RULES, QUARTERLY_
 from .vat_classification import is_vat_investment_good
 
 
-LATEST_SCHEMA_VERSION = 28
+LATEST_SCHEMA_VERSION = 29
 
 # Migrations that rebuild a table referenced by a foreign key. They must
 # run with foreign-key enforcement temporarily disabled, and that pragma
@@ -5493,6 +5493,9 @@ class LedgerDB:
     def list_tax_rows(self, *, year: int | None = None) -> list[dict[str, Any]]:
         sql = """
             SELECT t.*, p.period_key, td.document_number, td.issued_on,
+                   td.document_type, rr.receipt_number, rr.registered_on,
+                   rs.code AS receipt_series, rs.tax_year AS receipt_year,
+                   rr.document_source_hash AS registration_source_hash,
                    td.source_hash AS document_source_hash,
                    c.display_name AS counterparty_name, c.country_code,
                    c.vat_id, c.tax_id AS counterparty_tax_id,
@@ -5501,6 +5504,8 @@ class LedgerDB:
                    tt.include_modelo130, tt.include_modelo303, tt.include_modelo347,
                    tt.treatment_type, tt.jurisdiction, tt.vat_investment_good,
                    tt.aeat_expense_concept,
+                   tt.rate_basis_points, tt.aeat_invoice_type, tt.aeat_operation_key,
+                   tt.aeat_operation_qualification, tt.aeat_exemption_code, tt.aeat_reverse_charge,
                    CASE
                        WHEN COALESCE(at.asset_count, 0) + COALESCE(ad.asset_count, 0) > 0
                            THEN COALESCE(at.asset_id, ad.asset_id)
@@ -5515,6 +5520,8 @@ class LedgerDB:
             FROM transactions t
             JOIN periods p ON p.period_id = t.period_id
             LEFT JOIN documents td ON td.document_id = t.document_id
+            LEFT JOIN receipt_registrations rr ON rr.document_id = t.document_id
+            LEFT JOIN receipt_registration_series rs ON rs.series_id = rr.series_id
             LEFT JOIN counterparties c ON c.counterparty_id = t.counterparty_id
             LEFT JOIN tax_treatments tt ON tt.transaction_id = t.transaction_id
             LEFT JOIN (
@@ -8360,6 +8367,38 @@ def _migration_28(connection: sqlite3.Connection) -> None:
             )
 
 
+def _migration_29(connection: sqlite3.Connection) -> None:
+    connection.execute("""
+        CREATE TABLE receipt_registration_series (
+            series_id TEXT PRIMARY KEY,
+            business_activity_id TEXT NOT NULL REFERENCES business_activities(business_activity_id),
+            tax_year INTEGER NOT NULL CHECK (tax_year BETWEEN 1900 AND 9999),
+            code TEXT NOT NULL CHECK (length(trim(code)) > 0),
+            first_number INTEGER NOT NULL CHECK (first_number > 0),
+            reason TEXT NOT NULL CHECK (length(trim(reason)) > 0),
+            evidence_ref TEXT NOT NULL CHECK (length(trim(evidence_ref)) > 0),
+            UNIQUE (business_activity_id, tax_year, code)
+        )
+    """)
+    connection.execute("""
+        CREATE TABLE receipt_registrations (
+            document_id TEXT PRIMARY KEY REFERENCES documents(document_id),
+            series_id TEXT NOT NULL REFERENCES receipt_registration_series(series_id),
+            ordinal INTEGER NOT NULL CHECK (ordinal > 0),
+            receipt_number TEXT NOT NULL CHECK (length(trim(receipt_number)) > 0),
+            registered_on TEXT NOT NULL,
+            document_source_hash TEXT NOT NULL,
+            evidence_ref TEXT NOT NULL CHECK (length(trim(evidence_ref)) > 0),
+            UNIQUE (series_id, ordinal),
+            UNIQUE (series_id, receipt_number)
+        )
+    """)
+    for table in ("receipt_registration_series", "receipt_registrations"):
+        for action in ("UPDATE", "DELETE"):
+            connection.execute(f"CREATE TRIGGER {table}_no_{action.lower()} BEFORE {action} ON {table} "
+                               "BEGIN SELECT RAISE(ABORT, 'Receipt registration is immutable'); END")
+
+
 _MIGRATIONS = {
     1: _migration_1,
     2: _migration_2,
@@ -8389,4 +8428,5 @@ _MIGRATIONS = {
     26: _migration_26,
     27: _migration_27,
     28: _migration_28,
+    29: _migration_29,
 }

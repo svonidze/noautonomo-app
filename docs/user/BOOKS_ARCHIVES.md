@@ -54,11 +54,40 @@ returns, post transactions or modify historical filing snapshots.
 
 The separate IRPF/IVA review exports now retain counterparty tax IDs and VAT
 IDs, including FX rows linked to the source transaction. They remain review
-exports, not accepted AEAT import files. Remaining work includes receipt
-registration numbers and their justified series, full mandatory VAT/IRPF fields,
+exports, not accepted AEAT import files. Remaining acceptance includes historical
+receipt-number evidence, full mandatory VAT/IRPF fields,
 asset continuation/disposal evidence, reconciliation and completeness acceptance.
 Do not substitute generated source-row IDs for invoice receipt registration
 numbers. Preserve the original Xolo registers and their numbering evidence.
+
+## Receipt registration (schema 29)
+
+`receipt-register create-series --db PATH --payload series.json` records the
+activity, calendar year, series code, first ordinal, justification and evidence.
+The JSON fields are `business_activity_id`, `tax_year`, `code`, `first_number`,
+`reason` and `evidence_ref`. A first ordinal above one requires retained evidence
+of the predecessor register; this command does not certify that evidence.
+
+`receipt-register assign --db PATH --payload receipt.json` accepts `document_id`,
+`series_id`, `registered_on` and `evidence_ref`. Optional `ordinal` must be the
+next consecutive number; optional `receipt_number` preserves the exact original
+printed identifier, including leading zeroes. Without a printed identifier the
+new identifier is `YEAR/SERIES/ORDINAL`. `receipt-register list --db PATH` reads
+the register. Assignment is transactional and idempotent. Historical numbers
+and series cannot be reset, edited or deleted through this interface.
+
+Migration creates empty numbering tables and never backfills guessed numbers.
+The supplier's invoice number and a generated source-row ID are not evidence of
+a receipt registration number. Unknown historical numbers remain blank for
+review. A changed source-document hash invalidates its registration in exports.
+
+Separate review registers are produced for ordinary transactions as well as
+explicit tax-date attributions. They include operation and issue dates, receipt
+series/year/number, VAT rate and classification, and correction links. The
+`REQUIRED_FIELDS` worksheet and `register-content-check.json` identify missing
+fields. `TOTALS` separates income, expenses and adjustments by quarter and for
+the selected scope; blocked calculations have blank totals, never invented zeroes.
+These checks do not certify source completeness or AEAT import compatibility.
 
 For operational retention, archive original documents, a consistent database
 copy, exporter source/release, dependency versions and reproduction instructions

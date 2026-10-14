@@ -1252,6 +1252,15 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
                                   help="Manifest hash retained separately in the archive record")
     filing_integrity.set_defaults(_operational_handler=_cmd_filing_package_integrity)
 
+    receipts = subparsers.add_parser("receipt-register", help="Preserve received-invoice registration numbers")
+    receipts_sub = receipts.add_subparsers(dest="receipt_register_command", required=True)
+    for command in ("create-series", "assign", "list"):
+        parser = receipts_sub.add_parser(command)
+        _db_arg(parser)
+        if command != "list":
+            parser.add_argument("--payload", type=Path, required=True)
+        parser.set_defaults(_operational_handler=_cmd_receipt_register)
+
     filings = subparsers.add_parser("filings", help="Persist immutable calculation or filing snapshots")
     filings_sub = filings.add_subparsers(dest="filings_command", required=True)
     filings_snapshot = filings_sub.add_parser("snapshot")
@@ -4247,6 +4256,20 @@ def _cmd_filing_package_integrity(args: argparse.Namespace) -> int:
         expected_manifest_sha256=args.expected_manifest_sha256)
     _emit(result)
     return 0 if result["integrity_ok"] else 2
+
+
+def _cmd_receipt_register(args: argparse.Namespace) -> int:
+    from .receipt_register import create_series, register_receipt, list_receipts
+
+    with open_ledger_db(args.db, read_only=args.receipt_register_command == "list") as db:
+        if args.receipt_register_command == "list":
+            result = list_receipts(db)
+        else:
+            payload = _load_json_object(args.payload)
+            operation = create_series if args.receipt_register_command == "create-series" else register_receipt
+            result = operation(db, **payload)
+    _emit(result)
+    return 0
 
 
 def _cmd_filing_snapshot(args: argparse.Namespace) -> int:

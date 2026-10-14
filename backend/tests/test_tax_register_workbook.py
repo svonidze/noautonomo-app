@@ -153,7 +153,7 @@ def test_blocked_amounts_are_blank_with_date_period_reason_and_manifest(tmp_path
         if not stale:
             assert review_values(book)['IRPF Income base (EUR)'] == Decimal('920.00')
             q3 = read_workbook(write_accounting_books(db, tmp_path / 'q3', period_key='2025-Q3').files['tax_registers_xlsx'])
-            assert review_values(q3)['IVA status'] == 'Complete' and q3['BLOCKERS'] == []
+            assert review_values(q3)['IVA status'] == 'Amounts ready' and q3['BLOCKERS'] == []
         aeat = build_aeat_book_projection(db, period_key='2025-Q4')
         assert aeat['separate_register_xlsx']['generation_supported'] is True
         assert aeat['separate_register_xlsx']['registers_complete'] is False
@@ -165,7 +165,8 @@ def test_unattributed_exports_keep_existing_files(tmp_path):
     with initialize(tmp_path / 'db.sqlite') as db:
         source(db, tmp_path)
         export = write_accounting_books(db, tmp_path / 'books', period_key='2025-Q1')
-        assert set(export.files) == {'income', 'expense', 'assets', 'payments'}
+        assert set(export.files) == {'income', 'expense', 'assets', 'payments',
+            'irpf', 'iva', 'register_content_check', 'tax_registers', 'tax_registers_xlsx'}
 
 
 def test_expense_keeps_independent_deductions_and_ordinary_rows(tmp_path):
@@ -253,7 +254,7 @@ def test_mixed_iva_calculator_blockers_are_visible_in_review_exports(tmp_path, p
         book = read_workbook(tmp_path / 'books/tax-registers-review.xlsx')
         assert review_values(book)['IVA status'] == 'Blocked'
         assert review_values(book)['IVA Income base (EUR)'] is None
-        assert review_values(book)['IRPF status'] == 'Complete'
+        assert review_values(book)['IRPF status'] == 'Amounts ready'
         assert book['IVA'] == []
         assert len(book['BLOCKERS']) == 1
         blocker = book['BLOCKERS'][0]
@@ -376,7 +377,8 @@ def test_removed_prior_year_attribution_blocks_snapshot_readiness_without_curren
         manifest_path = write_filing_package(db, tmp_path / 'old', period_key='2024-Q4')
         manifest = json.loads(manifest_path.read_text())
         assert {artifact['book'] for artifact in manifest['artifacts']} == {
-            'income', 'expense', 'assets', 'payments', 'supplemental_book_status'}
+            'income', 'expense', 'assets', 'payments', 'supplemental_book_status',
+            'irpf', 'iva', 'register_content_check', 'tax_registers', 'tax_registers_xlsx'}
         assert manifest['submission_ready'] is False
         assert 'tax_attribution_snapshot_review_required' in manifest['readiness_blockers']
         assert [tuple(r) for r in db.connection.execute('SELECT * FROM filing_snapshots')] == before
