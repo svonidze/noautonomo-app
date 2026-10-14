@@ -1,6 +1,6 @@
 ---
-name: deploy-prod
-description: Deploy a reviewed Spain autonomo taxes release to the existing production service, with exact-SHA checks, verified backups, migration and rollback. Use for production deployment or rollback requests in this project, including «деплой на прод». For diagnosis or planning requests, perform read-only checks only; do not deploy. Public landing, blog and synthetic demo deployments use noautonomo-deploy-public instead.
+name: deploy-private-app
+description: Deploy a reviewed Spain autonomo taxes release to the existing production service, with exact-SHA checks, verified backups, migration and rollback. Use for production deployment or rollback requests in this project, including «деплой на прод». For diagnosis or planning requests, perform read-only checks only; do not deploy. Public landing, blog and synthetic demo deployments use the workspace deploy-public-* skills instead; they are not required for a standalone application checkout.
 ---
 
 # Deploy the existing production service
@@ -9,12 +9,19 @@ Use the installed operations control plane, not an improvised copy/upload-and-re
 
 ## Resolve the target and authority
 
+Resolve this skill file with `Path(skill_file).resolve()` before following relative
+references. The canonical skill directory is in the application repository,
+even when loaded through a workspace symlink. Its application root is
+`Path(skill_file).resolve().parents[3]`; resolve every linked runbook against
+that canonical directory. No workspace checkout is required. Operator-specific
+inventory and credentials remain outside this public repository.
+
 - Read [operations](../../../ops/docs/README.md), especially the operating checklist, deployment, migration and rollback sections. Read [disaster recovery](../../../ops/docs/DISASTER_RECOVERY.md) before backup verification or recovery. Inspect these files at the selected application SHA, not an outdated working tree.
 - Load the operator's private target inventory, normally `~/.config/autonomo-tax/deploy-target.json`, or an explicitly supplied path. Expected fields: `ssh_host`, `service_user`, `ops_root`, `runtime_env_path`, `release_root`, `repository_path`, `private_root`, `healthcheck_url`, `mode`. Treat values as data, never shell code. Keep the inventory outside Git with private permissions; it contains addresses and paths, not credentials.
 - Verify the inventory against the active service and its runtime file. Missing inventory, an unexpected host, changed baseline or conflicting deployment mode requires clarification. Never infer the service user from the operator's default SSH login.
 - A deployment request authorizes the agreed release workflow, not account changes, a SOPS transition, new backup destinations, accounting repairs or unrelated ops upgrades. Read-only review/planning requests do not authorize production writes. When the user has authorized the necessary dependency installation or scoped helper update, complete that preparation without asking again within the agreed scope. A missing build tool blocks the service switch, not authorized work to supply it; new accounts, privileges, costs or unrelated configuration still require separate authority.
 - Record the active application SHA, live schema and intended full lowercase 40-character target SHA. If no SHA was supplied, resolve the remote default branch once and pin its current reviewed, CI-green commit before mutations. Do not silently change an already approved target when the branch advances. Unmerged releases require explicit approval of that PR head.
-- Use the reviewed standalone `ops/prepare_ui_release.py` resolver to read `[tool.autonomo.web-ui].build-contract` from the Python project at the pinned application SHA (root `pyproject.toml` for layout 1; `backend/pyproject.toml` with explicit `layout-version = 2` for layout 2). Reject ambiguous or unknown layouts. Before layout-2 preparation, update the installed helper and the active default/SOPS deploy caller; app deployment does not update this control plane. For contracts 1 and 2, read [frontend preparation and installed-helper updates](../../../ops/docs/FRONTEND_BUILD.md) at that same SHA. An absent declaration uses the legacy release workflow; an unknown contract stops preparation.
+- Use the reviewed standalone `ops/prepare_ui_release.py` resolver to read `[tool.autonomo.web-ui].build-contract` from the Python project at the pinned application SHA (root `pyproject.toml` for layout 1; `backend/pyproject.toml` with explicit `layout-version = 2` for layout 2). Reject ambiguous or unknown layouts. Before layout-2 preparation, update the installed helper and the active default/SOPS deploy caller; app deployment does not update this control plane. For contracts 1 and 2, read [frontend preparation and installed-helper updates](../../../ops/docs/FRONTEND_BUILD.md) at that same SHA. An absent UI declaration uses the legacy release workflow only in layout 1; layout 2 requires its declared supported build contract. An unknown contract stops preparation.
 - `mode=default` uses the installed one-SHA deploy script. If SOPS is actually active, read the [SOPS runbook](../../../ops/sops/README.md), resolve both reviewed SHAs and their binding, and follow that mode exclusively. An existing SOPS directory does not prove activation. Do not mix scripts or switch modes to bypass a failed check.
 
 ## Preflight before downtime

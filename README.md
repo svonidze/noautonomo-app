@@ -83,3 +83,12 @@ VAT checks and accounting corrections.
 For development, see [builds and tests](docs/development/UI_DEVELOPMENT.md) and
 [repository privacy checks](docs/development/PRIVACY.md). For a server installation,
 see [Operations](ops/docs/README.md) and [Disaster recovery](ops/docs/DISASTER_RECOVERY.md).
+
+## Deployment skill
+
+Use [$deploy-private-app](.agents/skills/deploy-private-app/SKILL.md) for deployment,
+read-only preflight or rollback of your configured private accounting service.
+The skill ships with this application repository and reads your own private
+operator inventory; it does not require the NoAutonomo workspace. Deployments
+retain the operations runbooks' backup, migration, frontend and rollback checks.
+Public demo deployment is a separate workspace operation.
