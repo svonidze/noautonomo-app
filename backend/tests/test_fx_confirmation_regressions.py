@@ -247,6 +247,7 @@ def test_failed_decision_rolls_back_verification_event(tmp_path):
 
 
 @pytest.mark.parametrize("source", ["ecb", "actual_settlement"])
+@pytest.mark.web
 def test_foreign_expense_http_preview_and_confirm(tmp_path, monkeypatch, source):
     fixture, draft = setup_draft(tmp_path)
     with open_db(fixture["database"]) as db:
@@ -258,7 +259,7 @@ def test_foreign_expense_http_preview_and_confirm(tmp_path, monkeypatch, source)
         inbox_root=tmp_path / "inbox",
         archive_root=tmp_path / "archive",
         cache_root=tmp_path / "cache",
-        static_root=root / "backend/src/autonomo_taxes/web_ui",
+        static_root=root / "packages/ui/src/autonomo_taxes_ui/dist",
         read_only_document_roots=(tmp_path,),
     )
     server = _Server(config, monkeypatch, ecb=lambda *_: _fake_ecb_result(units="1"))

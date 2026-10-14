@@ -22,10 +22,7 @@ AS_OF = "2026-08-31"
 def _config(tmp_path: Path) -> LocalWebConfig:
     static_root = (
         REPO_ROOT
-        / "backend"
-        / "src"
-        / "autonomo_taxes"
-        / "web_ui"
+        / "packages/ui/src/autonomo_taxes_ui/dist"
     )
     return LocalWebConfig(
         project_root=tmp_path,
@@ -288,3 +285,6 @@ def test_analytics_http_requires_session_and_sets_headers(tmp_path: Path) -> Non
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+pytestmark = pytest.mark.web

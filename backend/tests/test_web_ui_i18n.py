@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 ROOT = REPO_ROOT
-STATIC_ROOT = ROOT / "backend/src/autonomo_taxes/web_ui"
+STATIC_ROOT = ROOT / "packages/ui/src/autonomo_taxes_ui/dist"
 INDEX_HTML = STATIC_ROOT / "index.html"
 
 
@@ -36,3 +36,8 @@ def test_built_shell_uses_external_module_resources():
     html = assets.path("index.html").read_text()
     assert 'type="module"' in html and '/ui-assets/' in html
     assert '<script src="/app.js"' not in html
+
+
+# Requires the separately built optional UI assets.
+import pytest
+pytestmark = pytest.mark.web

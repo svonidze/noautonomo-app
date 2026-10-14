@@ -25,19 +25,21 @@ def main() -> None:
         temporary = Path(directory)
         wheels = temporary / "wheels"
         checked([sys.executable, "-m", "build", "--wheel", "--outdir", str(wheels)], cwd=root / "backend")
-        wheel, = wheels.glob("*.whl")
+        core, = wheels.glob("*.whl")
+        checked([sys.executable, "-m", "build", "--wheel", "--outdir", str(wheels)], cwd=root / "packages/ui")
+        wheel, = wheels.glob("spain_autonomo_taxes_ui-*.whl")
         with zipfile.ZipFile(wheel) as archive:
-            prefix = "autonomo_taxes/web_ui/dist/"
+            prefix = "autonomo_taxes_ui/dist/"
             manifest = json.loads(archive.read(prefix + "build-manifest.json"))
             expected = {prefix + name for name in manifest["files"]} | {prefix + "build-manifest.json"}
-            actual = {name for name in archive.namelist() if name.startswith("autonomo_taxes/web_ui/")}
+            actual = {name for name in archive.namelist() if name.startswith(prefix)}
             if actual != expected:
                 raise RuntimeError("Wheel UI inventory differs from its build (missing, stale or source files)")
         environment = temporary / "venv"
         venv.EnvBuilder(with_pip=True).create(environment)
         bin_directory = environment / ("Scripts" if os.name == "nt" else "bin")
         python = bin_directory / ("python.exe" if os.name == "nt" else "python")
-        checked([str(python), "-m", "pip", "install", "--disable-pip-version-check", "--quiet", str(wheel)], cwd=temporary)
+        checked([str(python), "-I", "-m", "pip", "install", "--disable-pip-version-check", "--quiet", str(core), str(wheel)], cwd=temporary)
         env = dict(os.environ, PATH=str(bin_directory) + os.pathsep + os.environ["PATH"],
                    PYTHON=str(python), AUTONOMO_BROWSER_INSTALLED="1")
         env.pop("PYTHONPATH", None)

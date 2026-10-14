@@ -548,3 +548,6 @@ def test_reject_via_confirm_endpoint_needs_no_fx(
         assert result["transaction"]["lifecycle_status"] == "rejected"
     finally:
         server.close()
+
+
+pytestmark = pytest.mark.web

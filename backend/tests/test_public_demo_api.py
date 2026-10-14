@@ -204,7 +204,7 @@ def test_missing_or_changed_artifacts_fail_and_public_mode_never_loads_private_c
 
 
 def test_controlled_db_change_is_visible_without_rebuilding_the_frontend(prepared):
-    normal_index = REPO_ROOT / "backend/src/autonomo_taxes/web_ui/dist/index.html"
+    normal_index = REPO_ROOT / "packages/ui/src/autonomo_taxes_ui/dist/index.html"
     before_ui = normal_index.read_bytes()
     (prepared / "demo.sqlite").chmod(0o600)
     with sqlite3.connect(prepared / "demo.sqlite") as connection:
@@ -275,3 +275,6 @@ def test_document_requires_an_actual_attachment_even_when_the_source_path_exists
     manifest_path.write_text(json.dumps(manifest))
     with server_for(prepared) as (server, _):
         assert request(server, "GET", f"/demo/api/document/{orphan['document_id']}/content")[0] == 404
+
+
+pytestmark = pytest.mark.web

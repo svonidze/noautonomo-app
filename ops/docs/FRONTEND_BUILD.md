@@ -3,18 +3,18 @@
 This is a preparation contract, not permission to deploy. Use the existing
 reviewed-SHA, backup, active-mode and rollback procedures in the operations runbook.
 
-## Build contract 1
+## Build contracts 1 and 2
 
 The shared `prepare_ui_release.py` resolves the Python project from the exact
 Git object: root `pyproject.toml` for layout 1, or `backend/pyproject.toml` with
 `[tool.autonomo.release] layout-version = 2` for layout 2. Exactly one project
 root must exist; unknown or inconsistent layouts fail before installation.
 Layout 2 uses `frontend/` for Node metadata and commands. The Python project
-declares `[tool.autonomo.web-ui] build-contract = 1`; an absent UI declaration
+declares `[tool.autonomo.web-ui] build-contract = 1` or `2`; an absent UI declaration
 is legacy only in layout 1. UI manifests and installed resource paths keep
 contract 1 across both repository layouts.
 
-For a new contract-1 target, use the exact Node/npm engines in `package.json`
+For a new contract-1 or contract-2 target, use the exact Node/npm engines in `package.json`
 and matching `.nvmrc` from the pinned Git object. The commands below derive those
 versions through the installed compatible helper rather than maintaining another version list. A working registry/cache
 is required. Tool or network failure must leave the current service running;
@@ -30,7 +30,7 @@ led by the pinned Node and `CI=true` are passed. Proxy variables (`HTTP_PROXY`,
 configure a registry mirror or proxy in the build user's `~/.npmrc` (read through
 the preserved `HOME`), or widen the allowlist in `prepare_ui_release.py` as a
 reviewed change.
-The caller installs the Python package, records its schema marker and creates a
+The preparation helper installs the selected Python project, records its schema marker and creates a
 completion receipt only after isolated imports and installed resource hashes pass.
 The receipt is written atomically and includes build SHA, tool versions, lockfile
 digest, installed resource inventory and schema version. It is not a deployment
@@ -40,6 +40,23 @@ An existing complete target is verified without Node/npm. An incomplete target
 is preserved, and preparation refuses to repair it or mint a missing receipt.
 Follow separately scoped recovery; do not delete it or blindly rerun deployment.
 Old releases do not need the new receipt or assets, and rollback never rebuilds.
+
+## Paired optional UI release (contract 2)
+
+Current releases build the core from `backend/` and the UI from `packages/ui/`;
+layout-1 paired releases build the core from the repository root. The frontend
+writes `packages/ui/src/autonomo_taxes_ui/dist`, with the asset manifest retaining
+contract 1. `spain-autonomo-taxes` owns `autonomo-tax` and contains the expense
+rule catalog, with no frontend assets. `spain-autonomo-taxes-ui` owns
+`autonomo-web`, the assets, and an exact dependency on the matching core version.
+
+The shared `install` phase retains exactly two wheels in `.ui-wheels/`, validates
+matching project and wheel versions, then installs that pair. Completion receipts
+include both wheel hashes, the installed file hashes and launcher hashes. Reuse
+checks the retained wheels and installed pair without invoking Node. Tampering,
+version mismatch, missing assets or incomplete targets stop preparation before
+downtime. Existing contracts 0/1 and their receipts remain supported; rollback
+uses the already installed release and never rebuilds either wheel.
 
 ## Install and select the pinned build tools
 
@@ -163,10 +180,11 @@ Application deployment does not update installed ops helpers. Before using
 layout 2 (including tool-version discovery above), install the reviewed
 `prepare_ui_release.py` and active caller: `ops/deploy.sh` for default mode or
 `ops/sops/deploy.sh` for SOPS. Update both callers if both modes are operated.
-The helper must support `python-project-path` and both layouts. An old helper
+The helper must support `install`, `python-project-path`, both layouts, and
+contracts 0/1/2. An old helper
 refuses a layout-2 target during preflight; do not bypass that refusal.
 
-Before the first contract-1 rollout, compare the reviewed files with the installed active mode.
+Before the first contract-1 or contract-2 rollout, compare the reviewed files with the installed active mode.
 In default mode include `run-with-service-env.sh`; update and validate it through
 the [wrapper procedure](README.md#adding-the-manual-operation-wrapper-to-an-existing-default-installation)
 before using one-shot deployment controls. Do not install the default wrapper
@@ -186,7 +204,7 @@ into a SOPS workflow. Then update the shared helpers and active caller:
 5. Perform the actual reviewed release only through the existing deployment skill.
 
 Fresh provisioning installers include the helper. The runtime serves only files
-listed in `web_ui/dist/build-manifest.json`; the manifest, maps and source files
+listed in the installed package's `dist/build-manifest.json`; the manifest, maps and source files
 are not public. `/assets` remains an application route. Both shell and resources
 retain `no-store`; there are no lazy UI chunks or service worker.
 

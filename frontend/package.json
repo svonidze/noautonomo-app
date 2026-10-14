@@ -17,6 +17,7 @@
     "build": "npm run check:runtime && npm run locales:check && vite build && node scripts/write_ui_manifest.cjs",
     "test:demo": "npm run build && playwright test --config playwright.demo.config.mts",
     "test:installed": "python ../tests/packaging/installed_ui_runner.py",
+    "test:core": "python ../tests/packaging/installed_core_runner.py",
     "locales:check": "node scripts/build_locales.mts",
     "test:pseudo": "node scripts/test_pseudolocale.cjs",
     "test:chart-module": "node scripts/test_chart_module.cjs",

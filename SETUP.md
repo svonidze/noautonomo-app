@@ -15,9 +15,11 @@ outside these source checkouts.
 
 ## Requirements and installation
 
-Python 3.11 or newer is required. Installing from source also requires Node
-24.20.0 and npm 11.19.0 (see `frontend/.nvmrc`) to build the interface. A prebuilt Python
-wheel already contains those assets and does not require Node at runtime.
+Python 3.11 or newer is required. The core toolkit installs with `python -m pip
+install -e ./backend` and needs no Node or UI package. To use the optional browser
+interface from source, build with Node 24.20.0 and npm 11.19.0
+(see `frontend/.nvmrc`), then install both packages below. Prebuilt matching
+`spain-autonomo-taxes` and `spain-autonomo-taxes-ui` wheels need no Node at runtime.
 
 Run the installation commands from the repository root. First create and
 activate a virtual environment.
@@ -36,12 +38,12 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-Then build the interface before installing the Python package (both platforms):
+Then build the interface before installing the paired Python packages (both platforms):
 
 ```sh
 npm --prefix frontend ci --include=dev --no-audit --no-fund
 npm --prefix frontend run build
-python -m pip install -e ./backend
+python -m pip install -e ./backend -e ./packages/ui
 ```
 
 Image intake also requires the local Tesseract executable and its English model.

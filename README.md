@@ -5,7 +5,9 @@ accounts and tax preparation in Spain.
 
 This application is for self-employed people (autónomos) who want to review their
 records and understand the figures behind them. The browser interface is available
-in Russian and English.
+in Russian, English and Spanish.
+
+For complete command-driven accounting flows, read the [agent workflow](docs/AGENT_WORKFLOW.md) and [CLI capability matrix](docs/CLI_CAPABILITIES.md). They cover reviewed income, expenses, depreciation, retries and settings.
 
 ## What you can do
 
@@ -14,6 +16,17 @@ in Russian and English.
 - See income, expenses and working tax figures for each quarter.
 - Track equipment and depreciation, spreading its deductible cost over time.
 - Keep tax filing receipts and customer VAT checks alongside your records.
+
+## Installation choices
+
+The core `spain-autonomo-taxes` package provides `autonomo-tax` and installs from
+`backend/` without Node or browser assets. The optional
+`spain-autonomo-taxes-ui` package provides `autonomo-web` and the compiled
+interface. Install both packages at the same version for browser use.
+
+From source, install the core with `python -m pip install -e ./backend`. For the
+interface, build `frontend/` first and install `-e ./backend -e ./packages/ui`.
+Matching prebuilt wheels do not require Node at runtime.
 
 ## Start here
 

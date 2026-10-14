@@ -34,7 +34,7 @@ def _config(tmp_path: Path) -> LocalWebConfig:
         inbox_root=None,
         archive_root=None,
         cache_root=tmp_path / "cache",
-        static_root=REPO_ROOT / "backend/src/autonomo_taxes" / "web_ui",
+        static_root=REPO_ROOT / "packages/ui/src/autonomo_taxes_ui/dist",
     )
 
 
@@ -279,3 +279,6 @@ def test_transaction_detail_rejects_invalid_id_before_accessing_database(tmp_pat
 
     assert exc_info.value.status == 400
     assert exc_info.value.code == "invalid_transaction_id"
+
+
+pytestmark = pytest.mark.web

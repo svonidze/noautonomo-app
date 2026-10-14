@@ -22,7 +22,7 @@ def context_app(tmp_path, monkeypatch):
         inbox_root=tmp_path / "inbox",
         archive_root=tmp_path / "archive",
         cache_root=tmp_path / "cache",
-        static_root=REPO_ROOT / "backend/src/autonomo_taxes/web_ui",
+        static_root=REPO_ROOT / "packages/ui/src/autonomo_taxes_ui/dist",
     )
     monkeypatch.setattr(
         status_context,
@@ -325,3 +325,6 @@ def test_get_array_contract_and_controlled_unknown_period(context_app):
         server.server_close()
         thread.join(timeout=5)
     assert dump(config) == before
+
+
+pytestmark = pytest.mark.web

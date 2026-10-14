@@ -10,6 +10,7 @@ from pathlib import Path
 import tempfile
 import threading
 
+from autonomo_taxes.ui_assets import default_ui_root
 from autonomo_taxes import local_web
 from autonomo_taxes.ledger_db import LedgerDB
 
@@ -21,7 +22,7 @@ def main() -> None:
         config = local_web.LocalWebConfig(
             project_root=root, database=root / "ledger.sqlite",
             inbox_root=None, archive_root=None, cache_root=root / "cache",
-            static_root=Path(local_web.__file__).resolve().parent / "web_ui",
+            static_root=default_ui_root(),
             private_root=root,
         )
         with LedgerDB.initialize(config.database) as db:
