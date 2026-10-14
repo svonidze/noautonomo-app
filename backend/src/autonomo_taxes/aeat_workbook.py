@@ -17,7 +17,7 @@ import zipfile
 
 
 OFFICIAL_TEMPLATE_SHA256 = (
-    "0dd42d6b40d9388365624ae2ed7f301d8479ec92271b4eac06d2440096f49ebc"
+    "1011b811d71e5074dea08b946d2be2189343e419bcb668441d6e74fd1f639008"
 )
 AEAT_VALIDATOR_POST_URL = (
     "https://www2.agenciatributaria.gob.es/wlpl/PACM-SERV/ServletValidarLLRSI"

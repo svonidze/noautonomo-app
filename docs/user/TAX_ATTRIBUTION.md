@@ -163,6 +163,19 @@ rules differ from this native review workbook. Mapping all reviewed dates and FX
 to those columns has not been validated. Do not upload the review workbook as
 an AEAT import file.
 
+The unified template downloaded from AEAT on 14 October 2026 is pinned to SHA-256
+`1011b811d71e5074dea08b946d2be2189343e419bcb668441d6e74fd1f639008`.
+Its received-invoice total formula includes the reverse-charge flag when deciding
+whether to add IVA to the invoice total. The previous template remains identified
+in the contract for historical evidence; new bytes are not accepted automatically.
+Two synthetic expense rows were generated through the existing writer, recalculated
+in LibreOffice, and accepted by the official validator (`resultado.valido=true`).
+The ordinary-IVA and reverse-charge totals were respectively 121 and 100 for a
+base of 100 and IVA of 21. The response also retained a generic warning to check
+column layout and the income-sheet name. This checks these two format cases, not every supported tax operation,
+source completeness, or the separate attributed-register format. Recalculation is
+still required before validation; the writer itself does not evaluate formulas.
+
 The unified AEAT workbook has one operation date and amount set. Its projection
 is blocked with `separate_tax_registers_required` for attributed views; it never
 exports stale rows as corrected figures or invents duplicate invoices. Separate

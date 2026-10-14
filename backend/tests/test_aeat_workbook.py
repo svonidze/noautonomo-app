@@ -29,6 +29,11 @@ from autonomo_taxes.cli import main
 from autonomo_taxes.ledger_db import initialize
 
 
+def test_default_template_pin_matches_the_latest_reviewed_contract() -> None:
+    from autonomo_taxes.aeat_books import AEAT_BOOK_CONTRACT
+    assert aeat_workbook.OFFICIAL_TEMPLATE_SHA256 == AEAT_BOOK_CONTRACT["template_sha256_observed_2026_10_14"]
+
+
 def test_template_contract_checks_hash_sheets_and_exact_type_rows(tmp_path: Path) -> None:
     template = tmp_path / "official-template.xlsx"
     _write_template_fixture(template)

@@ -27,6 +27,9 @@ AEAT_BOOK_CONTRACT = {
     "template_sha256_observed_2026_07_16": (
         "0dd42d6b40d9388365624ae2ed7f301d8479ec92271b4eac06d2440096f49ebc"
     ),
+    "template_sha256_observed_2026_10_14": (
+        "1011b811d71e5074dea08b946d2be2189343e419bcb668441d6e74fd1f639008"
+    ),
     "required_sheets": (
         "EXPEDIDAS_INGRESOS",
         "RECIBIDAS_GASTOS",
