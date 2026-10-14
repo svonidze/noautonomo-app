@@ -328,6 +328,8 @@ def attach_attributions(db: LedgerDB, rows: Iterable[TaxRow]) -> list[TaxRow]:
                 tax_code='outside_scope' if is_gain else 'not_subject', include_modelo130=row.include_modelo130,
                 counterparty_id=row.counterparty_id, counterparty_name=row.counterparty_name,
                 counterparty_tax_id=row.counterparty_tax_id,
+                counterparty_identifier=row.counterparty_identifier, counterparty_id_type=row.counterparty_id_type,
+                counterparty_identity_country=row.counterparty_identity_country,
                 receipt_number=row.receipt_number, registered_on=row.registered_on,
                 receipt_series=row.receipt_series, receipt_year=row.receipt_year,
                 document_type=row.document_type, operation_date=row.operation_date,
@@ -358,10 +360,11 @@ def attributed_periods(db: LedgerDB, transaction_id: str, original_date: str) ->
 
 
 def register_projection(rows: Iterable[TaxRow], *, year: int, through: date,
-                        iva_starts_on: date | None = None) -> dict[str, Any]:
+                        iva_starts_on: date | None = None, for_books: bool = False) -> dict[str, Any]:
     from .tax_engine import project_tax_rows, calculate_modelo303_rows
     rows = list(rows)
     result: dict[str, Any] = {'date_basis': 'separate_reviewed_irpf_iva', 'registers': {}, 'bridge': []}
+    result['scope_type'] = 'accounting_books' if for_books else 'tax_return_projection'
     selected_ids: set[str] = set()
     parent_ids: set[str] = set()
     for basis in ('irpf', 'iva'):
@@ -371,13 +374,19 @@ def register_projection(rows: Iterable[TaxRow], *, year: int, through: date,
         blocked_rows = []
         for row in rows:
             try:
-                resolved = project_tax_rows([row], basis, start, through)
+                book_invoice = row.document_type in {'invoice', 'income_invoice', 'expense_invoice', 'ingresos_book', 'gastos_book'} and row.invoice_type not in {'SF','AJ'}
+                candidate = replace(row, include_modelo130=True,
+                    include_modelo303=row.include_modelo303 or (book_invoice and row.component == 'transaction')) if for_books else row
+                resolved = project_tax_rows([candidate], basis, start, through)
                 if not resolved:
                     continue
                 if basis == 'iva':
                     # Use the calculator's complete classification/rate guard, not an exporter copy.
                     calculate_modelo303_rows(resolved, year=year,
                                              quarter=(resolved[0].tax_date.month - 1) // 3 + 1)
+                if for_books:
+                    resolved = [replace(item, include_modelo130=row.include_modelo130,
+                                        include_modelo303=row.include_modelo303) for item in resolved]
                 projected.extend(resolved)
             except CalculationBlocked as exc:
                 day = row.effective_date(basis)

@@ -24,11 +24,13 @@ def check_register_content(projection: dict[str, Any]) -> dict[str, Any]:
             if row["component"].startswith("fx_"):
                 if not row["fx_evidence_ref"]:
                     missing.append("fx_evidence_ref")
-            elif row["document_type"] in {"invoice", "income_invoice", "expense_invoice"}:
+            elif row.get("amortization_entry_id") or row["document_type"] in {"social_security_evidence", "bank_fee_evidence"}:
+                missing.extend(field for field in ("document_number", "document_source_hash") if not row[field])
+            elif row["document_type"] in {"invoice", "income_invoice", "expense_invoice", "ingresos_book", "gastos_book"}:
                 missing.extend(field for field in ("document_number", "issued_on", "counterparty_name") if not row[field])
-                if not (row["counterparty_tax_id"] or row["vat_id"]):
+                if not (row["counterparty_identifier"] or row["counterparty_tax_id"] or row["vat_id"]):
                     missing.append("counterparty_identifier")
-                if row["kind"] == "expense" and not row["receipt_number"]:
+                if row["kind"] == "expense" and row["invoice_type"] not in {"SF","AJ"} and not row["receipt_number"]:
                     missing.append("receipt_registration")
                 if basis == "iva" and row["vat_eur"] and row["vat_rate_percent"] is None:
                     missing.append("vat_rate_percent")

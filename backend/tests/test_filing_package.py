@@ -94,7 +94,7 @@ class FilingPackageTests(unittest.TestCase):
         self.assertFalse(manifest["mandatory_books_ready"])
         self.assertEqual(manifest["readiness_blockers"], [
             "provisiones_suplidos_confirmation_missing", "register_required_fields_missing",
-            "mandatory_book_content_validation_pending"])
+            "mandatory_book_content_validation_pending", "tax_attribution_pending"])
         self.assertEqual(manifest["period"]["period_key"], "2026-Q2")
         self.assertEqual({artifact["filename"] for artifact in manifest["artifacts"]}, {
             "assets.csv", "expense.csv", "income.csv", "payments.csv", "supplemental-book-status.json",

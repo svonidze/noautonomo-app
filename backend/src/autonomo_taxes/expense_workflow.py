@@ -533,11 +533,16 @@ def _recognize(db: LedgerDB, entry_id: str, archive_root: Path, actor: str) -> d
         require(existing["lifecycle_status"] in {"posted", "included_in_snapshot"}, "Existing recognition is not posted", status=409)
         return {"amortization_entry_id": entry_id, "transaction_id": entry["recognition_transaction_id"], "posted": True}
     plan = _one(db, "SELECT * FROM asset_depreciation_plans WHERE asset_id=?", (entry["asset_id"],))
+    disposal = db.connection.execute("SELECT * FROM asset_disposals WHERE asset_id=?", (entry["asset_id"],)).fetchone()
+    require(not disposal or entry["recognition_on"] and entry["recognition_on"] <= disposal["last_depreciable_on"],
+            "Depreciation after disposal is blocked; review the final disposal-period settlement", status=409)
     parameters = json.loads(plan["parameters_json"])
     require(plan["calculation_version"] == CALCULATION_VERSION and plan["source_hash"] == digest(parameters),
             "The reviewed schedule version or parameters changed", status=409)
     expected_rows = schedule(**{key: parameters[key] for key in (
-        "basis_minor", "business_use_ratio", "annual_rate_basis_points", "placed_in_service_on", "method")})
+        "basis_minor", "business_use_ratio", "annual_rate_basis_points", "placed_in_service_on", "method")},
+        opening_accumulated_minor=parameters.get("opening_accumulated_minor", 0),
+        recognition_starts_on=parameters.get("recognition_starts_on"))
     expected_row = {key: entry[key] for key in ("period_key", "recognition_on", "amount_minor")}
     require(expected_row in expected_rows and entry["source_hash"] == digest({
         "parameters": parameters, "row": expected_row, "version": CALCULATION_VERSION}),
@@ -552,13 +557,18 @@ def _recognize(db: LedgerDB, entry_id: str, archive_root: Path, actor: str) -> d
     require(entry["recognition_on"] and entry["recognition_on"] <= date.today().isoformat(), "Depreciation date has not arrived", status=409)
     require(entry["amount_minor"] > 0, "Zero depreciation is not a posting action")
     acquisition = _one(db, "SELECT * FROM transactions WHERE transaction_id=?", (entry["acquisition_transaction_id"],))
-    require(acquisition["lifecycle_status"] in {"posted", "included_in_snapshot"}, "Acquisition must be posted first")
+    authoritative = (parameters.get("opening") and acquisition["transaction_id"] in {
+        row["transaction_id"] for row in db.list_authoritative_history_transactions()})
+    require(acquisition["lifecycle_status"] in {"posted", "included_in_snapshot"} or authoritative,
+            "Acquisition must be posted or accepted historical evidence")
     acquisition_packet = _build_packet(db, "transaction:" + acquisition["transaction_id"])
     _verify_archived_document(db, acquisition_packet["state"])
     basis = _one(db, "SELECT amortizable_base_minor,business_use_ratio FROM assets WHERE asset_id=?", (entry["asset_id"],))
     used = db.connection.execute("""SELECT COALESCE(SUM(ae.amount_minor),0) FROM amortization_entries ae
         JOIN transactions t ON t.transaction_id=ae.recognition_transaction_id
-        WHERE ae.asset_id=? AND t.lifecycle_status IN ('posted','included_in_snapshot')""", (entry["asset_id"],)).fetchone()[0]
+        WHERE ae.asset_id=? AND t.lifecycle_status IN ('posted','included_in_snapshot')
+          AND t.transaction_date>=?""", (entry["asset_id"], parameters.get("recognition_starts_on", "0001-01-01"))).fetchone()[0]
+    used += parameters.get("opening_accumulated_minor", 0)
     require(used + entry["amount_minor"] <= minor(Decimal(basis["amortizable_base_minor"]) * Decimal(str(basis["business_use_ratio"]))), "Depreciation exceeds remaining basis")
     content = (f"Internal depreciation record\nAsset: {entry['asset_code']}\nPeriod: {entry['period_key']}\n"
                f"Recognition date: {entry['recognition_on']}\nAmount EUR minor: {entry['amount_minor']}\n"

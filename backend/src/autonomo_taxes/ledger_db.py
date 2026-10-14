@@ -34,7 +34,7 @@ from .tax_rules import ALL_FORM_CODES, ANNUAL_FORM_CODES, FORM_RULES, QUARTERLY_
 from .vat_classification import is_vat_investment_good
 
 
-LATEST_SCHEMA_VERSION = 29
+LATEST_SCHEMA_VERSION = 30
 
 # Migrations that rebuild a table referenced by a foreign key. They must
 # run with foreign-key enforcement temporarily disabled, and that pragma
@@ -4572,6 +4572,10 @@ class LedgerDB:
         effective_tax_year = tax_year or int(period_key[:4])
         effective_include = entry_kind != "annual_evidence" if include_in_books is None else include_in_books
         period = self.ensure_period(period_key)
+        if self.connection.execute("PRAGMA user_version").fetchone()[0] >= 30 and entry_kind != "annual_evidence":
+            disposal = self.connection.execute("SELECT last_depreciable_on FROM asset_disposals WHERE asset_id=?", (asset_id,)).fetchone()
+            if disposal and period["ends_on"] > disposal["last_depreciable_on"]:
+                raise ValueError("Depreciation after disposal requires a reviewed final settlement; automatic entries are blocked")
         self._assert_period_mutable(period["period_id"])
         existing = self._fetch_optional(
             "SELECT * FROM amortization_entries WHERE asset_id = ? AND period_id = ?",
@@ -5499,6 +5503,9 @@ class LedgerDB:
                    td.source_hash AS document_source_hash,
                    c.display_name AS counterparty_name, c.country_code,
                    c.vat_id, c.tax_id AS counterparty_tax_id,
+                   ci.identifier AS counterparty_identifier, ci.aeat_id_type AS counterparty_id_type,
+                   ci.country_code AS counterparty_identity_country,
+                   ar.amortization_entry_id,
                    tt.tax_code, tt.taxable_base_minor, tt.vat_minor,
                    tt.deductible_irpf_minor, tt.deductible_vat_minor, tt.withholding_minor,
                    tt.include_modelo130, tt.include_modelo303, tt.include_modelo347,
@@ -5523,6 +5530,8 @@ class LedgerDB:
             LEFT JOIN receipt_registrations rr ON rr.document_id = t.document_id
             LEFT JOIN receipt_registration_series rs ON rs.series_id = rr.series_id
             LEFT JOIN counterparties c ON c.counterparty_id = t.counterparty_id
+            LEFT JOIN counterparty_identities ci ON ci.counterparty_id=c.counterparty_id AND ci.is_primary=1
+            LEFT JOIN amortization_entries ar ON ar.recognition_transaction_id=t.transaction_id
             LEFT JOIN tax_treatments tt ON tt.transaction_id = t.transaction_id
             LEFT JOIN (
                 SELECT acquisition_transaction_id, MIN(asset_id) AS asset_id, COUNT(*) AS asset_count
@@ -8399,6 +8408,18 @@ def _migration_29(connection: sqlite3.Connection) -> None:
                                "BEGIN SELECT RAISE(ABORT, 'Receipt registration is immutable'); END")
 
 
+def _migration_30(connection: sqlite3.Connection) -> None:
+    connection.execute("""CREATE TABLE asset_disposals (
+        asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id),
+        disposed_on TEXT NOT NULL, last_depreciable_on TEXT NOT NULL,
+        reason TEXT NOT NULL CHECK(length(trim(reason))>0),
+        evidence_ref TEXT NOT NULL CHECK(length(trim(evidence_ref))>0),
+        CHECK(last_depreciable_on<=disposed_on))""")
+    for action in ("UPDATE", "DELETE"):
+        connection.execute(f"CREATE TRIGGER asset_disposals_no_{action.lower()} BEFORE {action} ON asset_disposals "
+                           "BEGIN SELECT RAISE(ABORT, 'Asset disposals are immutable'); END")
+
+
 _MIGRATIONS = {
     1: _migration_1,
     2: _migration_2,
@@ -8429,4 +8450,5 @@ _MIGRATIONS = {
     27: _migration_27,
     28: _migration_28,
     29: _migration_29,
+    30: _migration_30,
 }

@@ -121,6 +121,10 @@ class TaxRow:
     attribution_reason: str = ""
     fx_evidence_ref: str = ""
     counterparty_tax_id: str = ""
+    counterparty_identifier: str = ""
+    counterparty_id_type: str = ""
+    counterparty_identity_country: str = ""
+    amortization_entry_id: str = ""
     receipt_number: str = ""
     receipt_series: str = ""
     receipt_year: int | None = None

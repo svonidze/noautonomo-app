@@ -698,6 +698,11 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
     assets_list = assets_sub.add_parser("list", help="List assets and book-profile fields")
     _db_arg(assets_list)
     assets_list.set_defaults(_operational_handler=_cmd_assets_list)
+    for action in ("continue", "dispose"):
+        command = assets_sub.add_parser(action, help="Record reviewed asset lifecycle evidence")
+        _db_arg(command)
+        command.add_argument("--payload", type=Path, required=True)
+        command.set_defaults(_operational_handler=_cmd_asset_lifecycle)
     asset_profile = assets_sub.add_parser(
         "book-profile",
         help="Apply a source-backed AEAT asset book profile",
@@ -1251,6 +1256,19 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
     filing_integrity.add_argument("--expected-manifest-sha256", required=True,
                                   help="Manifest hash retained separately in the archive record")
     filing_integrity.set_defaults(_operational_handler=_cmd_filing_package_integrity)
+    archive = filing_sub.add_parser("archive", help="Retain a frozen ledger, books, originals, program and wheels")
+    _db_arg(archive)
+    archive.add_argument("--period", required=True)
+    archive.add_argument("--out-dir", type=Path, required=True)
+    archive.add_argument("--dependency-dir", type=Path, required=True)
+    archive.add_argument("--source-file", type=Path, action="append", default=[])
+    archive.add_argument("--legacy-path-map", type=Path)
+    archive.add_argument("--supplemental-evidence", type=Path)
+    archive.set_defaults(_operational_handler=_cmd_filing_archive)
+    archive_verify = filing_sub.add_parser("archive-verify", help="Verify every retained archive file")
+    archive_verify.add_argument("--manifest", type=Path, required=True)
+    archive_verify.add_argument("--expected-manifest-sha256", required=True)
+    archive_verify.set_defaults(_operational_handler=_cmd_filing_archive_verify)
 
     receipts = subparsers.add_parser("receipt-register", help="Preserve received-invoice registration numbers")
     receipts_sub = receipts.add_subparsers(dest="receipt_register_command", required=True)
@@ -2550,6 +2568,15 @@ def _cmd_assets_list(args: argparse.Namespace) -> int:
             ).fetchall()
         ]
     _emit(rows)
+    return 0
+
+
+def _cmd_asset_lifecycle(args: argparse.Namespace) -> int:
+    from .asset_lifecycle import continue_asset, record_disposal
+    operation = continue_asset if args.assets_command == "continue" else record_disposal
+    with open_ledger_db(args.db) as db:
+        result = operation(db, **_load_json_object(args.payload))
+    _emit(result)
     return 0
 
 
@@ -4270,6 +4297,24 @@ def _cmd_receipt_register(args: argparse.Namespace) -> int:
             result = operation(db, **payload)
     _emit(result)
     return 0
+
+
+def _cmd_filing_archive(args: argparse.Namespace) -> int:
+    from .filing_archive import write_filing_archive
+    evidence = _load_json_object(args.supplemental_evidence) if args.supplemental_evidence else None
+    with open_ledger_db(args.db, read_only=True) as db:
+        manifest = write_filing_archive(db, args.out_dir, period_key=args.period, dependency_dir=args.dependency_dir,
+            source_files=args.source_file, legacy_path_map=args.legacy_path_map, supplemental_evidence=evidence)
+    _emit({"manifest":str(manifest.resolve()),"manifest_sha256":hashlib.sha256(manifest.read_bytes()).hexdigest(),
+           "mandatory_books_ready":False,"runtime_replay_verified":False})
+    return 0
+
+
+def _cmd_filing_archive_verify(args: argparse.Namespace) -> int:
+    from .filing_archive import verify_filing_archive
+    result = verify_filing_archive(args.manifest, expected_manifest_sha256=args.expected_manifest_sha256)
+    _emit(result)
+    return 0 if result["integrity_ok"] else 2
 
 
 def _cmd_filing_snapshot(args: argparse.Namespace) -> int:

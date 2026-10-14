@@ -82,7 +82,9 @@ a receipt registration number. Unknown historical numbers remain blank for
 review. A changed source-document hash invalidates its registration in exports.
 
 Separate review registers are produced for ordinary transactions as well as
-explicit tax-date attributions. They include operation and issue dates, receipt
+explicit tax-date attributions. Invoices remain in books even when excluded from
+both declarations; their original inclusion flags remain visible and IVA validation
+still runs. They include operation and issue dates, receipt
 series/year/number, VAT rate and classification, and correction links. The
 `REQUIRED_FIELDS` worksheet and `register-content-check.json` identify missing
 fields. `TOTALS` separates income, expenses and adjustments by quarter and for
@@ -92,8 +94,69 @@ These checks do not certify source completeness or AEAT import compatibility.
 For operational retention, archive original documents, a consistent database
 copy, exporter source/release, dependency versions and reproduction instructions
 alongside the package in a new private archive object. Verify an isolated restore.
-The export command does not yet build that complete recovery bundle or enforce
-remote retention. Never overwrite a submitted version with a new calculation.
+The basic export command does not build the recovery bundle. The separate archive
+command below retains it locally; remote retention remains the storage operator's
+responsibility. Never overwrite a submitted version with a new calculation.
 
 Sources: [IRPF register requirements](https://www.boe.es/buscar/act.php?id=BOE-A-2019-10487),
 [received invoice register](https://sede.agenciatributaria.gob.es/Sede/iva/facturacion-registro/libros-registro-iva/libro-registro-facturas-recibidas.html).
+
+## Continuing assets and recording disposal (schema 30)
+
+`assets continue --db PATH --payload opening.json` accepts `asset_id`, `as_of`
+(completed quarter end), `prior_year_minor`, `current_year_minor`, `evidence_ref`
+and `reason`. Amounts are the reviewed business depreciation already accumulated,
+in EUR cents. The asset must have its reviewed EUR basis, linear method, rate and
+category. The continuation uses the original annual basis/rate and caps new
+charges at the remaining balance. It preserves historical entries and does not
+post anything. Existing later schedule entries require reconciliation; they are
+never silently replaced. Recognition uses the existing reviewed posting command.
+
+`assets dispose --db PATH --payload disposal.json` accepts `asset_id`, `disposed_on`,
+`last_depreciable_on`, `reason` and `evidence_ref`. Both dates are explicit: the
+command does not guess the last deductible day. It retains disposal evidence and
+prevents subsequent depreciation posting or direct automatic schedule entries.
+Already recognized depreciation after that date requires an explicit historical
+correction. Disposal details appear in the asset CSV.
+
+Final partial-period depreciation, disposal proceeds, gains/losses and applicable
+VAT adjustments still require a reviewed settlement. Until supported and reviewed,
+the affected package reports `asset_disposal_settlement_review_required`. Recording
+disposal alone does not settle its tax consequences or change filed returns.
+
+## Complete retained archive
+
+`filing-package archive --db PATH --period YEAR-QN --out-dir NEW_DIRECTORY
+--dependency-dir WHEEL_DIRECTORY` snapshots the committed database, exports books
+from that copy, retains selected source documents and source-book files, and copies
+the actual exporter package and matching installed dependency versions. Supply
+`--legacy-path-map PATH` for old source paths, repeat `--source-file PATH` for
+additional original evidence, and use `--supplemental-evidence PATH` for the
+period's explicit empty-book confirmation.
+
+Generation and verification run through the staged program copy, with its source
+fingerprint retained in the manifest. Filing receipts and referenced snapshot
+artifacts are included. Authority documents without period links are retained
+conservatively and labeled as unperioded, rather than guessed into a tax quarter.
+For imported books, a canonical row/document provenance hash is never treated as
+the original file's byte hash. Unverified historical content identity remains an
+explicit warning in the manifest; retaining it does not certify original evidence.
+
+Prepare the dependency wheel directory for the same Python version and operating
+system. Missing dependency versions, missing originals, altered reviewed document
+hashes or an unreproducible export fail the operation and remove the incomplete new
+directory. Existing versions are never reused. No network package installation or
+production database migration is performed by the archive command.
+Wheel platform and Python tags must be compatible with the capturing runtime.
+
+Keep the returned manifest SHA-256 separately, then upload the new directory to
+the configured encrypted storage without overwriting earlier versions.
+`filing-package archive-verify --manifest PATH --expected-manifest-sha256 HASH`
+verifies every retained file without the live database. Paths escaping the archive,
+symlinks, unlisted files, duplicate inventory entries and altered bytes are rejected. Follow the
+included `REPRODUCE.txt` in an isolated environment to install from retained wheels
+without internet and rerun verification using the retained program and database.
+Create the replay environment outside the retained directory and disable bytecode
+writes so execution does not add unlisted files to the archive.
+`runtime_replay_verified` stays false until that separate execution has actually
+been performed; an intact archive is not proof of mandatory-book completeness.

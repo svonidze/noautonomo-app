@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from autonomo_taxes.ledger_db import initialize, open_database
+from autonomo_taxes.ledger_db import initialize, open_database, LATEST_SCHEMA_VERSION
 from autonomo_taxes.receipt_register import create_series, register_receipt, list_receipts
 from autonomo_taxes.tax_row_loader import load_tax_rows
 
@@ -96,7 +96,7 @@ def test_migration_preserves_existing_rows_and_does_not_invent_registration(tmp_
         aid = activity(db); expense(db, "legacy", aid)
         before = [tuple(r) for r in db.connection.execute("SELECT * FROM transactions")]
     with open_database(path, apply_migrations=True) as db:
-        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == 29
+        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == LATEST_SCHEMA_VERSION
         assert [tuple(r) for r in db.connection.execute("SELECT * FROM transactions")] == before
         assert list_receipts(db) == []
         assert load_tax_rows(db, 2024)[0].receipt_number == ""
@@ -159,3 +159,31 @@ def test_cli_preserves_explicit_original_number(tmp_path, capsys):
     capsys.readouterr()
     assert main(["receipt-register", "list", "--db", str(path)]) == 0
     assert len(json.loads(capsys.readouterr().out)) == 1
+
+
+def test_unreported_invoices_remain_in_books_with_inclusion_flags(tmp_path):
+    from autonomo_taxes.books import write_accounting_books
+    with initialize(tmp_path / "ledger.sqlite") as db:
+        aid = activity(db); expense(db,"NONDEDUCTIBLE",aid)
+        db.connection.execute("UPDATE tax_treatments SET include_modelo130=0,include_modelo303=0,deductible_irpf_minor=0,deductible_vat_minor=0")
+        export = write_accounting_books(db,tmp_path / "books",period_key="2024-Q1")
+        projection = json.loads(export.files["tax_registers"].read_text())
+        assert projection["scope_type"] == "accounting_books"
+        for register in projection["registers"].values():
+            assert len(register["rows"]) == 1
+            assert register["rows"][0]["document_number"] == "NONDEDUCTIBLE"
+            assert register["rows"][0]["include_modelo130"] is False
+            assert register["rows"][0]["include_modelo303"] is False
+        assert json.loads(export.files["register_content_check"].read_text())["checked_fields_ready"] is False
+
+
+def test_unreported_invoice_still_runs_iva_validation(tmp_path):
+    from autonomo_taxes.books import write_accounting_books
+    with initialize(tmp_path / "ledger.sqlite") as db:
+        aid = activity(db); doc = expense(db,"UNCLASSIFIED",aid); s = series(db,aid)
+        assign(db,doc,s["series_id"])
+        db.connection.execute("UPDATE tax_treatments SET include_modelo130=0,include_modelo303=0,tax_code='unknown'")
+        export = write_accounting_books(db,tmp_path / "books",period_key="2024-Q1")
+        projection = json.loads(export.files["tax_registers"].read_text())
+        assert projection["registers"]["iva"]["blocked"] is True
+        assert json.loads(export.files["register_content_check"].read_text())["checked_fields_ready"] is False

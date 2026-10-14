@@ -136,7 +136,7 @@ def test_migrates_schema_26_to_27_and_keeps_elections_append_only(tmp_path: Path
             "'DE','SYNTHETIC','unavailable',0)", (party["counterparty_id"],),
         )
         vies_before = dict(db.connection.execute("SELECT * FROM vies_checks").fetchone())
-        for name in ("receipt_registrations", "receipt_registration_series", "tax_attribution_fx_events", "transaction_tax_attributions",
+        for name in ("asset_disposals", "receipt_registrations", "receipt_registration_series", "tax_attribution_fx_events", "transaction_tax_attributions",
                      "reta_base_election_voids", "reta_base_elections", "reta_rate_tables"):
             db.connection.execute(f"DROP TABLE {name}")
         db.connection.execute("PRAGMA user_version = 26")

@@ -23,8 +23,11 @@ REGISTER_COLUMNS = (
     ('vat_rate_percent', 'VAT rate (%)'), ('invoice_type', 'Invoice type'),
     ('operation_key', 'Operation key'), ('operation_qualification', 'Operation qualification'),
     ('exempt_operation', 'Exemption'), ('reverse_charge', 'Reverse charge'),
+    ('include_modelo130', 'Included in Modelo 130'), ('include_modelo303', 'Included in Modelo 303'),
     ('counterparty_name', 'Counterparty'), ('transaction_id', 'Row ID'),
     ('counterparty_tax_id', 'Counterparty tax ID'), ('vat_id', 'Counterparty VAT ID'),
+    ('counterparty_identifier', 'Confirmed identifier'), ('counterparty_id_type', 'Identifier type'),
+    ('counterparty_identity_country', 'Identifier country'), ('amortization_entry_id', 'Depreciation entry'),
     ('country_code', 'Counterparty country'),
     ('source_transaction_id', 'Source transaction ID'), ('attribution_id', 'Attribution ID'),
     ('document_id', 'Document ID'), ('document_source_hash', 'Document SHA-256'),
@@ -56,7 +59,7 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
     review = [['Tax registers for review', 'AEAT import unsupported'],
               ['Scope', 'IRPF year to date; IVA selected period'],
               ['Amounts', 'EUR; source and attribution sheets are traceability only'],
-              ['Calculations', 'Registers precede difficult-expense relief and form-specific adjustments']]
+              ['Calculations', 'Book entries may be excluded from returns; use inclusion flags when reconciling']]
     blockers = []
     review.extend([['Required fields', 'Checked fields ready' if content_check['checked_fields_ready'] else 'Review required'],
                    ['Source completeness', 'Not verified by this export']])

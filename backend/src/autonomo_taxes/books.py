@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 import sqlite3
@@ -86,6 +86,13 @@ ASSET_FIELDS = (
     "iva_treatment",
     "advisor_decision",
     "source_hash",
+    "disposed_on",
+    "disposal_reason",
+    "disposal_evidence_ref",
+    "accumulated_start_minor",
+    "accumulated_end_minor",
+    "remaining_amortizable_minor",
+    "calculation_status",
 )
 
 PAYMENT_FIELDS = (
@@ -153,6 +160,7 @@ def write_accounting_books(database: LedgerDB, output_dir: str | Path, *, period
     projection = register_projection(
         tax_rows, year=int(period_key[:4]), through=date.fromisoformat(period["ends_on"]),
         iva_starts_on=date.fromisoformat(period["starts_on"]),
+        for_books=True,
     )
     from .register_content_check import check_register_content
     content_check = check_register_content(projection)
@@ -166,10 +174,12 @@ def write_accounting_books(database: LedgerDB, output_dir: str | Path, *, period
     fields = ("transaction_id", "source_transaction_id", "component", "attribution_id", "tax_date",
               "document_id", "document_number", "issued_on", "document_source_hash", "counterparty_name",
               "counterparty_tax_id", "vat_id", "country_code",
+              "counterparty_identifier", "counterparty_id_type", "counterparty_identity_country", "amortization_entry_id",
               "receipt_number", "receipt_series", "receipt_year", "registered_on", "operation_date", "document_type",
               "correction_of_transaction_id", "correction_kind",
               "vat_rate_percent", "invoice_type", "operation_key", "operation_qualification",
               "exempt_operation", "reverse_charge",
+              "include_modelo130", "include_modelo303",
               "kind", "amount_eur", "taxable_base_eur", "vat_eur", "deductible_irpf_eur",
               "deductible_vat_eur", "withholding_eur")
     for basis, register in projection["registers"].items():
@@ -348,23 +358,21 @@ def _build_asset_rows(connection: sqlite3.Connection, period: sqlite3.Row) -> li
         LEFT JOIN transactions acq ON acq.transaction_id = a.acquisition_transaction_id
         LEFT JOIN documents d ON d.document_id = a.document_id
         LEFT JOIN (
-            SELECT ae.amortization_entry_id, ae.asset_id, ae.amount_minor
+            SELECT GROUP_CONCAT(ae.amortization_entry_id, ';') AS amortization_entry_id,
+                   ae.asset_id, SUM(ae.amount_minor) AS amount_minor
             FROM amortization_entries ae
             JOIN periods ap ON ap.period_id = ae.period_id
-            WHERE ap.period_key = ?
+            WHERE ap.starts_on >= ? AND ap.ends_on <= ?
               AND ae.include_in_books = 1
               AND ae.entry_kind IN ('quarter_schedule', 'adjustment')
+            GROUP BY ae.asset_id
         ) AS current ON current.asset_id = a.asset_id
-        WHERE a.acquisition_transaction_id IN (
-            SELECT t.transaction_id
-            FROM transactions t
-            JOIN periods p ON p.period_id = t.period_id
-            WHERE p.period_key = ?
-        )
-           OR current.amortization_entry_id IS NOT NULL
+        WHERE (a.placed_in_service_on <= ? OR (a.placed_in_service_on IS NULL
+               AND (acq.transaction_date <= ? OR acq.transaction_date IS NULL))) AND NOT EXISTS (
+            SELECT 1 FROM asset_disposals disposal WHERE disposal.asset_id=a.asset_id AND disposal.disposed_on<?)
         ORDER BY a.asset_code, a.asset_id
         """,
-        (period["period_key"], period["period_key"]),
+        (period["starts_on"], period["ends_on"], period["ends_on"], period["ends_on"], period["starts_on"]),
     )
     orphan_entries = _fetch_all(
         connection,
@@ -391,6 +399,12 @@ def _build_asset_rows(connection: sqlite3.Connection, period: sqlite3.Row) -> li
     export_rows: list[dict[str, str]] = []
     for row in rows:
         base_minor = row["amortizable_base_minor"] if row["amortizable_base_minor"] is not None else row["cost_minor"]
+        from .depreciation import accumulated_at, native_year_summary
+        accumulated_start = accumulated_at(connection, row["asset_id"],
+            (date.fromisoformat(period["starts_on"]) - timedelta(days=1)).isoformat())
+        accumulated_end = accumulated_at(connection, row["asset_id"], period["ends_on"])
+        disposal = connection.execute("SELECT * FROM asset_disposals WHERE asset_id=? AND disposed_on<=?",
+                                      (row["asset_id"], period["ends_on"])).fetchone()
         recomputed_minor = _recomputed_amortization_minor(
             base_minor=base_minor,
             months_in_period=months_in_period,
@@ -403,15 +417,35 @@ def _build_asset_rows(connection: sqlite3.Connection, period: sqlite3.Row) -> li
             business_use_ratio=row["business_use_ratio"],
             annual_rate_basis_points=row["annual_rate_basis_points"],
         )
-        native = connection.execute("SELECT 1 FROM asset_depreciation_plans WHERE asset_id=?", (row["asset_id"],)).fetchone()
-        if native:
-            planned = connection.execute("""SELECT COALESCE(SUM(ae.amount_minor),0) FROM amortization_entries ae JOIN transactions t ON t.transaction_id=ae.recognition_transaction_id WHERE ae.asset_id=? AND ae.period_id=? AND ae.include_in_books=1 AND t.lifecycle_status IN ('posted','included_in_snapshot')""", (row["asset_id"], period["period_id"])).fetchone()[0]
+        native = native_year_summary(connection, row["asset_id"], int(period["ends_on"][:4]), through_date=period["ends_on"])
+        if native is not None:
+            planned = connection.execute("""SELECT COALESCE(SUM(ae.amount_minor),0) FROM amortization_entries ae JOIN transactions t ON t.transaction_id=ae.recognition_transaction_id WHERE ae.asset_id=? AND t.transaction_date BETWEEN ? AND ? AND ae.include_in_books=1 AND t.lifecycle_status IN ('posted','included_in_snapshot')""", (row["asset_id"], period["starts_on"], period["ends_on"])).fetchone()[0]
             recomputed_minor = int(planned)
+            if period["starts_on"] == period["ends_on"][:4] + "-01-01":
+                recomputed_minor = native["current_minor"]
+                accumulated_start = native["prior_minor"]
+        calculation_status = "calculated"
+        if disposal:
+            calculation_status = "disposal_settlement_review_required"
+            recomputed_minor = None
+        elif not row["placed_in_service_on"]:
+            calculation_status = "placed_in_service_date_missing"
+            recomputed_minor = None
+        elif native is not None and native["pending"]:
+            calculation_status = "pending_native_depreciation"
         export_rows.append(
             {
                 "period_key": period["period_key"],
                 "asset_id": row["asset_id"],
                 "asset_code": row["asset_code"],
+                "calculation_status": calculation_status,
+                "disposed_on": disposal["disposed_on"] if disposal else "",
+                "disposal_reason": disposal["reason"] if disposal else "",
+                "disposal_evidence_ref": disposal["evidence_ref"] if disposal else "",
+                "accumulated_start_minor": str(accumulated_start),
+                "accumulated_end_minor": str(accumulated_end),
+                "remaining_amortizable_minor": (str(int((Decimal(base_minor) * Decimal(str(row["business_use_ratio"]))).quantize(Decimal('1'), rounding=ROUND_HALF_UP)) - accumulated_end)
+                                                if row["business_use_ratio"] is not None else ""),
                 "acquisition_transaction_id": _text(row["acquisition_transaction_id"]),
                 "acquisition_transaction_date": _text(row["acquisition_transaction_date"]),
                 "description": _text(row["acquisition_description"]),
@@ -425,7 +459,7 @@ def _build_asset_rows(connection: sqlite3.Connection, period: sqlite3.Row) -> li
                 "amortizable_base_minor": str(base_minor),
                 "current_amortization_entry_id": _text(row["current_amortization_entry_id"]),
                 "filed_period_amortization_minor": _minor_text(row["current_amortization_minor"]),
-                "recomputed_period_amortization_minor": str(recomputed_minor),
+                "recomputed_period_amortization_minor": str(recomputed_minor) if recomputed_minor is not None else "",
                 "iva_treatment": row["iva_treatment"],
                 "advisor_decision": _text(row["advisor_decision"]),
                 "source_hash": row["source_hash"],

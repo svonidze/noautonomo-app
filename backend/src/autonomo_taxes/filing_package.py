@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import csv
 import json
 from pathlib import Path
 import shutil
@@ -214,6 +215,13 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
             readiness_reasons.append('tax_attribution_snapshot_review_required')
     supplemental = json.loads(export.files["supplemental_book_status"].read_text(encoding="utf-8"))
     readiness_reasons.extend(supplemental["blockers"])
+    disposal = connection.execute("SELECT 1 FROM asset_disposals WHERE disposed_on BETWEEN ? AND ? LIMIT 1",
+                                  (period["starts_on"][:4] + "-01-01", period["ends_on"])).fetchone()
+    if disposal:
+        readiness_reasons.append("asset_disposal_settlement_review_required")
+    with export.files["assets"].open(newline="", encoding="utf-8") as handle:
+        if any(row.get("calculation_status") != "calculated" for row in csv.DictReader(handle)):
+            readiness_reasons.append("asset_recomputation_unavailable")
     content_check = json.loads(export.files["register_content_check"].read_text(encoding="utf-8"))
     if not content_check["checked_fields_ready"]:
         readiness_reasons.append("register_required_fields_missing")
