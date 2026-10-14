@@ -821,6 +821,8 @@ def _asset_row(
     from .depreciation import native_year_summary
     native = native_year_summary(database.connection, asset["asset_id"], year, through_date=through_date.isoformat() if through_date else None)
     if native is not None:
+        if native["pending"]:
+            raise AeatBookProjectionError("Asset has pending depreciation recognition")
         annual = {"amount_minor": native["current_minor"], "source_book_line_id": None,
                   "source_hash": native["source_hash"]}
     else:

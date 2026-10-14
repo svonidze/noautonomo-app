@@ -124,6 +124,18 @@ VAT adjustments still require a reviewed settlement. Until supported and reviewe
 the affected package reports `asset_disposal_settlement_review_required`. Recording
 disposal alone does not settle its tax consequences or change filed returns.
 
+Legacy assets with method `free` use their validated posted depreciation entries,
+even when they predate versioned depreciation plans. Exports do not prorate these
+charges as linear depreciation or repeat them in later quarters. Accumulated
+amounts carry into later years. Missing or inconsistent recognition stays pending;
+the exporter does not invent a write-off from the asset's rate or acquisition date.
+
+For imported source-book assets, the stored acquisition basis and ratio may encode
+the allocation of a multi-item purchase to one asset. Compare the effective basis
+(stored basis multiplied by the ratio) with the source asset book before assuming
+a mismatch. That importer-derived ratio alone does not establish personal versus
+business use. Preserve the original invoice and the source-book allocation.
+
 ## Complete retained archive
 
 `filing-package archive --db PATH --period YEAR-QN --out-dir NEW_DIRECTORY

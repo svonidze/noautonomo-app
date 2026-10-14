@@ -1,4 +1,4 @@
-"""Versioned schedules for new, explicitly reviewed assets (not imported history)."""
+"""Reviewed depreciation schedules and posted-recognition summaries."""
 from __future__ import annotations
 
 import calendar
@@ -65,14 +65,20 @@ def schedule(*, basis_minor: int, business_use_ratio: float, annual_rate_basis_p
 
 
 def native_year_summary(connection, asset_id: str, year: int, *, through_date: str | None = None) -> dict[str, Any] | None:
-    """Actual native recognition only; schedules never become external evidence."""
+    """Posted recognition for native plans and legacy free-method assets."""
     import hashlib
     import json
     plan = connection.execute("SELECT * FROM asset_depreciation_plans WHERE asset_id=?", (asset_id,)).fetchone()
+    free_asset = None
     if plan is None:
-        return None
+        free_asset = connection.execute(
+            "SELECT placed_in_service_on FROM assets WHERE asset_id=? AND depreciation_method='free'",
+            (asset_id,),
+        ).fetchone()
+        if free_asset is None:
+            return None
     cutoff = through_date or f"{year}-12-31"
-    parameters = json.loads(plan["parameters_json"])
+    parameters = json.loads(plan["parameters_json"]) if plan is not None else {}
     opening = parameters.get("opening")
     if opening and cutoff <= opening["as_of"]:
         return None
@@ -98,12 +104,18 @@ def native_year_summary(connection, asset_id: str, year: int, *, through_date: s
             continue
         if row["tax_year"] == year and row["recognition_on"] and row["recognition_on"] <= cutoff and (not valid or not row["include_in_books"]):
             pending.append(row["amortization_entry_id"])
+        elif free_asset is not None and row["tax_year"] <= year and (not row["recognition_on"] or row["recognition_on"] <= cutoff) and (not valid or not row["include_in_books"]):
+            pending.append(row["amortization_entry_id"])
         if valid and row["transaction_date"] <= cutoff:
             if row["tax_year"] < year:
                 prior += row["amount_minor"]
             elif row["tax_year"] == year:
                 current += row["amount_minor"]
             proof.append([row["recognition_transaction_id"], row["amount_minor"], row["source_hash"]])
+    if free_asset is not None and not proof and (
+        not free_asset["placed_in_service_on"] or free_asset["placed_in_service_on"] <= cutoff
+    ):
+        pending.append("free_depreciation_recognition_missing")
     if disposal and int(disposal["disposed_on"][:4]) == year:
         pending.append("disposal_settlement_review_required")
     return {"prior_minor": prior, "current_minor": current, "pending": pending,

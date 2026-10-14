@@ -34,6 +34,71 @@ def imported_asset(tmp_path):
     return fixture, asset_id
 
 
+def legacy_free_asset(tmp_path):
+    fixture, draft = setup_draft(tmp_path, method="immediate", transaction_date="2024-01-02")
+    with open_db(fixture["database"]) as db:
+        with patch("autonomo_taxes.expense_workflow.date", AcquisitionDay):
+            result = commit(db, fixture, draft, tmp_path)
+        asset_id = result["asset_id"]
+        db.connection.execute("DELETE FROM asset_depreciation_plans WHERE asset_id=?", (asset_id,))
+        db.connection.execute("UPDATE assets SET depreciation_method='free' WHERE asset_id=?", (asset_id,))
+        db.connection.commit()
+    return fixture, asset_id
+
+
+def test_legacy_free_export_uses_recognition_once_and_carries_prior_year(tmp_path):
+    import csv
+    from autonomo_taxes.books import write_accounting_books
+    fixture, asset_id = legacy_free_asset(tmp_path)
+    with open_db(fixture["database"]) as db:
+        for period in ("2024-Q1", "2024-Q2", "2024", "2025-Q1", "2025"):
+            db.ensure_period(period)
+        before = "\n".join(db.connection.iterdump())
+        for period, expected in (("2024-Q1", 10000), ("2024-Q2", 0), ("2024", 10000), ("2025-Q1", 0), ("2025", 0)):
+            export = write_accounting_books(db, tmp_path / period, period_key=period)
+            with export.files["assets"].open() as handle:
+                row = next(csv.DictReader(handle))
+            assert row["recomputed_period_amortization_minor"] == str(expected)
+            assert row["accumulated_end_minor"] == "10000"
+            assert row["remaining_amortizable_minor"] == "0"
+            assert row["calculation_status"] == "calculated"
+        assert db.validate_asset_year(2024)["ready"]
+        assert native_year_summary(db.connection, asset_id, 2025)["prior_minor"] == 10000
+        assert "\n".join(db.connection.iterdump()) == before
+        from autonomo_taxes.aeat_books import build_aeat_book_projection
+        db.connection.execute("UPDATE counterparties SET tax_id='TEST-TAX-ID-001'")
+        projection = build_aeat_book_projection(db, period_key="2025-Q1")
+        assert projection["data_projection_ready"], projection["blockers"]
+        assert projection["asset_rows"][0]["amortizacion_acumulada_inicio_eur"] == "100.00"
+        assert projection["asset_rows"][0]["amortizacion_cuota_resultante_eur"] == "0.00"
+
+
+@pytest.mark.parametrize("fault", ["missing", "unposted", "amount", "date", "not_in_books"])
+def test_legacy_free_requires_valid_recognition_even_in_previous_year(tmp_path, fault):
+    fixture, asset_id = legacy_free_asset(tmp_path)
+    with open_db(fixture["database"]) as db:
+        entry = db.connection.execute("SELECT * FROM amortization_entries WHERE asset_id=?", (asset_id,)).fetchone()
+        if fault == "missing":
+            db.connection.execute("DELETE FROM amortization_entries WHERE asset_id=?", (asset_id,))
+        elif fault == "unposted":
+            db.connection.execute("UPDATE transactions SET lifecycle_status='approved' WHERE transaction_id=?", (entry["recognition_transaction_id"],))
+        elif fault == "amount":
+            db.connection.execute("UPDATE amortization_entries SET amount_minor=9999 WHERE asset_id=?", (asset_id,))
+        elif fault == "date":
+            db.connection.execute("UPDATE amortization_entries SET recognition_on=NULL WHERE asset_id=?", (asset_id,))
+        else:
+            db.connection.execute("UPDATE amortization_entries SET include_in_books=0 WHERE asset_id=?", (asset_id,))
+        for year in (2024, 2025):
+            assert native_year_summary(db.connection, asset_id, year)["pending"]
+            assert not db.validate_asset_year(year)["ready"]
+        from autonomo_taxes.aeat_books import build_aeat_book_projection
+        db.connection.execute("UPDATE counterparties SET tax_id='TEST-TAX-ID-001'")
+        projection = build_aeat_book_projection(db, period_key="2025-Q1")
+        assert not projection["data_projection_ready"]
+        assert not projection["asset_rows"]
+        assert any("pending depreciation recognition" in item["message"] for item in projection["blockers"])
+
+
 def opening(db, asset_id, **changes):
     return continue_asset(db, **(dict(asset_id=asset_id, as_of="2024-12-31", prior_year_minor=0,
         current_year_minor=2493, evidence_ref="synthetic:opening-control", reason="Reviewed historical continuation") | changes))
