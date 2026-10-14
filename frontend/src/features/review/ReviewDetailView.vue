@@ -85,6 +85,7 @@ const guidedContext = computed(() => ({
 }));
 const workflowContext = computed(() => ({
   transactionId: props.context.transactionId,
+  period: period.value,
   services: props.context.services,
   settled: props.context.settled,
   onPosted: (result: { transaction_id: string }) => {
@@ -103,22 +104,24 @@ const forbidden = computed(
 const retry = () => (forbidden.value ? window.location.reload() : void load());
 </script>
 <template>
-  <div v-if="error" class="empty-state state-error" role="alert">
-    <a
-      class="secondary-button"
+  <template v-if="error"
+    ><a
+      class="text-button back-link"
       :href="viewHref(context.services, back)"
       @click="followSpaLink($event, context.services.navigate)"
-      >{{ t('review.workspaceBack') }}</a
+      ><span aria-hidden="true">←</span> {{ t('review.workspaceBack') }}</a
     >
-    <p>{{ t(forbidden ? 'common.sessionExpired' : 'common.loadFailed') }}</p>
-    <details>
-      <summary>{{ t('issues.sourceDetails') }}</summary>
-      <p>{{ errorMessage(error, locale) }}</p>
-    </details>
-    <button class="secondary-button" @click="retry">
-      {{ t(forbidden ? 'common.reload' : 'common.retry') }}
-    </button>
-  </div>
+    <div class="empty-state state-error" role="alert">
+      <p>{{ t(forbidden ? 'common.sessionExpired' : 'common.loadFailed') }}</p>
+      <details>
+        <summary>{{ t('issues.sourceDetails') }}</summary>
+        <p>{{ errorMessage(error, locale) }}</p>
+      </details>
+      <button class="secondary-button" @click="retry">
+        {{ t(forbidden ? 'common.reload' : 'common.retry') }}
+      </button>
+    </div></template
+  >
   <div v-else-if="mode === 'loading'" class="empty-state" role="status">
     {{ t('common.loading') }}
   </div>
@@ -137,7 +140,7 @@ const retry = () => (forbidden.value ? window.location.reload() : void load());
         :href="documentHref(context.services, savedDetail.document.document_id)"
         target="_blank"
         rel="noreferrer"
-        >{{ t('common.file') }}</a
+        >{{ t('common.openDocument') }}</a
       >
     </header>
     <TaxAttributionDetails

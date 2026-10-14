@@ -90,6 +90,7 @@ test.each([
       navigate: vi.fn(),
     },
     copyTarget: null,
+    profileConfigured: true,
     settled: vi.fn(),
     refreshCalculation: async () => {},
     copy: vi.fn(),

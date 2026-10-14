@@ -2,10 +2,17 @@
   "transactions.amount": "Importe",
   "transactions.counterpartyDocument": "Contraparte / documento",
   "transactions.date": "Fecha",
-  "transactions.emptyIncome": "Todavía no hay ingresos en este periodo. Pulsa «Añadir» para recibir una factura.",
+  "transactions.incomeEmpty": "Aún no hay ingresos en este trimestre. Añade una factura con el botón «Añadir documento».",
   "transactions.irpfDeduction": "Deducción de IRPF",
+  "transactions.jurisdictions.ES": "España",
   "transactions.noCounterparty": "Sin contraparte",
   "transactions.noMatches": "No hay resultados para esta búsqueda.",
+  "transactions.periodTitle": "Operaciones de {period}",
   "transactions.search": "Buscar por contraparte o número",
-  "transactions.status": "Estado"
+  "transactions.status": "Estado",
+  "transactions.types.adjustment": "Ajuste",
+  "transactions.types.expense": "Gasto",
+  "transactions.types.income": "Ingreso",
+  "transactions.types.invoice_review": "Revisión de factura",
+  "transactions.types.non_invoice_review": "Revisión de gasto sin factura"
 }

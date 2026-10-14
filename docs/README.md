@@ -4,8 +4,10 @@ Start with [Local setup](../SETUP.md) to install and run the application.
 
 User guidance is in [user/](user/): the accounting workflow, statuses, account
 settings, counterparty corrections, VIES checks, exchange rates, history replay,
-the [Renta WEB draft review checklist](user/RENTA_DRAFT_CHECKLIST.md), and the
-[RETA bracket check](user/RETA_CHECK.md).
+the [Renta WEB draft review checklist](user/RENTA_DRAFT_CHECKLIST.md), the
+[RETA bracket check](user/RETA_CHECK.md), and the
+[official references](user/OFFICIAL_REFERENCES.md) behind the interface term
+tooltips.
 Developer guidance is in [development/](development/): frontend development,
 localization, privacy, and the repository layout. Operational runbooks live in
 [ops/docs/](../ops/docs/), including deployment, provisioning, frontend build,

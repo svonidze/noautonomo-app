@@ -11,6 +11,8 @@ const props = defineProps<{
   summary?: TaxFormSummary;
   refreshing: boolean;
   readOnly?: boolean;
+  /** The quarter has not started: nothing to calculate yet. */
+  future?: boolean;
 }>();
 const emit = defineEmits<{ refresh: [] }>();
 const { locale, t } = useLocale();
@@ -38,11 +40,17 @@ const boxLabel = (key: string) =>
 const filing = computed(() =>
   props.summary?.determination === 'due'
     ? props.summary.filing_status === 'filed'
-      ? `${t('taxes.filed')}${props.summary.filed_on ? ` · ${formatDateText(props.summary.filed_on, locale.value)}` : ''}`
-      : t('taxes.notFiled')
+      ? props.summary.filed_on
+        ? t('statuses.filedOn', { date: formatDateText(props.summary.filed_on, locale.value) })
+        : t('statuses.labels.filed')
+      : props.summary.statutory_due_on
+        ? t('statuses.filingDueBy', {
+            date: formatDateText(props.summary.statutory_due_on, locale.value),
+          })
+        : t('statuses.labels.due')
     : !props.summary?.determination || props.summary.determination === 'unknown'
       ? t('taxes.filingUndecided')
-      : t('taxes.filingNotRequired'),
+      : t('statuses.labels.not_due'),
 );
 </script>
 <template>
@@ -82,6 +90,18 @@ const filing = computed(() =>
       >
         {{ t('taxes.refundRequested') }}: {{ money(summary.refund_requested_minor) }}
       </p>
+      <template v-if="form.display_state === 'unavailable' && !future"
+        ><p>{{ t('help.words.refreshHint') }}</p>
+        <button
+          type="button"
+          class="secondary-button calculate-button"
+          :disabled="readOnly || refreshing"
+          :title="readOnly ? t('demo.readOnlyReason') : undefined"
+          @click="!readOnly && emit('refresh')"
+        >
+          {{ t(refreshing ? 'common.calculating' : 'common.calculate') }}
+        </button></template
+      >
     </div>
     <dl class="tax-form-facts">
       <div>
@@ -109,18 +129,6 @@ const filing = computed(() =>
         >
       </div>
       <div v-else class="empty-state">{{ presentation.formEmptyState(form) }}</div>
-      <template v-if="form.display_state === 'unavailable'"
-        ><p>{{ t('help.words.refreshHint') }}</p>
-        <button
-          type="button"
-          class="secondary-button"
-          :disabled="readOnly || refreshing"
-          :title="readOnly ? t('demo.readOnlyReason') : undefined"
-          @click="!readOnly && emit('refresh')"
-        >
-          {{ t('help.words.refresh') }}
-        </button></template
-      >
     </details>
   </section>
 </template>

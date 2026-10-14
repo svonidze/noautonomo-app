@@ -8,6 +8,8 @@ import {
   DOCUMENT_ID as DOC,
 } from '../fixtures/review.ts';
 import type { ExpensePayload } from '../../src/features/review/workflow-model.ts';
+import issues from '../../src/locales/ru/issues.json' with { type: 'json' };
+import workflow from '../../src/locales/ru/workflow.json' with { type: 'json' };
 const path = `/review/${ID}?period=2026-Q3`;
 async function detail(page: Page, kind = 'income', posted = () => false) {
   await page.route(`**/api/transactions/${ID}`, (route) =>
@@ -71,6 +73,7 @@ test('native save/preview/confirm preserves units and independent IVA choice, th
     route.fulfill({ json: { follow_up_pending: false } }),
   );
   await page.goto(path);
+  await page.locator('[data-reveals="wf-kind"]').click();
   await page.locator('#wf-kind').selectOption('asset');
   await page.locator('[data-p="asset.method"]').selectOption('linear');
   await page.locator('[data-p="asset.annual_rate_basis_points"]').fill('25.50');
@@ -79,7 +82,7 @@ test('native save/preview/confirm preserves units and independent IVA choice, th
     .locator('[data-p="decision.tax_treatment.tax_code"]')
     .selectOption('eu_service_expense');
   await page.locator('#wf-form button[type="submit"]').click();
-  await expect(page.locator('#wf-preview')).toBeVisible();
+  await expect(page.locator('#wf-confirm')).toBeVisible();
   expect(saved?.asset?.annual_rate_basis_points).toBe(2550);
   expect(saved?.decision.tax_treatment.vat_investment_good).toBe(false);
   expect(saved?.decision.tax_treatment.include_modelo130).toBe(false);
@@ -98,6 +101,105 @@ test('native save/preview/confirm preserves units and independent IVA choice, th
   await page.locator('#wf-open-posted').click();
   await expect(page).toHaveURL(new RegExp(`/expenses/${ID}\\?`));
   expect(await page.evaluate(() => history.length)).toBe(before + 1);
+});
+test('a new reviewer sees what remains, the result in view and reaches the confirmation by keyboard', async ({
+  page,
+}) => {
+  await native(page);
+  const draft = nativeFixture();
+  draft.source.issues = [{ issue_code: 'document_classification_review' }];
+  let saved: ExpensePayload | undefined;
+  await page.route(`**/api/expense-workflows/${ID}`, (route) => route.fulfill({ json: draft }));
+  await page.route(`**/api/expense-workflows/${ID}/save`, (route) => {
+    saved = route.request().postDataJSON().payload;
+    return route.fulfill({ json: { ...draft, payload: saved, draft_version: 2 } });
+  });
+  // Like the server, the preview refuses a draft without an IVA rate.
+  await page.route(`**/api/expense-workflows/${ID}/preview`, (route) =>
+    saved?.decision.tax_treatment.rate_basis_points !== 2100
+      ? route.fulfill({
+          status: 400,
+          json: { error: 'Explicit rate_basis_points in EUR is required', code: 'expense_invalid' },
+        })
+      : route.fulfill({
+          json: {
+            preview_token: 'synthetic-token',
+            supplier: 'Synthetic supplier',
+            period: '2026-Q3',
+            currency: 'EUR',
+            gross_minor: 12100,
+            deductible_vat_minor: 2100,
+            deductible_irpf_minor: 10000,
+            future_depreciation_minor: 0,
+            schedule: [],
+          },
+        }),
+  );
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(path);
+    await expect(page.locator('nav.wf-steps a')).toHaveText(['1 Документ', '2 Налоги', '3 Итог']);
+    const remaining = page.locator('.wf-remaining');
+    await expect(remaining.locator('h3')).toHaveText('Что осталось');
+    const question = remaining.getByRole('link', {
+      name: issues['issues.messages.document_classification_review'],
+    });
+    await expect(question).toHaveAttribute('href', '#wf-manual_review_reason');
+    await question.click();
+    await expect(page.locator('#wf-manual_review_reason')).toBeFocused();
+    // Intake leaves the IVA rate empty: it is visible beside the invoice IVA and named until typed.
+    const rate = page.locator('[data-p="decision.tax_treatment.rate_basis_points"]');
+    await expect(rate).toBeVisible();
+    const rateItem = remaining.getByRole('link', { name: workflow['workflow.remaining.ivaRate'] });
+    await rateItem.click();
+    await expect(rate).toBeFocused();
+    await rate.fill('21');
+    await expect(rateItem).toHaveCount(0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath(`expense-review-${width}.png`),
+      fullPage: true,
+    });
+    const preview = page.locator('#wf-preview');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(preview).not.toBeInViewport();
+    await page.locator('#wf-form button[type="submit"]').click();
+    await expect(preview.locator('#wf-confirm')).toBeVisible();
+    await expect(preview).toBeInViewport();
+    await expect(page.locator('#wf-preview-title')).toBeFocused();
+    await expect(page.locator('nav.wf-steps a').nth(2)).toHaveAttribute('aria-current', 'step');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#wf-confirm')).toBeFocused();
+    await page.screenshot({
+      path: test.info().outputPath(`expense-review-result-${width}.png`),
+      fullPage: true,
+    });
+  }
+  // The whole form is reachable in reading order from the step links to the confirmation.
+  await page.locator('nav.wf-steps a').first().focus();
+  const visited: string[] = [];
+  for (let press = 0; press < 200 && visited.at(-1) !== 'wf-confirm'; press++) {
+    await page.keyboard.press('Tab');
+    visited.push(
+      await page.evaluate(() => {
+        const active = document.activeElement as HTMLElement | null;
+        return active?.dataset.p || active?.id || '';
+      }),
+    );
+  }
+  expect(visited.at(-1)).toBe('wf-confirm');
+  const order = [
+    'facts.document_number',
+    'manual_review_reason',
+    'decision.tax_treatment.tax_code',
+    'decision.tax_treatment.rate_basis_points',
+    'decision.business_purpose',
+    'wf-save',
+  ].map((name) => visited.indexOf(name));
+  expect(order.every((position) => position >= 0)).toBe(true);
+  expect(order).toEqual([...order].sort((a, b) => a - b));
 });
 test('native conflict reset is explicit and edits invalidate a posting preview', async ({
   page,
@@ -144,9 +246,9 @@ test('native conflict reset is explicit and edits invalidate a posting preview',
   await page.locator('#wf-reset').click();
   await expect(page.locator('[data-p="facts.document_number"]')).toHaveValue('SYN-CURRENT');
   await page.locator('#wf-form button[type="submit"]').click();
-  await expect(page.locator('#wf-preview')).toBeVisible();
+  await expect(page.locator('#wf-confirm')).toBeVisible();
   await page.locator('[data-p="facts.document_number"]').fill('SYN-EDITED');
-  await expect(page.locator('#wf-preview')).toHaveCount(0);
+  await expect(page.locator('#wf-confirm')).toHaveCount(0);
 });
 test('home supplies rule: parser pre-selection, area fact, saved proposal, copy and preview row', async ({
   page,
@@ -319,9 +421,15 @@ test('snapshot changes retain only counterparty facts; blocked approval still pe
   fixture.packet.snapshot_hash = 'current-snapshot';
   fixture.packet.state.counterparty = { country_code: 'ZZ' };
   fixture.packet.decision.business_purpose = 'Current source purpose';
-  fixture.ui_context.state = 'deferred';
+  // Server-shaped: a deferral is one future_dated blocker, also inside the status context.
+  const posting = {
+    preview_bucket: 'deferred',
+    posting_deferred_until: '2026-10-01',
+    blockers: [{ code: 'future_dated', blocking: true }],
+  };
+  fixture.ui_context = { ...fixture.ui_context, state: 'deferred', posting };
   fixture.review_allowed = false;
-  fixture.posting_context = { preview_bucket: 'deferred', posting_deferred_until: '2026-10-01' };
+  fixture.posting_context = posting;
   await page.addInitScript(
     ({ id }) =>
       localStorage.setItem(
@@ -356,6 +464,13 @@ test('snapshot changes retain only counterparty facts; blocked approval still pe
     'domestic_output',
   );
   await expect(page.locator('#review-primary-button')).toBeDisabled();
+  await expect(page.locator('.review-workspace-header .status-context')).toContainText(
+    'Будущая дата операции',
+  );
+  await expect(page.locator('.review-alert.warning')).toContainText(
+    'Будущую операцию можно провести с 01 окт. 2026 г.',
+  );
+  await expect(page.locator('.review-alert.warning')).not.toContainText('г..');
   await page.locator('.review-reject-panel > summary').click();
   await page.locator('#review-reject-button').click();
   expect(posted).toHaveLength(0);
@@ -376,4 +491,58 @@ test('snapshot changes retain only counterparty facts; blocked approval still pe
     },
     fx: null,
   });
+});
+test('a blocked approved row in the queue opens its review when the server offers one', async ({
+  page,
+}) => {
+  await native(page);
+  await page.route(`**/api/expense-workflows/${ID}`, (route) =>
+    route.fulfill({ json: nativeFixture() }),
+  );
+  await page.route(/\/api\/transactions\?.*status=review/, (route) =>
+    route.fulfill({
+      json: [
+        {
+          transaction_id: ID,
+          entry_type: 'expense',
+          lifecycle_status: 'approved',
+          transaction_date: '2026-07-03',
+          period_key: '2026-Q3',
+          description: 'Synthetic USD expense',
+          currency: 'USD',
+          amount_original: '99.00',
+          amount_eur: null,
+          ui_context: {
+            domain: 'transaction',
+            subject_id: ID,
+            state: 'blocked',
+            lifecycle_status: 'approved',
+            reasons: [],
+            posting: { preview_bucket: 'blocked', blockers: [{ code: 'fx_missing' }] },
+            actions: [{ kind: 'review', transaction_id: ID, period: '2026-Q3' }],
+          },
+        },
+      ],
+    }),
+  );
+  await page.route('**/api/issues?**', (route) => route.fulfill({ json: [] }));
+  await page.route('**/api/documents?**', (route) => route.fulfill({ json: [] }));
+  await page.route('**/api/review/posting-preview?**', (route) =>
+    route.fulfill({
+      json: { period: '2026-Q3', period_status: 'open', ready: [], deferred: [], blocked: [] },
+    }),
+  );
+  await page.goto('/review?period=2026-Q3');
+  const row = page
+    .locator('#review-tabpanel tbody tr')
+    .filter({ hasText: 'Synthetic USD expense' });
+  await expect(row).toContainText('Проверено, проведение заблокировано');
+  await expect(row.locator('.status-context [data-status-help]')).toHaveText('Что сделать');
+  const action = row.locator('td.table-actions > *');
+  await expect(action).toHaveCount(1);
+  await expect(action).toHaveText('Открыть проверку');
+  await expect(action).toHaveClass('secondary-button compact-button');
+  await action.click();
+  await expect(page).toHaveURL(new RegExp(`/review/${ID}\\?period=2026-Q3$`));
+  await expect(page.locator('#wf-form')).toBeVisible();
 });

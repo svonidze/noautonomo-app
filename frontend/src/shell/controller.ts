@@ -1,4 +1,5 @@
 import {
+  computed,
   markRaw,
   nextTick,
   onBeforeUnmount,
@@ -29,6 +30,7 @@ import {
   type UiMessage,
 } from '../core/i18n.ts';
 import { errorDescriptor } from '../core/error-message.ts';
+import { formatPeriod } from '../core/format.ts';
 import { disposeHelp } from '../vue/help.ts';
 import { useLocale } from '../vue/locale.ts';
 import type IntakeDialog from '../features/intake/IntakeDialog.vue';
@@ -61,6 +63,7 @@ interface Bootstrap {
   periods: Period[];
   default_period: string;
   profile_name: string;
+  profile_configured: boolean;
   intake_enabled: boolean;
 }
 export interface ViewGuards {
@@ -88,9 +91,12 @@ export function useShell() {
     intake = ref<InstanceType<typeof IntakeDialog>>();
   const loading = ref(true),
     failure = shallowRef<unknown>(),
-    busy = ref(false),
+    pending = ref(0),
     resolved = ref(false),
     revision = ref(0);
+  // The topbar refresh and every in-page «Рассчитать» share one busy flag and one queue.
+  const busy = computed(() => pending.value > 0);
+  let calculations: Promise<unknown> = Promise.resolve();
   const toast = shallowRef<{ value: UiMessage | string; error: boolean }>();
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   let active = true,
@@ -338,7 +344,8 @@ export function useShell() {
         services,
         settled,
         onProfile(name) {
-          if (owns()) bootstrap.value = { ...bootstrap.value!, profile_name: name };
+          if (owns())
+            bootstrap.value = { ...bootstrap.value!, profile_name: name, profile_configured: true };
         },
         onLocale: changeLocale,
         reload() {
@@ -424,7 +431,6 @@ export function useShell() {
           if (owns() && (next.view === 'expenses' || runtime.readOnly))
             void replacePresentation(routeUrl(next.view, sourcePeriod, { q: value }));
         },
-        openIntake: add,
         copy: (row) => copy(row, sourcePeriod),
       } satisfies TransactionListContext);
     else
@@ -432,34 +438,53 @@ export function useShell() {
         view: next.view,
         period: sourcePeriod,
         copyTarget: target,
+        profileConfigured: data.profile_configured,
         services,
         settled,
         notify,
-        refreshCalculation: () => refreshCalculation(sourcePeriod),
+        refreshCalculation: () => whileBusy(() => calculate(sourcePeriod)),
+        openIntake: data.intake_enabled ? add : undefined,
         copy: (row) => copy(row, sourcePeriod),
       } satisfies OverviewContext);
+  }
+  async function whileBusy<T>(work: () => Promise<T>): Promise<T> {
+    pending.value++;
+    try {
+      return await work();
+    } finally {
+      pending.value--;
+    }
+  }
+  /** Calculations run one after another; each clears the posting "calculation stale" marker that
+   * existed when it started, so a newer marker survives. */
+  function calculate(captured: string): Promise<void> {
+    const run = calculations.then(async () => {
+      const token = refreshToken(captured);
+      await refreshCalculation(captured);
+      clearRefresh(captured, token);
+    });
+    calculations = run.catch(() => undefined);
+    return run;
   }
   async function refresh() {
     if (runtime.readOnly) return;
     if (!canLeave() || busy.value) return;
     const version = generation,
       captured = period.value;
-    busy.value = true;
-    try {
-      if (
-        !['contact-detail', 'expense-detail', 'aeat-documents'].includes(route.value?.view || '')
-      ) {
-        const token = refreshToken(captured);
-        await refreshCalculation(captured);
-        clearRefresh(captured, token);
-        if (version === generation) notify(message('refresh.done', { period: captured }));
+    await whileBusy(async () => {
+      try {
+        if (
+          !['contact-detail', 'expense-detail', 'aeat-documents'].includes(route.value?.view || '')
+        ) {
+          await calculate(captured);
+          if (version === generation)
+            notify(message('refresh.done', { period: formatPeriod(captured, locale.value) }));
+        }
+        if (version === generation) await showRoute();
+      } catch (error) {
+        if (version === generation) notify(errorDescriptor(error), true);
       }
-      if (version === generation) await showRoute();
-    } catch (error) {
-      if (version === generation) notify(errorDescriptor(error), true);
-    } finally {
-      busy.value = false;
-    }
+    });
   }
   async function init() {
     loading.value = true;

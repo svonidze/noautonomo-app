@@ -603,7 +603,6 @@ function geometryOnly(scene) {
     shareUnavailableLabel: "share not available",
     showSegmentShares: true,
     tableInitiallyOpen: true,
-    tablePrimaryOnNarrow: true,
     formatValue: eur,
     formatPercent: (ratio) => `${(ratio * 100).toFixed(1)}%`,
     rows: [
@@ -648,7 +647,6 @@ function geometryOnly(scene) {
     ],
   });
   const tableFigure = tableContainer.children[0];
-  assert.ok(tableFigure.className.includes("chart-table-primary-on-narrow"));
   const details = tableFigure.children.find((child) => child.tag === "details");
   assert.strictEqual(details.open, true);
   const table = details.children[1].children[0];

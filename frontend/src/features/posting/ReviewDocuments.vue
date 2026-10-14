@@ -7,7 +7,7 @@ import { formatMessage, messageIds } from '../../core/i18n.ts';
 import type { HelpContext } from '../../vue/help.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import TermHelp from '../../components/TermHelp.vue';
-import type { ReviewDocument } from './model.ts';
+import { waitingDocumentStates, type ReviewDocument } from './model.ts';
 const props = defineProps<{
   services?: ViewServices;
   documents: ReviewDocument[];
@@ -15,9 +15,7 @@ const props = defineProps<{
 }>();
 const { locale, t } = useLocale();
 const rows = computed(() =>
-  props.documents.filter((row) =>
-    ['received', 'extracted', 'needs_review'].includes(row.lifecycle_status),
-  ),
+  props.documents.filter((row) => waitingDocumentStates.includes(row.lifecycle_status)),
 );
 const type = (value: string) => {
   const code = String(value || 'other_document');
@@ -66,13 +64,13 @@ const type = (value: string) => {
                 :href="documentHref(services, row.document_id)"
                 target="_blank"
                 rel="noreferrer"
-                >{{ t('common.file') }}</a
+                >{{ t('common.openDocument') }}</a
               >
             </td>
           </tr>
           <tr v-if="!rows.length">
             <td colspan="7">
-              <div class="empty-state">{{ t('common.noRecords') }}</div>
+              <div class="empty-state">{{ t('review.documentsEmpty') }}</div>
             </td>
           </tr>
         </tbody>

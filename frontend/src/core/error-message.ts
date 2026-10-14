@@ -1,10 +1,18 @@
+import { formatPeriod } from './format.ts';
 import { ApiError } from './http.ts';
 import { formatMessage, messageIds, type UiMessage } from './i18n.ts';
 /** Older/newer servers may send only diagnostic text or unknown additive IDs. */
 export function errorMessage(value: unknown, locale: unknown): string {
   if (value instanceof ApiError && value.messageCode && messageIds.includes(value.messageCode)) {
     try {
-      return formatMessage(value.messageCode, value.params, locale);
+      // Servers send quarters as keys («2026-Q3»): name them the way the header does.
+      const params = Object.fromEntries(
+        Object.entries(value.params ?? {}).map(([name, param]) => [
+          name,
+          typeof param === 'string' ? formatPeriod(param, locale) : param,
+        ]),
+      );
+      return formatMessage(value.messageCode, params, locale);
     } catch {
       return value.message;
     } // Additive metadata must not hide a server diagnostic.

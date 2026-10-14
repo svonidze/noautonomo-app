@@ -15,6 +15,7 @@
   "aeatDocuments.kind.resolution": "Решение",
   "aeatDocuments.kind.response_receipt": "Квитанция ответа",
   "aeatDocuments.kind.submission_receipt": "Квитанция подачи",
+  "aeatDocuments.listEmpty": "Документов AEAT ещё нет. Добавьте квитанцию кнопкой «Добавить документ AEAT» ниже.",
   "aeatDocuments.notes": "Комментарий",
   "aeatDocuments.newCase": "Создать новое дело",
   "aeatDocuments.occurredAt": "Дата и время",
@@ -25,6 +26,8 @@
   "aeatDocuments.procedure.periodic": "Периодическая декларация",
   "aeatDocuments.procedure.rectification": "Исправление декларации",
   "aeatDocuments.procedureCode": "Код процедуры",
+  "aeatDocuments.receiptNumber": "Номер квитанции (justificante)",
+  "aeatDocuments.reference": "Ссылка AEAT (referencia)",
   "aeatDocuments.requestedEffective": "Запрошенная дата действия",
   "aeatDocuments.save": "Сохранить проверенный PDF",
   "aeatDocuments.saved": "Документ AEAT сохранён",
@@ -38,6 +41,6 @@
   "aeatDocuments.status.responded": "Ответ отправлен",
   "aeatDocuments.status.submitted": "Подано, ожидается решение",
   "aeatDocuments.statusSaved": "Статус дела сохранён",
-  "aeatDocuments.title": "Документы AEAT",
+  "aeatDocuments.verificationCode": "Код проверки (CSV)",
   "aeatDocuments.year": "Год"
 }

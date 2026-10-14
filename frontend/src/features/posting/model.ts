@@ -61,6 +61,8 @@ export interface ReviewDocument {
   total_eur?: Amount;
   source_available: boolean;
 }
+/** Document states that still wait for review: the documents tab lists them. */
+export const waitingDocumentStates = ['received', 'extracted', 'needs_review'];
 export interface OverviewData {
   rows: ReviewRow[];
   issues: { ui_context: HelpContext }[];

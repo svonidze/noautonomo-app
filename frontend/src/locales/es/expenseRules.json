@@ -1,5 +1,6 @@
 {
   "expenseRules.title": "Regla de deducción",
+  "expenseRules.summary": "Regla de deducción: {rule}",
   "expenseRules.select": "Regla para este gasto",
   "expenseRules.noRule": "Sin regla: introducir manualmente",
   "expenseRules.fromParser": "{rule} (del extractor de documentos)",
@@ -53,7 +54,7 @@
   "expenseRules.fact.eur_amount": "Importes confirmados en EUR (tipo de cambio)",
   "expenseRules.fact.taxable_base_minor": "Base imponible, EUR",
   "expenseRules.fact.vat_minor": "IVA de la factura, EUR",
-  "expenseRules.fact.transaction_date": "Fecha contable",
+  "expenseRules.fact.transaction_date": "Fecha de la operación",
   "expenseRules.code.rule_unknown": "Esta regla no está en el catálogo instalado.",
   "expenseRules.code.rule_not_valid_on_date": "La regla se aplica desde {valid_from}{valid_to, select, none {} other { hasta {valid_to}}}; el gasto tiene fecha {transaction_date}.",
   "expenseRules.code.equipment_not_covered": "La regla no cubre equipos; selecciona ninguna regla en la opción de equipos.",

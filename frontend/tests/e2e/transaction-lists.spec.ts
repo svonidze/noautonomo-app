@@ -18,7 +18,12 @@ function row(id = ID, kind = 'expense', label = 'Synthetic entry') {
     currency: 'USD',
     deductible_irpf_eur: '90.00',
     deductible_vat_eur: '0.00',
-    ui_context: { domain: 'transaction', state: 'posted', subject_id: id, reasons: [] },
+    ui_context: {
+      domain: 'transaction',
+      state: 'posted',
+      subject_id: id,
+      reasons: [] as { code: string }[],
+    },
   };
 }
 function expensePage(
@@ -151,11 +156,16 @@ test('expense refresh retains expanded rows, defers during help, and disposes po
 }) => {
   await page.clock.install();
   let requests = 0;
+  // Only a row with a reason or an action links to its explanation.
+  const explained = (value: ReturnType<typeof row>) => ({
+    ...value,
+    ui_context: { ...value.ui_context, reasons: [{ code: 'document_classification_review' }] },
+  });
   await page.route(/\/api\/expenses\?/, (route) => {
     requests++;
     const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
     return route.fulfill({
-      json: expensePage('1', [row(offset ? OTHER : ID)], offset === 0, offset + 1),
+      json: expensePage('1', [explained(row(offset ? OTHER : ID))], offset === 0, offset + 1),
     });
   });
   await page.goto('/expenses?period=2026-Q3');

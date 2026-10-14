@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod, isFuturePeriod } from '../../core/format.ts';
 import { errorDescriptor, errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import { formatMessage, message, messageIds } from '../../core/i18n.ts';
@@ -58,7 +58,9 @@ async function refresh() {
   try {
     await context.refreshCalculation();
     if (active && revision === generation) {
-      context.notify(message('refresh.done', { period: context.period }));
+      context.notify(
+        message('refresh.done', { period: formatPeriod(context.period, locale.value) }),
+      );
       await load();
     }
   } catch (failure) {
@@ -70,6 +72,17 @@ async function refresh() {
 const p = computed(() => createFinancePresentation(locale.value));
 const headline = computed(() =>
   p.value.taxHeadlineModel(data.value?.period_state, data.value?.tax_summary),
+);
+// A quarter that has not started has no calculation by design: no «Рассчитать» anywhere.
+const future = computed(
+  () => data.value?.period_state?.phase === 'future' || isFuturePeriod(props.context.period),
+);
+// No calculation exists yet for a started quarter: the headline cannot name an amount.
+const uncalculated = computed(
+  () =>
+    !future.value &&
+    ['attention', 'neutral'].includes(headline.value.tone) &&
+    (['130', '303'] as const).every((code) => form(code).display_state === 'unavailable'),
 );
 const extraDue = computed(
   () =>
@@ -112,10 +125,19 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
   <div v-else-if="data" class="tax-page">
     <section class="tax-hero" :class="`tax-hero-${headline.tone}`">
       <div class="tax-hero-copy">
-        <span>{{ data.period }}</span>
+        <span>{{ formatPeriod(data.period, locale) }}</span>
         <h2>{{ headline.label }}</h2>
         <strong v-if="headline.amount != null">{{ money(headline.amount) }}</strong>
         <p>{{ headline.detail }}</p>
+        <button
+          v-if="uncalculated"
+          type="button"
+          class="secondary-button calculate-button"
+          :disabled="refreshing"
+          @click="refresh"
+        >
+          {{ t(refreshing ? 'common.calculating' : 'common.calculate') }}
+        </button>
       </div>
       <div
         v-if="data.tax_summary && data.period_state?.phase !== 'future'"
@@ -159,6 +181,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
         :form="form(code)"
         :summary="data.tax_summary?.forms?.[code]"
         :refreshing="refreshing"
+        :future="future"
         @refresh="refresh"
       />
     </div>

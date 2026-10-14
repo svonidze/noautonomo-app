@@ -246,7 +246,7 @@ task-list, старый адрес отдает 410. `ui-ux-pro-max` не исп
 | `extracted` | Данные извлечены / извлечено | Данные извлечены, ждет проверки | Extracted, awaiting review |
 | `needs_review` | Требуется проверка / нужна проверка / Нужно проверить решение по счету | Требуется проверка | Review required |
 | `approved` + `ready` | Готово к проведению / Можно провести сейчас / можно провести / готово | Проверено, можно провести | Reviewed, ready to post |
-| `approved` + `deferred` | Проверено · Можно будет провести {date} / Отложено / позже | Проверено, провести после {date} | Reviewed, post after {date} |
+| `approved` + `deferred` | Проверено · Можно будет провести {date} / Отложено / позже | Проверено, провести с {date} | Reviewed, post from {date} |
 | `approved` + `blocked` | Проведение заблокировано / Проверено · Нельзя провести / Блокировки после проверки | Проверено, проведение заблокировано | Reviewed, posting blocked |
 | `posted` | Проведено в учете / проведено | Проведено | Posted |
 | `included_in_snapshot` | в декларации / Есть запись в снимке декларации / filing snapshot | В поданной декларации | In a filed return |
@@ -493,7 +493,7 @@ task-list, старый адрес отдает 410. `ui-ux-pro-max` не исп
 ```markdown
 ## Clarity redesign (round 2)
 
-- Status: Draft, proposed 2026-10-05 in docs/plans/ui-clarity-redesign.md.
+- Status: Active (stages 0–7 implemented; stage 8 pending).
 - Screen purpose: an owner without accounting training must see what to do
   now, what each figure means and where to act; an operator keeps dense
   tables, codes and facts on the same screens.
@@ -512,9 +512,10 @@ task-list, старый адрес отдает 410. `ui-ux-pro-max` не исп
   internal services; headings name the current step). Transferable: hierarchy
   and status feedback. Not transferable: GOV.UK typography, colours and the
   one-question flow.
-- Acceptance: every route renders exactly one primary action outside open
-  dialogs; RU catalogs contain no Latin service words outside the allowed
-  term list; every blocking status shows an action or its owner; every empty
+- Acceptance: every route and form state (read-only detail pages have none)
+  renders exactly one primary action outside open dialogs; RU catalogs
+  contain no Latin service words outside the allowed term list; every
+  blocking status shows an action or its owner; every empty
   state names the next step; charts render only with at least two non-zero
   points; dashboard first screen at 375 px shows tasks, not charts.
 - Precedence: where this section disagrees with an earlier section, this

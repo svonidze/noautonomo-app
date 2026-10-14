@@ -74,6 +74,7 @@ export function nativeFixture(): WorkflowDraft {
     conflict: false,
     source: {
       assets: [],
+      transaction: { lifecycle_status: 'needs_review' },
       document: { document_id: DOCUMENT_ID },
       period: { period_key: '2026-Q3' },
       issues: [],

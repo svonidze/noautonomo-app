@@ -13,6 +13,12 @@
   --accent-soft: #dcefe9;
   --warning: #b26a12;
   --warning-soft: #fff0d7;
+  /* WCAG ratios against #fff / #f4f6f5 (DESIGN.md "Accessibility tokens"). */
+  --warning-text: #8a5110; /* 6.43 / 5.93 */
+  --control-border: #828d89; /* 3.43 / 3.16 */
+  --focus-ring: #0b6b59; /* 6.44 / 5.93, the same as --accent-dark */
+  /* Small text on the soft fills: accent 4.97, warning 5.29, danger 4.86, info 5.01. */
+  --muted-on-soft: #5c6663;
   --danger: #b94040;
   --danger-soft: #fbe3e3;
   --info: #376da5;
@@ -26,10 +32,12 @@
 
 /* Contextual status controls use the existing palette and remain readable
    without relying on color or a hover-only interaction. */
-.status-context { display: grid; gap: 6px; justify-items: start; min-width: 0; }
+/* A status cell is a badge and at most one line: the reason, then its link inline. */
+.status-context { display: grid; gap: 2px; justify-items: start; min-width: 0; }
 .status-context small { color: var(--muted); line-height: 1.4; max-width: 34ch; }
 .status-context .badge { white-space: normal; text-align: left; }
-.status-details-button { padding: 3px 0; text-decoration: underline; text-underline-offset: 3px; }
+.status-details-button { text-decoration: underline; text-underline-offset: 3px; }
+.status-context .status-details-button { padding: 0; }
 .badge.status-neutral { color: var(--text); background: var(--surface-muted); }
 .badge.status-pending { color: #714307; background: var(--warning-soft); }
 .badge.status-attention { color: #812525; background: var(--danger-soft); }
@@ -59,7 +67,6 @@
 .status-sources li { display: grid; gap: 5px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .status-sources a { color: var(--accent-dark); }
 .status-safety-note { color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
-.status-help-dialog a:focus-visible, .term-help:focus-visible, .status-details-button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
 * {
   box-sizing: border-box;
@@ -129,6 +136,7 @@ button {
   margin-top: 2px;
   color: var(--sidebar-muted);
   font-size: 0.72rem;
+  overflow-wrap: anywhere;
 }
 
 .primary-nav {
@@ -171,15 +179,22 @@ button {
   color: #6dd2b8;
 }
 
-.sidebar-footer {
-  margin-top: auto;
-  display: flex;
+/* The section name and «Меню» appear only in the narrow bar (max-width: 760px). */
+.nav-current,
+.nav-toggle {
+  display: none;
+}
+
+.nav-toggle {
   align-items: center;
   gap: 8px;
-  padding: 18px 20px;
-  color: var(--sidebar-muted);
-  border-top: 1px solid #34413e;
-  font-size: 0.76rem;
+  min-height: 40px;
+  padding: 0 12px;
+  color: #fff;
+  background: transparent;
+  border: 1px solid var(--sidebar-muted);
+  border-radius: 5px;
+  font-weight: 600;
 }
 
 .status-dot {
@@ -197,6 +212,7 @@ button {
 .topbar {
   min-height: 76px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
@@ -213,15 +229,42 @@ button {
 }
 
 .topbar p {
+  max-width: 72ch;
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.86rem;
 }
 
+/* The purpose line keeps a readable width; the actions move below it when both do not fit. */
+.page-heading {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+/* The actions wrap, right-aligned, wherever «Добавить документ» does not fit beside the period. */
 .topbar-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  margin-left: auto;
+}
+
+.new-entry {
+  text-align: right;
+}
+
+#new-entry-button {
+  white-space: nowrap;
+}
+
+.new-entry small {
+  display: block;
+  max-width: 28ch;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 
 .locale-control {
@@ -231,7 +274,7 @@ button {
   gap: 2px;
   min-height: 38px;
   padding: 3px;
-  background: var(--surface-muted);
+  background: var(--surface);
   border: 1px solid #cbd4d0;
   border-radius: 5px;
 }
@@ -242,14 +285,14 @@ button {
   background: transparent;
   border: 0;
   border-radius: 3px;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .locale-control button.active {
   color: var(--text);
-  background: var(--surface);
-  box-shadow: 0 1px 3px rgba(28, 39, 35, 0.12);
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px #cbd4d0;
 }
 
 .period-control {
@@ -265,16 +308,22 @@ input {
   min-height: 38px;
   color: var(--text);
   background: var(--surface);
-  border: 1px solid #cbd4d0;
+  border: 1px solid var(--control-border);
   border-radius: 5px;
   padding: 7px 10px;
 }
 
+/* One focus ring everywhere but the dark sidebar and the toast; fields show it on mouse focus too. */
+:focus-visible,
 select:focus,
 input:focus,
-button:focus-visible {
-  outline: 2px solid #65bfa8;
+textarea:focus {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 .icon-button,
@@ -316,7 +365,7 @@ button:focus-visible {
 }
 
 .primary-button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.65;
 }
 
@@ -324,6 +373,14 @@ button:focus-visible {
   color: var(--text);
   background: var(--surface);
   border-color: #cbd4d0;
+}
+
+/* A link styled as a button keeps the button's box, not the link underline. */
+a.primary-button,
+a.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .content {
@@ -417,7 +474,7 @@ button:focus-visible {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -432,7 +489,6 @@ button:focus-visible {
   font-size: 0.84rem;
 }
 
-.period-note.posting-banner,
 .period-note.posting-warning {
   display: flex;
   align-items: center;
@@ -517,35 +573,120 @@ button:focus-visible {
   padding-top: 13px;
 }
 
-.deadline-strip {
+.metric dl {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 15px;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.metric dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.metric dd {
+  margin: 0;
+}
+
+.metric dd strong {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+}
+
+/* «Что сделать сейчас»: one row per task, the whole row is the link or the action. */
+.task-list {
   margin: 0 0 18px;
-  padding: 13px 15px;
-  background: var(--warning-soft);
-  border: 1px solid #ebcc9b;
+}
+
+.task-list h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.task-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
 }
 
-.deadline-strip strong {
-  white-space: nowrap;
+.task-list li + li {
+  border-top: 1px solid var(--line);
 }
 
-.deadline-strip p {
+.task-list p {
   margin: 0;
-  color: #71470f;
+  color: var(--muted);
 }
 
-.deadline-strip time {
-  font-weight: 700;
+.task-list p + p {
+  margin-top: 4px;
+  font-size: 0.84rem;
+}
+
+.task-row {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 12px 15px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  text-decoration: none;
+}
+
+.task-row:hover {
+  background: var(--surface-muted);
+}
+
+.task-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.task-row strong,
+.task-row small {
+  display: block;
+}
+
+.task-row strong {
+  color: var(--accent-dark);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.task-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* On narrow rows the status tag moves under the text instead of squeezing it. */
+.task-row > span:first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.task-row .badge {
+  flex: none;
 }
 
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(300px, 0.9fr);
   gap: 18px;
+}
+
+/* Without open questions the recent operations take the whole row. */
+.dashboard-grid > :only-child {
+  grid-column: 1 / -1;
 }
 
 .panel {
@@ -565,7 +706,8 @@ button:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
-.panel-header h2 {
+.panel-header h2,
+.panel-header h3 {
   margin: 0;
   font-size: 0.96rem;
   letter-spacing: 0;
@@ -874,6 +1016,32 @@ tbody tr:hover td {
   white-space: normal;
 }
 
+/* The row the queue's «Провести» opened (`#posting-row-<id>`); beats the hover background. */
+.table-wrap tbody tr.posting-row-target td {
+  background: #e9f6f1;
+}
+
+.table-wrap tbody tr.posting-row-target td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent-dark);
+}
+
+/* The row takes focus when the tab opens at it. */
+.table-wrap tbody tr.posting-row-target:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.posting-technical summary {
+  width: fit-content;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.posting-technical .posting-summary-grid {
+  margin-top: 10px;
+}
+
 .tax-page {
   display: grid;
   gap: 18px;
@@ -1014,6 +1182,10 @@ tbody tr:hover td {
   color: var(--muted);
 }
 
+.calculate-button {
+  margin-top: 10px;
+}
+
 .tax-form-facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1127,6 +1299,17 @@ tbody tr:hover td {
   font-weight: 650;
 }
 
+.back-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; justify-self: start; }
+
+/* Pointer targets (WCAG 2.5.8): a text action in a table cell or a status line is at least 24 px
+   tall; a link inside a sentence (.inline-button) is exempt. */
+td .text-button:not(.inline-button),
+.status-details-button {
+  display: inline-block;
+  min-height: 24px;
+  padding: 2px 0;
+}
+
 .transaction-actions {
   display: flex;
   align-items: center;
@@ -1233,7 +1416,6 @@ tbody tr:hover td {
   padding: 10px 12px; border: 0; background: transparent; color: var(--text);
 }
 .counterparty-actions-menu button:hover { background: var(--surface-muted); }
-.contact-back-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; justify-self: start; }
 #contact-identity { display: grid; gap: 16px; }
 .contact-detail-header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
@@ -1528,6 +1710,11 @@ tbody tr:hover td {
   line-height: 1;
 }
 
+/* --focus-ring is 2.09:1 on the toast and 1.23:1 on the error toast; white is 13.45 / 7.91. */
+.toast-close:focus-visible {
+  outline-color: currentColor;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -1540,18 +1727,34 @@ tbody tr:hover td {
   border: 0;
 }
 
-button:focus-visible,
-a:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
+/* --focus-ring is 2.32:1 on the sidebar; this green is 8.21:1 there. */
+.nav-item:focus-visible,
+.nav-toggle:focus-visible {
+  outline-color: #6dd2b8;
 }
 
-.nav-item:focus-visible {
-  outline: 3px solid #6dd2b8;
-  outline-offset: 2px;
+.refresh-label {
+  display: none;
 }
 
-.icon-button.busy {
+@media (min-width: 1080px) {
+  #refresh-button:not([hidden]) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    padding: 0 12px;
+  }
+
+  .refresh-label {
+    display: inline;
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+}
+
+.icon-button.busy .refresh-icon {
+  display: inline-block;
   animation: refresh-spin 0.9s linear infinite;
 }
 
@@ -1562,35 +1765,13 @@ a:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .icon-button.busy {
+  .icon-button.busy .refresh-icon {
     animation: none;
+  }
+
+  .icon-button.busy {
     opacity: 0.55;
   }
-}
-
-.review-banner {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 22px;
-  padding: 16px 18px;
-  color: var(--text);
-  background: linear-gradient(135deg, #ebf7f2, #dff1ea);
-  border: 1px solid #b8ddd0;
-  border-radius: 10px;
-  text-align: left;
-}
-
-.review-banner strong,
-.review-banner span {
-  display: block;
-}
-
-.review-banner span {
-  color: var(--accent-dark);
-  font-weight: 700;
 }
 
 .review-shell {
@@ -1631,11 +1812,6 @@ a:focus-visible {
   border-bottom: 2px solid var(--accent);
 }
 
-.review-tabs [role="tab"]:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-
 .tab-count {
   min-width: 20px;
   padding: 1px 6px;
@@ -1653,15 +1829,25 @@ a:focus-visible {
 
 .review-summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 10px;
+  padding: 15px;
 }
 
+/* The summary cards are filter toggles: pressed reads from the border, not only the colour. */
 .review-summary-card {
-  padding: 16px;
+  padding: 10px 12px;
+  color: var(--text);
+  text-align: left;
   background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: 10px;
+  cursor: pointer;
+}
+
+.review-summary-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .review-summary-card strong,
@@ -1670,13 +1856,13 @@ a:focus-visible {
 }
 
 .review-summary-card span {
-  color: var(--muted);
+  color: var(--muted-on-soft);
   font-size: 0.78rem;
 }
 
 .review-summary-card strong {
-  margin-top: 6px;
-  font-size: 1.5rem;
+  margin-top: 4px;
+  font-size: 1.25rem;
 }
 
 .review-summary-card.ready {
@@ -1684,12 +1870,12 @@ a:focus-visible {
   border-color: #b8ddd0;
 }
 
-.review-summary-card.needs-review {
+.review-summary-card.needs_review {
   background: #eef3fb;
   border-color: #c6d4e8;
 }
 
-.review-summary-card.later {
+.review-summary-card.deferred {
   background: var(--warning-soft);
   border-color: #eed39f;
 }
@@ -1699,8 +1885,28 @@ a:focus-visible {
   border-color: #e9b5b5;
 }
 
+/* After the tone colours, so a pressed card always shows the dark border. */
+.review-summary-card[aria-pressed="true"] {
+  border-color: var(--accent-dark);
+  box-shadow: inset 0 0 0 1px var(--accent-dark);
+}
+
 .table-actions {
   white-space: nowrap;
+}
+
+/* One action per queue row: the column is as wide as that one control. */
+.table-wrap .review-queue-table .table-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.review-queue-age {
+  margin: 0;
+  padding: 10px 15px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.83rem;
 }
 
 .compact-button {
@@ -1742,10 +1948,6 @@ a:focus-visible {
   text-align: right;
 }
 
-.review-workspace-status strong {
-  font-size: 0.95rem;
-}
-
 .review-alert {
   padding: 14px 16px;
   border-radius: 10px;
@@ -1759,6 +1961,14 @@ a:focus-visible {
 
 .review-alert p {
   margin: 6px 0 0;
+}
+
+.review-alert > p:first-child {
+  margin-top: 0;
+}
+
+.review-alert > .secondary-button {
+  margin-left: 10px;
 }
 
 .review-alert.info,
@@ -1895,15 +2105,10 @@ textarea {
   resize: vertical;
   color: var(--text);
   background: var(--surface);
-  border: 1px solid #cbd4d0;
+  border: 1px solid var(--control-border);
   border-radius: 5px;
   padding: 10px;
   font: inherit;
-}
-
-textarea:focus {
-  outline: 2px solid #65bfa8;
-  outline-offset: 2px;
 }
 
 .review-issues-grid {
@@ -1954,10 +2159,6 @@ textarea:focus {
 }
 
 @media (max-width: 1080px) {
-  .metric-grid {
-    grid-template-columns: repeat(3, minmax(150px, 1fr));
-  }
-
   .dashboard-grid,
   .tax-form-grid,
   .review-facts-grid {
@@ -1968,32 +2169,75 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
-  .review-summary-grid {
-    grid-template-columns: 1fr;
-  }
-
   .posting-summary-grid {
     grid-template-columns: repeat(2, minmax(130px, 1fr));
   }
 }
 
 @media (max-width: 760px) {
+  /* One bar: the brand mark, the current section and «Меню»; the brand name, the owner and the
+     links open below it. */
   .sidebar {
     position: static;
     width: 100%;
     height: auto;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: minmax(56px, auto);
+    align-items: center;
+    column-gap: 12px;
+    padding: 0 12px;
   }
 
   .brand {
-    height: 60px;
+    display: contents;
+  }
+
+  .brand-mark {
+    grid-area: 1 / 1;
+  }
+
+  .brand > span:last-child {
+    grid-area: 2 / 1 / 3 / -1;
+    padding: 10px 0;
+    border-top: 1px solid #34413e;
+  }
+
+  /* Folded, the name and the owner stay readable to screen readers. */
+  .sidebar:not(.menu-open) .brand > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .nav-current {
+    display: block;
+    grid-area: 1 / 2;
+    min-width: 0;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+    grid-area: 1 / 3;
   }
 
   .primary-nav {
-    display: grid;
+    display: none;
+    grid-area: 3 / 1 / 4 / -1;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     overflow: visible;
-    padding: 7px 8px;
+    padding: 7px 0;
     border-top: 1px solid #34413e;
+  }
+
+  .menu-open .primary-nav {
+    display: grid;
   }
 
   .nav-item {
@@ -2002,10 +2246,6 @@ textarea:focus {
     padding: 0 8px;
     gap: 7px;
     white-space: normal;
-  }
-
-  .sidebar-footer {
-    display: none;
   }
 
   .workspace {
@@ -2017,11 +2257,6 @@ textarea:focus {
     padding: 12px 14px;
   }
 
-  .topbar-actions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
   .period-control span {
     display: none;
   }
@@ -2030,20 +2265,6 @@ textarea:focus {
     padding: 16px 12px 36px;
   }
 
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .deadline-strip {
-    grid-template-columns: 1fr auto;
-  }
-
-  .deadline-strip p {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  .period-note.posting-banner,
   .period-note.posting-warning,
   .posting-action-row,
   .posting-results-header {
@@ -2073,10 +2294,6 @@ textarea:focus {
     min-width: 0;
   }
 
-  .review-banner {
-    align-items: flex-start;
-  }
-
   .tax-form-facts {
     grid-template-columns: 1fr;
   }
@@ -2101,10 +2318,6 @@ textarea:focus {
     justify-content: flex-start;
   }
 
-  .metric-grid {
-    grid-template-columns: 1fr;
-  }
-
   .posting-summary-grid {
     grid-template-columns: 1fr;
   }
@@ -2125,10 +2338,6 @@ textarea:focus {
 }
 
 /* ------------------------------ Guided review ------------------------------ */
-
-.review-back-link {
-  text-decoration: none;
-}
 
 .danger-button {
   min-height: 38px;
@@ -2221,10 +2430,6 @@ textarea:focus {
   font-size: 0.82rem;
 }
 
-.review-inline-error.fx-needed {
-  padding: 0 2px;
-}
-
 .review-issues-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2274,7 +2479,7 @@ textarea:focus {
 }
 
 .fx-card-status.warning {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .fx-choice {
@@ -2297,7 +2502,7 @@ textarea:focus {
 }
 
 .fx-choice small {
-  color: var(--muted);
+  color: var(--muted-on-soft);
 }
 
 .fx-choice-note {
@@ -2326,7 +2531,7 @@ textarea:focus {
 }
 
 .review-reject-panel {
-  margin-bottom: 16px;
+  margin-top: 16px;
   padding: 4px 0;
 }
 
@@ -2384,7 +2589,7 @@ textarea:focus {
   .term-help { width: 44px; }
 }
 @media (forced-colors: active) {
-  .status-context .badge, .status-reason, .term-help, .accounting-tooltip, .chart-expand-button { border: 1px solid CanvasText; }
+  .badge, .status-reason, .term-help, .accounting-tooltip, .chart-expand-button { border: 1px solid CanvasText; }
 }
 
 .charts-panel {
@@ -2392,6 +2597,29 @@ textarea:focus {
   gap: 18px;
   grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
   margin-top: 18px;
+}
+
+#dashboard-analytics-title {
+  margin: 18px 0 4px;
+  font-size: 1rem;
+}
+
+.analytics-details > summary {
+  padding: 6px 0;
+  color: var(--accent-dark);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chart-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+/* A chart below the data threshold is one line across the grid, in its own place. */
+.charts-panel > .chart-slot:has(> .chart-empty) {
+  grid-column: 1 / -1;
 }
 
 .chart-slot {
@@ -2448,11 +2676,6 @@ textarea:focus {
   border-color: var(--muted);
 }
 
-.chart-expand-button:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 3px;
-}
-
 .chart-dialog {
   width: min(1200px, calc(100vw - 48px));
   overflow-y: auto;
@@ -2475,15 +2698,6 @@ textarea:focus {
 @media (max-width: 700px) {
   .chart-dialog {
     width: calc(100vw - 16px);
-  }
-}
-
-@media (max-width: 760px) {
-  /* Detailed expense rows survive narrow screens and browser zoom without
-     relying on clipped SVG labels or hover-only titles. */
-  .chart-table-primary-on-narrow .chart-host,
-  .chart-table-primary-on-narrow .chart-legend {
-    display: none;
   }
 }
 
@@ -2648,13 +2862,18 @@ textarea:focus {
   min-height: 84px;
 }
 
-.chart-data summary {
+/* On a phone the open table comes first and «Показать график» folds the drawing below it. */
+.chart-data summary,
+.chart-plot > summary {
+  min-height: 24px;
+  padding: 3px 0;
   color: var(--muted);
   font-size: 0.8rem;
   cursor: pointer;
 }
 
-.chart-data[open] summary {
+.chart-data[open] summary,
+.chart-plot[open] > summary {
   margin-bottom: 6px;
 }
 
@@ -2668,12 +2887,6 @@ textarea:focus {
 .expense-document-link {
   text-decoration: underline;
   text-underline-offset: 0.18em;
-}
-
-.expense-document-link:focus-visible,
-.expense-detail a:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 3px;
 }
 
 .expense-note-text {
@@ -2705,14 +2918,18 @@ textarea:focus {
 /* Expense workflow shares the existing form/panel language. */
 .wf-layout { display: grid; grid-template-columns: minmax(250px, .8fr) minmax(360px, 1.2fr); gap: 20px; align-items: start; }
 .wf-source { padding: 16px; position: sticky; top: 20px; }
+.wf-source h3 { margin-top: 0; }
 .wf-source iframe { border: 0; width: 100%; height: 65vh; margin-top: 12px; background: var(--surface, white); }
 .wf-fields { padding: 20px; min-width: 0; }
+.wf-fields > h2 { margin: 0 0 12px; font-size: 1rem; }
 .wf-fields fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 14px; }
 .wf-fields label { display: grid; gap: 6px; min-width: 0; }
 .wf-fields input, .wf-fields select { width: 100%; min-width: 0; padding: 10px; box-sizing: border-box; }
-.wf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+/* Base, IVA and rate share a row where they fit; a phone stacks them. */
+.wf-grid.wf-grid-facts { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .wf-fields .wf-check { display: flex; align-items: start; gap: 8px; }
-.wf-check input { width: auto; margin-top: 4px; }
+.wf-check input { width: auto; min-height: 0; margin-top: 4px; padding: 0; }
 .wf-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .wf-fields details { display: grid; gap: 12px; }
 .wf-message:empty { display: none; }
@@ -2722,6 +2939,35 @@ textarea:focus {
 .wf-rule small, .wf-rule-risk { color: var(--muted); }
 .wf-risk { margin-left: 8px; }
 .wf-rule-stale { color: #714307; }
+/* Three in-page steps; the current one is marked, every step stays a plain link. */
+.wf-steps ol { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; padding: 0; list-style: none; }
+.wf-steps a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--muted); font-weight: 600; text-decoration: none; }
+.wf-steps a:hover, .wf-steps a[aria-current="step"] { color: var(--accent-dark); }
+.wf-step-number { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 2px solid currentColor; border-radius: 50%; font-size: .85rem; }
+.wf-steps a[aria-current="step"] .wf-step-number { color: var(--surface); background: var(--accent-dark); border-color: var(--accent-dark); }
+.wf-remaining { padding: 14px 16px; border: 1px solid #eed39f; border-radius: 10px; background: var(--warning-soft); }
+.wf-remaining h3 { margin: 0 0 8px; font-size: 1rem; }
+.wf-remaining ul { display: grid; gap: 6px; margin: 0; padding-left: 20px; }
+.wf-remaining a { color: var(--accent-dark); text-decoration: underline; text-underline-offset: 3px; }
+.wf-step { display: grid; gap: 14px; min-width: 0; }
+.wf-step > h2 { margin: 0; font-size: 1.1rem; }
+.wf-step > h3 { margin: 6px 0 0; font-size: 1rem; }
+.wf-source a { color: var(--accent-dark); }
+/* A secondary action keeps its own width inside the form grid. */
+.wf-fields button { justify-self: start; }
+.wf-step + .wf-step { padding-top: 18px; border-top: 1px solid var(--line); }
+.wf-hint { color: var(--muted); font-size: .85rem; line-height: 1.4; }
+/* A matched supplier or activity is one line of text with «Изменить». */
+.wf-chosen { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; }
+.wf-chosen > span { color: var(--muted); }
+.wf-chosen strong { overflow-wrap: anywhere; }
+.wf-more > summary, .wf-rule > summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.wf-more[open] > summary, .wf-rule[open] > summary { margin-bottom: 12px; }
+.wf-rule-body { display: grid; gap: 10px; }
+/* Without a previewable original the source is one compact line above the form. */
+.wf-layout-compact { grid-template-columns: minmax(0, 1fr); }
+.wf-layout-compact .wf-source { position: static; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+.wf-layout-compact .wf-source h3 { margin: 0; }
 @media (max-width: 800px) {
   .wf-layout { grid-template-columns: minmax(0, 1fr); }
   .wf-source { position: static; }
@@ -2734,21 +2980,16 @@ textarea:focus {
 }
 
 /* Account settings use the same forms and palette as accounting screens. */
-.storage-settings-link { color: var(--sidebar-muted); text-decoration: none; }
-.storage-settings-link:hover { color: white; }
-.storage-settings-link:focus-visible { outline: 3px solid var(--accent); outline-offset: -4px; }
 .settings-page { max-width: 1180px; margin: 0 auto; }
-.settings-intro { color: var(--muted); margin: 0 0 24px; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
 .settings-panel { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
 .settings-panel h2 { font-size: 1.2rem; margin: 0 0 16px; }
 .settings-panel h3 { font-size: 1rem; margin: 24px 0 12px; }
-.settings-panel h4 { font-size: .95rem; margin: 0 0 8px; }
+.settings-panel h4, .settings-activity h3 { font-size: .95rem; margin: 0 0 8px; }
 .settings-panel fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .settings-panel label { display: grid; gap: 7px; margin: 16px 0 8px; font-weight: 600; }
-.settings-panel input, .settings-panel select { width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; background: var(--surface); color: var(--text); }
+.settings-panel input, .settings-panel select { width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--control-border); border-radius: var(--radius); padding: 10px 12px; background: var(--surface); color: var(--text); }
 .settings-panel input[readonly] { background: var(--surface-muted); }
-.settings-panel input:focus-visible, .settings-panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .settings-hint { color: var(--muted); font-size: .9rem; line-height: 1.55; }
 .settings-warning { padding: 12px 14px; border-left: 3px solid var(--warning); background: var(--warning-soft); font-size: .9rem; line-height: 1.55; }
 .settings-feedback { min-height: 1.5em; font-size: .9rem; color: var(--accent-dark); overflow-wrap: anywhere; }
@@ -2771,17 +3012,22 @@ textarea:focus {
 }
 
 /* AEAT documents are global records rather than quarter-scoped ledger rows. */
-.aeat-filter-grid { display: grid; grid-template-columns: minmax(14rem, 2fr) repeat(4, minmax(8rem, 1fr)); gap: .75rem; align-items: end; }
+/* As many 180 px filters per row as fit, inside the panel's own padding at every width. */
+.aeat-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: .75rem; align-items: end; padding: 12px 15px 0; }
+.aeat-documents-table th.aeat-form-code { white-space: nowrap; }
 .aeat-filter-grid label, .aeat-upload-panel label { display: grid; gap: .35rem; }
+.aeat-filter-grid label { min-width: 0; }
+.aeat-filter-grid input, .aeat-filter-grid select { width: 100%; min-width: 0; }
 .aeat-documents-table td small, .aeat-documents-table td strong { display: block; }
 .aeat-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .aeat-upload-panel > summary { cursor: pointer; font-weight: 700; }
+.aeat-upload-panel:not([open]) { background: none; border: 0; }
+.aeat-upload-panel > summary.primary-button { display: inline-flex; align-items: center; list-style: none; }
+.aeat-upload-panel > summary.primary-button::-webkit-details-marker { display: none; }
 .aeat-upload-panel[open] > summary { margin-bottom: 1rem; }
 .aeat-documents-page .full-width { grid-column: 1 / -1; }
 .aeat-preview { max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-muted); border-radius: .5rem; padding: .75rem; }
-@media (max-width: 900px) { .aeat-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) {
-  .aeat-filter-grid { grid-template-columns: 1fr; }
   .aeat-documents-table thead { display: none; }
   .aeat-documents-table, .aeat-documents-table tbody, .aeat-documents-table tr, .aeat-documents-table td { display: block; width: 100%; }
   .aeat-documents-table tr { border-bottom: 1px solid var(--line); padding: .75rem 0; }

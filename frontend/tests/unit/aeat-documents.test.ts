@@ -3,6 +3,7 @@ import { expect, test, vi } from 'vitest';
 import AeatDocumentsView from '../../src/features/aeat-documents/AeatDocumentsView.vue';
 import type { AeatDocumentsContext } from '../../src/features/aeat-documents/model.ts';
 import { mountView } from '../support/mount.ts';
+import { formatDateTime } from '../../src/core/format.ts';
 
 async function flush() {
   for (let index = 0; index < 5; index++) {
@@ -76,6 +77,8 @@ test('AEAT registry filters rows and submits a sourced status transition', async
   await flush();
   expect(root.textContent).toContain('Synthetic ROI');
   expect(root.textContent).toContain('Modelo 303');
+  expect(root.textContent).not.toContain('2032-04-03T10:20:30Z');
+  expect(root.textContent).toContain(formatDateTime('2032-04-03T10:20:30Z', 'ru'));
 
   const search = root.querySelector('input[type="search"]') as HTMLInputElement;
   search.value = '036';

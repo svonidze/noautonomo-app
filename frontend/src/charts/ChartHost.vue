@@ -2,14 +2,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../vue/locale.ts';
 import { captureFocus, restoreFocus } from '../core/focus.ts';
-import type { ViewServices } from '../vue/services.ts';
-import { createChartBuilders, type ChartKind } from './builders.ts';
+import { chartValueCount, createChartBuilders, type ChartKind } from './builders.ts';
 import type { Analytics, ChartSpec } from './types.ts';
 import { renderCartesian, renderHorizontalBars, renderBullet } from './renderer.js';
 const props = defineProps<{
   kind: ChartKind;
   period: string;
-  request?: ViewServices['request'];
+  // A plain function type: the SFC compiler reads `ViewServices['request']` as a Promise prop.
+  request?: (url: string) => Promise<unknown>;
   analytics?: Analytics;
   failed?: boolean;
   revision?: number;
@@ -40,19 +40,54 @@ const spec = computed(
     props.spec ??
     (source.value ? createChartBuilders(locale.value)[props.kind](source.value) : null),
 );
+const values = computed(() => (spec.value ? chartValueCount(spec.value) : 0)),
+  drawable = computed(() => values.value >= 2);
+/** On a phone the data table is the chart (DESIGN.md "Charts"): the drawing and its legend wait in a
+ * closed «Показать график» below the open table. */
+function fold(figure: HTMLElement | null) {
+  const parts = figure?.querySelectorAll(':scope > .chart-host, :scope > .chart-legend');
+  if (!figure || !parts?.length) return;
+  const plot = document.createElement('details'),
+    summary = document.createElement('summary');
+  plot.className = 'chart-plot';
+  summary.textContent = t('charts.showChart');
+  plot.addEventListener('toggle', () => {
+    summary.textContent = t(plot.open ? 'charts.hideChart' : 'charts.showChart');
+  });
+  plot.append(summary, ...parts);
+  figure.append(plot);
+}
 function paint(container: HTMLElement | undefined, expanded = false) {
   if (!container || !spec.value) return;
+  if (!drawable.value) {
+    container.replaceChildren();
+    return;
+  }
   const focus = captureFocus(container),
-    details = container.querySelector('details');
+    table = container.querySelector<HTMLDetailsElement>('details.chart-data'),
+    plot = container.querySelector<HTMLDetailsElement>('details.chart-plot');
   const width = Math.round(container.getBoundingClientRect().width) - 28;
-  const value: ChartSpec = { ...spec.value, ...(width > 0 ? { width } : {}) };
+  const folded = !expanded && !!window.matchMedia?.('(max-width: 760px)').matches;
+  // Below 400 units four «IV кв. 2026» labels (64 px each) no longer fit their bars.
+  const compact = !props.spec && width > 0 && width < 400 && !!source.value;
+  const value: ChartSpec = {
+    ...(compact
+      ? createChartBuilders(locale.value, { compactQuarters: true })[props.kind](source.value!)
+      : spec.value),
+    ...(width > 0 ? { width } : {}),
+    ...(folded ? { tableInitiallyOpen: true } : {}),
+  };
   if (!expanded)
     value.expandAction = { label: props.labels?.expand ?? t('charts.expand'), handler: open };
   render.value(container, value);
+  if (folded) fold(container.querySelector('figure'));
   if (!expanded && opened.value)
     opener = container.querySelector<HTMLElement>('.chart-expand-button') || undefined;
-  const next = container.querySelector('details');
-  if (next && details) next.open = details.open;
+  // A redraw keeps what the reader opened, unless the layout switched between phone and wider.
+  const next = container.querySelector<HTMLDetailsElement>('details.chart-data'),
+    nextPlot = container.querySelector<HTMLDetailsElement>('details.chart-plot');
+  if (next && table && !!plot === folded) next.open = table.open;
+  if (nextPlot && plot) nextPlot.open = plot.open;
   restoreFocus(container, focus);
 }
 async function open(trigger: HTMLElement) {
@@ -133,7 +168,14 @@ onBeforeUnmount(() => {
     <div v-if="failure || failed" class="empty-state chart-empty-state">
       {{ labels?.loadError ?? t('charts.loadError') }}
     </div>
-    <div ref="host" v-show="!failure && !failed"></div>
+    <p v-else-if="spec && !drawable" class="chart-empty">
+      {{
+        values === 1
+          ? t('charts.singleValue', { title: spec.title })
+          : t('charts.emptyLine', { title: spec.title, message: spec.emptyMessage ?? '' })
+      }}
+    </p>
+    <div ref="host" v-show="!failure && !failed && drawable"></div>
     <Teleport to="body"
       ><dialog
         ref="dialog"

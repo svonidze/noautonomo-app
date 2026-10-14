@@ -15,6 +15,10 @@ export interface HelpAdapter {
   label(context: HelpContext): string;
   summary(context: HelpContext): string;
   tone(context: HelpContext): string;
+  /** «Что сделать», «Почему», or '' when the record has neither an action nor a reason. */
+  link(context: HelpContext): string;
+  /** The review the server offers for the record (the one review-availability rule), if any. */
+  reviewAction(context: HelpContext): { transaction_id: string; period?: string } | undefined;
   word(key: string): string;
   termLabel?(key: string): string;
   reasonInfo(reason: Record<string, unknown>): string[];

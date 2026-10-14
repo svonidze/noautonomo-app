@@ -1,8 +1,8 @@
 {
   "reta.additional": "Pago adicional estimado",
   "reta.baseRange": "Intervalo de bases del tramo",
-  "reta.basesEmpty": "Todavía no hay bases registradas.",
-  "reta.basesHint": "Las bases son de solo lectura aquí. Registra cada una a partir de su resolución de la TGSS con el comando {command}; consulta {doc}.",
+  "reta.basesEmpty": "Aún no hay bases. Aparecen aquí cuando el operador las registra a partir de la resolución de la TGSS.",
+  "reta.basesHint": "Las bases son de solo lectura aquí. El operador las registra a partir de la resolución de la TGSS.",
   "reta.basesTitle": "Bases registradas",
   "reta.boundarySensitive": "Tus rendimientos están cerca del límite de un tramo: unas pocas operaciones más pueden hacer que pasen al siguiente.",
   "reta.disclaimer": "Ayuda para decidir, no una resolución de la TGSS. Estas estimaciones nunca se suman ni se compensan con los pagos fiscales de la AEAT mostrados arriba.",

@@ -1,11 +1,20 @@
 {
   "titles.assets": "Activos",
+  "titles.assetsLead": "Equipos y su amortización por trimestre",
   "titles.aeatDocuments": "Documentos de la AEAT",
+  "titles.aeatDocumentsLead": "Justificantes, requerimientos y resoluciones de la AEAT",
   "titles.contacts": "Contrapartes",
+  "titles.contactsLead": "Clientes y proveedores, sus datos y operaciones",
   "titles.dashboard": "Resumen",
+  "titles.dashboardLead": "Qué hacer este trimestre y cómo va todo",
   "titles.expenses": "Gastos",
+  "titles.expensesLead": "Compras, servicios y amortización que reducen tus impuestos",
   "titles.income": "Ingresos",
+  "titles.incomeLead": "Facturas emitidas e ingresos recibidos este trimestre",
   "titles.review": "Revisión",
+  "titles.reviewLead": "Revisa los documentos y después contabiliza los asientos revisados: contabilizar incluye las operaciones revisadas en el cálculo fiscal. Esto no es un pago ni una presentación fiscal",
   "titles.settings": "Configuración de la cuenta",
-  "titles.taxes": "Impuestos y plazos"
+  "titles.settingsLead": "Datos del contribuyente, copias de seguridad e idioma de la interfaz",
+  "titles.taxes": "Impuestos y plazos",
+  "titles.taxesLead": "Cuánto pagar a la AEAT por el trimestre y cuándo"
 }

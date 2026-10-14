@@ -156,14 +156,7 @@ const reason = (code: string) =>
         </table>
       </div>
       <p v-else>{{ t('reta.basesEmpty') }}</p>
-      <p class="reta-check-note">
-        {{
-          t('reta.basesHint', {
-            command: 'autonomo-tax reta base add',
-            doc: 'docs/user/RETA_CHECK.md',
-          })
-        }}
-      </p>
+      <p v-if="data.elections.length" class="reta-check-note">{{ t('reta.basesHint') }}</p>
     </template>
   </section>
 </template>

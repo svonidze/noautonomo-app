@@ -65,7 +65,8 @@ export interface WorkflowDraft {
   conflict: boolean;
   source: {
     assets: unknown[];
-    document: { document_id: string };
+    transaction?: { lifecycle_status?: string };
+    document: { document_id: string; mime_type?: string | null };
     period: { period_key: string };
     issues: { issue_code: string }[];
   };
@@ -100,6 +101,7 @@ export interface PostedExpense {
 }
 export interface WorkflowContext {
   transactionId: string;
+  period: string;
   services: ViewServices;
   onPosted(result: PostedExpense): void;
   onLegacy(): void;
@@ -110,12 +112,28 @@ export interface FieldSpec {
   label: MessageId;
   kind?: 'text' | 'money' | 'rate' | 'ratio' | 'boolean';
   type?: 'text' | 'date' | 'number';
+  hint?: MessageId;
 }
 export const factsFields: FieldSpec[] = [
   { path: 'facts.document_number', label: 'workflow.documentNumber' },
-  { path: 'facts.issued_on', label: 'workflow.issueDate', type: 'date' },
-  { path: 'facts.transaction_date', label: 'workflow.accountingDate', type: 'date' },
-  { path: 'facts.booking_date', label: 'workflow.bookingDate', type: 'date' },
+  {
+    path: 'facts.issued_on',
+    label: 'workflow.issueDate',
+    type: 'date',
+    hint: 'workflow.hint.issueDate',
+  },
+  {
+    path: 'facts.transaction_date',
+    label: 'workflow.accountingDate',
+    type: 'date',
+    hint: 'workflow.hint.transactionDate',
+  },
+  {
+    path: 'facts.booking_date',
+    label: 'workflow.bookingDate',
+    type: 'date',
+    hint: 'workflow.hint.bookingDate',
+  },
   { path: 'facts.currency', label: 'workflow.originalCurrency' },
   {
     path: 'facts.gross_minor',
@@ -139,13 +157,13 @@ export const taxFields: FieldSpec[] = [
   },
   {
     path: 'decision.tax_treatment.deductible_vat_minor',
-    label: 'workflow.deductibleIvaEur',
+    label: 'workflow.ivaDeductionDecision',
     kind: 'money',
     type: 'number',
   },
   {
     path: 'decision.tax_treatment.deductible_irpf_minor',
-    label: 'workflow.irpfDeductionEur',
+    label: 'workflow.irpfDeductionDecision',
     kind: 'money',
     type: 'number',
   },
@@ -183,6 +201,8 @@ export function fieldValue(payload: ExpensePayload, path: string): Scalar | unde
       value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined;
   return value as Scalar | undefined;
 }
+/** The element id of the control for a payload path; «Что осталось» links point at it. */
+export const fieldId = (path: string) => 'wf-' + path.replaceAll('.', '-');
 export function setField(payload: ExpensePayload, path: string, value: Scalar): void {
   const keys = path.split('.');
   if (keys.some((key) => ['__proto__', 'prototype', 'constructor'].includes(key)))

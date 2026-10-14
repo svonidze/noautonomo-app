@@ -1,11 +1,20 @@
 {
   "titles.assets": "Активы",
+  "titles.assetsLead": "Оборудование и его амортизация по кварталам",
   "titles.aeatDocuments": "Документы AEAT",
+  "titles.aeatDocumentsLead": "Квитанции, запросы и решения AEAT",
   "titles.contacts": "Контрагенты",
+  "titles.contactsLead": "Клиенты и поставщики, их реквизиты и операции",
   "titles.dashboard": "Обзор",
+  "titles.dashboardLead": "Что сделать в этом квартале и как идут дела",
   "titles.expenses": "Расходы",
+  "titles.expensesLead": "Покупки, услуги и амортизация, которые уменьшают налог",
   "titles.income": "Доходы",
+  "titles.incomeLead": "Выставленные счета и полученные доходы за квартал",
   "titles.review": "Проверка",
+  "titles.reviewLead": "Проверить документы, затем провести: включить проверенные операции в расчёт налогов. Это не оплата и не подача декларации",
   "titles.settings": "Настройки аккаунта",
-  "titles.taxes": "Налоги и сроки"
+  "titles.settingsLead": "Профиль налогоплательщика, резервные копии и язык интерфейса",
+  "titles.taxes": "Налоги и сроки",
+  "titles.taxesLead": "Сколько и когда заплатить AEAT за квартал"
 }

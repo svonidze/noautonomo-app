@@ -95,11 +95,12 @@ test('guided demo never reads or persists local review drafts and rejects forged
 });
 
 test('expense demo uses the real HTTP document preview, freezes fields and keeps search usable', async () => {
-  const request = vi.fn(async (url: string) =>
-    url === '/api/counterparties' ? [] : nativeFixture(),
-  );
+  const draft = nativeFixture();
+  draft.source.document.mime_type = 'application/pdf';
+  const request = vi.fn(async (url: string) => (url === '/api/counterparties' ? [] : draft));
   const element = mount(ExpenseWorkflowView, {
     transactionId: REVIEW_ID,
+    period: '2026-Q3',
     services: services(request),
     onPosted: vi.fn(),
     onLegacy: vi.fn(),
@@ -311,6 +312,7 @@ test('read-only accounting records stay unchanged when the interface language ch
   draft.payload.facts.document_number = 'English stored document';
   const workflowRoot = mount(ExpenseWorkflowView, {
     transactionId: REVIEW_ID,
+    period: '2026-Q3',
     services: services(vi.fn(async (url: string) => (url === '/api/counterparties' ? [] : draft))),
     onPosted: vi.fn(),
     onLegacy: vi.fn(),

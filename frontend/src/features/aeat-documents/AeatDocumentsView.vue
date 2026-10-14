@@ -2,7 +2,7 @@
 import { viewHref } from '../../vue/services.ts';
 import { computed, onBeforeUnmount, reactive, ref, shallowRef } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { formatDateText } from '../../core/format.ts';
+import { formatDateTime, formatPeriod } from '../../core/format.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { formatMessage } from '../../core/i18n.ts';
 import type { AeatDocumentRow, AeatDocumentsContext, AeatDocumentsData } from './model.ts';
@@ -13,6 +13,8 @@ const data = shallowRef<AeatDocumentsData>();
 const error = shallowRef<unknown>();
 const loading = ref(true);
 const saving = ref(false);
+// Closed, the upload form's summary is the page's one primary action; open, its save button is.
+const uploadOpen = ref(false);
 const preview = shallowRef<Record<string, unknown>>();
 const file = shallowRef<File>();
 const filters = reactive({ year: '', form: '', kind: '', status: '', q: '' });
@@ -210,12 +212,9 @@ async function saveStatus() {
 
 <template>
   <div class="section-stack aeat-documents-page">
-    <section class="panel">
+    <section class="panel" aria-labelledby="page-title">
       <header class="panel-header">
-        <div>
-          <h2>{{ t('aeatDocuments.title') }}</h2>
-          <p>{{ t('aeatDocuments.intro') }}</p>
-        </div>
+        <p>{{ t('aeatDocuments.intro') }}</p>
         <small>{{ rows.length }}</small>
       </header>
       <div class="table-toolbar aeat-filter-grid">
@@ -287,25 +286,25 @@ async function saveStatus() {
           <thead>
             <tr>
               <th>{{ t('aeatDocuments.date') }}</th>
-              <th>Modelo</th>
+              <th class="aeat-form-code">Modelo</th>
               <th>{{ t('aeatDocuments.procedure') }}</th>
               <th>{{ t('aeatDocuments.kind') }}</th>
               <th>{{ t('aeatDocuments.status') }}</th>
-              <th>Referencia</th>
-              <th>Justificante</th>
-              <th>CSV</th>
+              <th>{{ t('aeatDocuments.reference') }}</th>
+              <th>{{ t('aeatDocuments.receiptNumber') }}</th>
+              <th>{{ t('aeatDocuments.verificationCode') }}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="row in rows" :key="`${row.record_source}:${row.record_id}`">
               <td :data-label="t('aeatDocuments.date')">
-                {{ formatDateText(row.occurred_at, locale) }}
+                {{ formatDateTime(row.occurred_at, locale) }}
               </td>
               <td data-label="Modelo">{{ row.form_code || '—' }}</td>
               <td :data-label="t('aeatDocuments.procedure')">
                 <strong>{{ row.title }}</strong
-                ><small>{{ row.procedure_code || row.period_key || '' }}</small>
+                ><small>{{ row.procedure_code || formatPeriod(row.period_key, locale) }}</small>
                 <details v-if="row.status_history?.length" class="aeat-history">
                   <summary>{{ t('aeatDocuments.history') }}</summary>
                   <ol>
@@ -314,7 +313,7 @@ async function saveStatus() {
                       :key="`${event.status}:${event.occurred_at}`"
                     >
                       <time :datetime="event.occurred_at">{{
-                        formatDateText(event.occurred_at, locale)
+                        formatDateTime(event.occurred_at, locale)
                       }}</time>
                       {{ label(`aeatDocuments.status.${event.status}`) }}
                       <small>{{ event.evidence_reference || event.notes || '' }}</small>
@@ -328,9 +327,13 @@ async function saveStatus() {
               <td :data-label="t('aeatDocuments.status')">
                 {{ label(`aeatDocuments.status.${row.status}`) }}
               </td>
-              <td data-label="Referencia">{{ row.submission_reference || '—' }}</td>
-              <td data-label="Justificante">{{ row.justificante_number || '—' }}</td>
-              <td data-label="CSV">
+              <td :data-label="t('aeatDocuments.reference')">
+                {{ row.submission_reference || '—' }}
+              </td>
+              <td :data-label="t('aeatDocuments.receiptNumber')">
+                {{ row.justificante_number || '—' }}
+              </td>
+              <td :data-label="t('aeatDocuments.verificationCode')">
                 <code>{{ row.verification_code || '—' }}</code>
               </td>
               <td class="aeat-actions">
@@ -340,7 +343,7 @@ async function saveStatus() {
                   :href="viewHref(context.services, row.content_url)"
                   target="_blank"
                   rel="noreferrer"
-                  >{{ t('common.file') }}</a
+                  >{{ t('common.openDocument') }}</a
                 >
                 <span v-else>{{ t('aeatDocuments.sourceUnavailable') }}</span>
                 <button
@@ -358,15 +361,27 @@ async function saveStatus() {
               </td>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="9" class="empty-state">{{ t('common.noRecords') }}</td>
+              <td colspan="9">
+                <div class="empty-state">
+                  {{ t(data?.rows.length ? 'transactions.noMatches' : 'aeatDocuments.listEmpty') }}
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <details class="panel aeat-upload-panel">
-      <summary>{{ t('aeatDocuments.add') }}</summary>
+    <details
+      class="panel aeat-upload-panel"
+      @toggle="uploadOpen = ($event.target as HTMLDetailsElement).open"
+    >
+      <summary
+        :class="{ 'primary-button': !uploadOpen }"
+        :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+      >
+        {{ t('aeatDocuments.add') }}
+      </summary>
       <p v-if="context.services.readOnly">{{ t('demo.readOnlyReason') }}</p>
       <form
         class="form-grid"
@@ -479,15 +494,15 @@ async function saveStatus() {
             :readonly="context.services.readOnly"
         /></label>
         <label
-          ><span>Referencia</span
+          ><span>{{ t('aeatDocuments.reference') }}</span
           ><input v-model="upload.submission_reference" :readonly="context.services.readOnly"
         /></label>
         <label
-          ><span>Justificante</span
+          ><span>{{ t('aeatDocuments.receiptNumber') }}</span
           ><input v-model="upload.justificante" :readonly="context.services.readOnly"
         /></label>
         <label
-          ><span>CSV</span
+          ><span>{{ t('aeatDocuments.verificationCode') }}</span
           ><input v-model="upload.verification_code" :readonly="context.services.readOnly"
         /></label>
         <label class="full-width"

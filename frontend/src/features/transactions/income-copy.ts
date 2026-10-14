@@ -1,4 +1,5 @@
-import { message, type UiMessage } from '../../core/i18n.ts';
+import { getLocale, message, type UiMessage } from '../../core/i18n.ts';
+import { formatPeriod } from '../../core/format.ts';
 import type { TransactionRow } from './model.ts';
 export interface CopyContext {
   sourcePeriodKey: string;
@@ -28,7 +29,7 @@ export function buildIncomeCopy(row: TransactionRow, context: CopyContext) {
     gross: '',
   };
   const noticeLines: UiMessage[] = [
-    message('intake.copyNotice', { period: context.targetPeriodKey }),
+    message('intake.copyNotice', { period: formatPeriod(context.targetPeriodKey, getLocale()) }),
   ];
   const currency = String(row.currency || '')
       .trim()

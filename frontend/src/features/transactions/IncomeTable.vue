@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { type ViewServices, documentHref } from '../../vue/services.ts';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import TermHelp from '../../components/TermHelp.vue';
 import { copyable, type TransactionRow } from './model.ts';
@@ -67,7 +67,7 @@ const minor = (value: number | null | undefined) =>
                 :href="documentHref(services, row.document_id)"
                 target="_blank"
                 rel="noreferrer"
-                >{{ t('common.file') }}</a
+                >{{ t('common.openDocument') }}</a
               ><button
                 v-if="copyable(row, target)"
                 type="button"
@@ -77,9 +77,9 @@ const minor = (value: number | null | undefined) =>
                 :title="
                   services?.readOnly
                     ? t('demo.readOnlyReason')
-                    : t('common.copyToPeriod', { period: target! })
+                    : t('common.copyToPeriod', { period: formatPeriod(target, locale) })
                 "
-                :aria-label="t('common.copyToPeriod', { period: target! })"
+                :aria-label="t('common.copyToPeriod', { period: formatPeriod(target, locale) })"
                 @click="copy(row)"
               >
                 <svg
@@ -124,7 +124,7 @@ const minor = (value: number | null | undefined) =>
         <tr v-if="!rows.length">
           <td colspan="7">
             <div class="empty-state">
-              {{ t(query.trim() ? 'transactions.noMatches' : 'transactions.emptyIncome') }}
+              {{ t(query.trim() ? 'transactions.noMatches' : 'transactions.incomeEmpty') }}
             </div>
           </td>
         </tr>

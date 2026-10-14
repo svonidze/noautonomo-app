@@ -77,8 +77,12 @@ catalogs and the unchanged geometry kernel are excluded. TypeScript 6.0.3 is pin
 with vue-tsc 3.3.11; upgrade them together after verifying the compiler API boundary.
 Dependencies and lockfile versions are exact; Node is a build/test dependency.
 
-Playwright starts its own server on 127.0.0.1:8765 with an ephemeral synthetic
-database and refuses to reuse another process. It does not discover personal
+Playwright starts its own servers with ephemeral synthetic databases and refuses
+to reuse another process: 127.0.0.1:8765 serves the seeded fixture and
+127.0.0.1:8766 a ledger straight from `db init`, without any quarter
+(`AUTONOMO_FIXTURE_EMPTY=1`, project `empty-ledger`, `first-run.spec.ts`);
+127.0.0.1:8768 serves a second such ledger to the `@previous-quarter` test of
+that file alone (project `empty-ledger-previous`). None discovers personal
 configuration. Google OAuth/Picker and external Drive endpoints are mocked; live
 OAuth was not exercised. Credentials stay in memory from the runtime API. Intake
 retains native File objects, while schema-1 browser drafts contain allowed text

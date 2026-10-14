@@ -3,7 +3,7 @@ import TaxAttributionDetails from '../review/TaxAttributionDetails.vue';
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { followSpaLink, documentHref, viewHref } from '../../vue/services.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { codeLabel, eur, formatDateText, formatPeriod, taxCodeLabel } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { formatMessage, localeTag, messageIds } from '../../core/i18n.ts';
@@ -115,7 +115,7 @@ function backLabel(url: string) {
   if (/^\/contacts\/[0-9a-fA-F-]{32,36}$/.test(parsed.pathname)) return t('contacts.backToParty');
   return t('expense.back', {
     title: translatedCode('titles', parsed.pathname.slice(1) || 'expenses'),
-    period: parsed.searchParams.get('period') || '—',
+    period: formatPeriod(parsed.searchParams.get('period'), locale.value) || '—',
   });
 }
 const facts = computed(() => {
@@ -125,7 +125,7 @@ const facts = computed(() => {
     [t('fields.transactionDate'), formatDateText(value.transaction_date, locale.value)],
     [t('fields.bookingDate'), formatDateText(value.booking_date, locale.value)],
     [t('fields.issuedOn'), formatDateText(data.value?.document?.issued_on, locale.value)],
-    [t('toolbar.period'), data.value!.period.period_key],
+    [t('toolbar.period'), formatPeriod(data.value!.period.period_key, locale.value)],
     [t('expense.description'), value.description || '—'],
     [
       t('fields.amount'),
@@ -139,7 +139,8 @@ const facts = computed(() => {
     ],
   ];
 });
-const treatmentLabel = (row: TaxTreatment) => `${row.treatment_type} · ${row.jurisdiction}`;
+const treatmentLabel = (row: TaxTreatment) =>
+  `${codeLabel('transactions.types', row.treatment_type, locale.value)} · ${codeLabel('transactions.jurisdictions', row.jurisdiction, locale.value)}`;
 const errorText = (value: unknown) => errorMessage(value, locale.value);
 const notFound = computed(() => error.value instanceof ApiError && error.value.status === 404);
 const forbidden = computed(
@@ -150,12 +151,8 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
 </script>
 <template>
   <div :aria-busy="loading || busy" class="section-stack expense-detail">
-    <a
-      v-if="loading || error || data?.transaction.entry_type !== 'expense'"
-      class="secondary-button"
-      :href="viewHref(context.services, back)"
-      @click="navigate"
-      >{{ backLabel(back) }}</a
+    <a class="text-button back-link" :href="viewHref(context.services, back)" @click="navigate"
+      ><span aria-hidden="true">←</span> {{ backLabel(back) }}</a
     >
     <div v-if="loading" class="empty-state" role="status">{{ t('common.loading') }}</div>
     <div v-else-if="error" class="empty-state" role="alert">
@@ -198,6 +195,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
         <button
           id="expense-follow-up"
           type="button"
+          class="secondary-button"
           :disabled="context.services.readOnly || busy"
           :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
           @click="followUp"
@@ -207,11 +205,8 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
         <p id="expense-follow-up-error" role="alert">{{ errorText(followError) }}</p>
       </section>
       <header class="review-workspace-header">
-        <a class="secondary-button" :href="viewHref(context.services, back)" @click="navigate">{{
-          backLabel(back)
-        }}</a>
         <div>
-          <h2>{{ data.document?.document_number || t('expense.title') }}</h2>
+          <h2>{{ data.document?.document_number || t('expense.noNumber') }}</h2>
           <p>{{ data.counterparty?.display_name || '—' }}</p>
         </div>
         <div>
@@ -223,7 +218,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
       </header>
       <section class="panel expense-notes" aria-labelledby="expense-notes-title">
         <header class="panel-header">
-          <h2 id="expense-notes-title">{{ t('expense.notes') }}</h2>
+          <h3 id="expense-notes-title">{{ t('expense.notes') }}</h3>
         </header>
         <div class="expense-panel-body">
           <template v-if="notes.length"
@@ -242,8 +237,8 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
       />
       <section class="panel">
         <header class="panel-header">
-          <h2>{{ t('review.factsTitle') }}</h2>
-          <small>{{ data.period.period_key }}</small>
+          <h3>{{ t('review.factsTitle') }}</h3>
+          <small>{{ formatPeriod(data.period.period_key, locale) }}</small>
         </header>
         <div class="expense-panel-body">
           <dl class="review-facts-list">
@@ -258,13 +253,13 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
             :href="documentHref(context.services, data.document.document_id)"
             target="_blank"
             rel="noreferrer"
-            >{{ t('common.file') }}</a
+            >{{ t('common.openDocument') }}</a
           >
         </div>
       </section>
       <section class="panel">
         <header class="panel-header">
-          <h2>{{ t('review.taxDecision') }}</h2>
+          <h3>{{ t('review.taxDecision') }}</h3>
         </header>
         <div class="expense-panel-body">
           <template v-if="treatments.length"
@@ -273,7 +268,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
               <dl class="review-facts-list">
                 <div>
                   <dt>{{ t('fields.taxCode') }}</dt>
-                  <dd>{{ translatedCode('taxCodeLabels', row.tax_code || '') }}</dd>
+                  <dd>{{ taxCodeLabel(row.tax_code, locale) }}</dd>
                 </div>
                 <div>
                   <dt>{{ t('transactions.irpfDeduction') }}</dt>
@@ -310,7 +305,7 @@ const navigate = (event: MouseEvent) => followSpaLink(event, props.context.servi
               </dl>
             </div></template
           >
-          <p v-else>{{ t('common.noRecords') }}</p>
+          <p v-else>{{ t('expense.treatmentEmpty') }}</p>
         </div>
       </section>
     </template>

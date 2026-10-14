@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateTime } from '../../core/format.ts';
+import { eur, formatDateTime, formatPeriod } from '../../core/format.ts';
 import { errorDescriptor, errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import { message, messageText } from '../../core/i18n.ts';
@@ -15,6 +15,7 @@ import {
   statusLabel,
 } from './normalize.ts';
 import { postingState, markStale, refreshToken, clearRefresh } from './state.ts';
+import { waitingDocumentStates } from './model.ts';
 import type {
   OverviewData,
   PostingItem,
@@ -96,6 +97,13 @@ watch(
   { immediate: true },
 );
 const tabs: ReviewTab[] = ['queue', 'posting', 'documents'];
+const quarterDocuments = computed(() =>
+  !data.value?.documents.length
+    ? 'noDocuments'
+    : data.value.documents.some((row) => waitingDocumentStates.includes(row.lifecycle_status))
+      ? 'documentsWaiting'
+      : 'allReviewed',
+);
 const selected = computed(() => (tabs.includes(props.context.tab) ? props.context.tab : 'queue'));
 const counts = computed(() => ({
   queue: data.value?.rows.filter((row) => row.ui_context?.state === 'needs_review').length || 0,
@@ -121,14 +129,20 @@ const last = computed(() =>
 const stats = computed(() => {
   const p = data.value!.preview;
   return [
-    { label: t('review.postingApproved'), count: p.summary.approvedCount },
+    { label: t('statuses.labels.approved'), count: p.summary.approvedCount },
     {
-      label: t('review.postingBatchReady'),
+      label: t('statuses.labels.ready'),
       count: p.summary.readyCount,
       detail: eur(p.summary.readyTotalEur, locale.value),
     },
-    { label: t('review.postingDeferred'), count: p.summary.deferredCount },
-    { label: t('review.postingBatchBlocked'), count: p.summary.blockedCount },
+    { label: t('statuses.labels.deferred'), count: p.summary.deferredCount },
+    { label: t('statuses.labels.blocked'), count: p.summary.blockedCount },
+  ];
+});
+// Moving originals to the archive is a technical side effect of posting: folded under the counts.
+const cleanupStats = computed(() => {
+  const p = data.value!.preview;
+  return [
     { label: t('review.postingCleanup'), count: p.summary.cleanupCount },
     { label: t('review.postingCleanupBlocked'), count: p.summary.cleanupBlockedCount },
   ];
@@ -144,7 +158,7 @@ const hint = computed(() =>
     data.value?.preview.periodStatus !== 'open'
       ? 'review.postingClosedHint'
       : !data.value.preview.ready.length
-        ? 'review.postingNothingReady'
+        ? 'review.postingEmpty'
         : 'review.postingReadyHint',
   ),
 );
@@ -249,6 +263,19 @@ async function submit() {
     submitting.value = false;
   }
 }
+// The queue's «Провести» opens this tab at `#posting-row-<id>`; a malformed fragment names nothing.
+const target = (() => {
+  try {
+    return decodeURIComponent(window.location.hash.slice(1));
+  } catch {
+    return '';
+  }
+})();
+// The server's review actions per transaction (its queue row): posting rows offer only those.
+const actions = computed(
+  () =>
+    new Map((data.value?.rows || []).map((row) => [row.transaction_id, row.ui_context?.actions])),
+);
 const forbidden = () => error.value instanceof ApiError && error.value.code === 'session_forbidden';
 const reload = () => (forbidden() ? window.location.reload() : void load());
 </script>
@@ -302,7 +329,12 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
         role="tabpanel"
         :aria-labelledby="`review-tab-${selected}`"
       >
-        <ReviewQueue v-if="selected === 'queue'" :rows="data.rows" :context="context" />
+        <ReviewQueue
+          v-if="selected === 'queue'"
+          :rows="data.rows"
+          :context="context"
+          :documents="quarterDocuments"
+        />
         <ReviewDocuments
           :services="context.services"
           v-else-if="selected === 'documents'"
@@ -312,7 +344,7 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
         <section v-else class="panel">
           <header class="panel-header">
             <h2>{{ t('review.postingTitle') }}</h2>
-            <small>{{ context.period }}</small>
+            <small>{{ formatPeriod(context.period, locale) }}</small>
           </header>
           <div class="posting-panel">
             <div v-if="stale" class="period-note posting-warning">
@@ -370,9 +402,24 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
               {{ context.services.readOnly ? t('demo.readOnlyReason') : hint }}
             </p>
             <PostingRows
-              :title="t('review.postingDeferred')"
+              :title="t('statuses.labels.ready')"
+              :rows="data.preview.ready"
+              anchored
+              :target="target"
+              :actions="actions"
+            /><PostingRows
+              :title="t('statuses.labels.deferred')"
               :rows="data.preview.deferred"
-            /><PostingRows :title="t('review.postingBatchBlocked')" :rows="data.preview.blocked" />
+              anchored
+              :target="target"
+              :actions="actions"
+            /><PostingRows
+              :title="t('statuses.labels.blocked')"
+              :rows="data.preview.blocked"
+              anchored
+              :target="target"
+              :actions="actions"
+            />
             <div v-if="last" class="posting-results">
               <div class="posting-results-header">
                 <h3>{{ t('review.postingResults') }}</h3>
@@ -387,6 +434,15 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
               </div>
               <PostingRows :title="t('review.postingRows')" :rows="last.results" />
             </div>
+            <details class="posting-technical">
+              <summary>{{ t('review.technicalStats') }}</summary>
+              <div class="posting-summary-grid">
+                <div v-for="stat in cleanupStats" :key="stat.label" class="posting-stat">
+                  <span>{{ stat.label }}</span
+                  ><strong>{{ stat.count }}</strong>
+                </div>
+              </div>
+            </details>
           </div>
         </section>
       </div>
@@ -405,7 +461,7 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
           <header class="dialog-header">
             <div>
               <h2 id="vue-posting-title">{{ t('review.postConfirmTitle') }}</h2>
-              <p>{{ frozen?.period }}</p>
+              <p>{{ formatPeriod(frozen?.period, locale) }}</p>
             </div>
             <button
               type="button"

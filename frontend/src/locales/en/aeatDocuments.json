@@ -15,6 +15,7 @@
   "aeatDocuments.kind.resolution": "Decision",
   "aeatDocuments.kind.response_receipt": "Response receipt",
   "aeatDocuments.kind.submission_receipt": "Submission receipt",
+  "aeatDocuments.listEmpty": "No AEAT documents yet. Add a receipt with the “Add AEAT document” button below.",
   "aeatDocuments.notes": "Notes",
   "aeatDocuments.newCase": "Create a new case",
   "aeatDocuments.occurredAt": "Date and time",
@@ -25,6 +26,8 @@
   "aeatDocuments.procedure.periodic": "Periodic filing",
   "aeatDocuments.procedure.rectification": "Return correction",
   "aeatDocuments.procedureCode": "Procedure code",
+  "aeatDocuments.receiptNumber": "Receipt number (justificante)",
+  "aeatDocuments.reference": "AEAT reference (referencia)",
   "aeatDocuments.requestedEffective": "Requested effective date",
   "aeatDocuments.save": "Save checked PDF",
   "aeatDocuments.saved": "AEAT document saved",
@@ -38,6 +41,6 @@
   "aeatDocuments.status.responded": "Response submitted",
   "aeatDocuments.status.submitted": "Submitted, awaiting decision",
   "aeatDocuments.statusSaved": "Case status saved",
-  "aeatDocuments.title": "AEAT documents",
+  "aeatDocuments.verificationCode": "Verification code (CSV)",
   "aeatDocuments.year": "Year"
 }

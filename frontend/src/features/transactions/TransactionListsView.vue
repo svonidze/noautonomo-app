@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur } from '../../core/format.ts';
+import { eur, formatPeriod } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import ChartHost from '../../charts/ChartHost.vue';
@@ -18,10 +18,6 @@ import {
 } from './model.ts';
 const props = defineProps<{ context: TransactionListContext }>();
 const { locale, t } = useLocale();
-function openIntake() {
-  if (props.context.services.readOnly) return;
-  props.context.openIntake();
-}
 const query = ref(props.context.query),
   search = ref<HTMLInputElement>();
 const page = shallowRef<ExpensePage>(),
@@ -141,7 +137,7 @@ function copy(row: TransactionRow) {
 <template>
   <div>
     <div class="table-toolbar" :class="{ 'expense-toolbar': expense }">
-      <h2>{{ t(expense ? 'titles.expenses' : 'titles.income') }} · {{ context.period }}</h2>
+      <h2>{{ t('transactions.periodTitle', { period: formatPeriod(context.period, locale) }) }}</h2>
       <div class="toolbar-filters">
         <label v-if="expense"
           ><span>{{ t('expense.search') }}</span
@@ -161,15 +157,6 @@ function copy(row: TransactionRow) {
           :placeholder="t('transactions.search')"
           @input="searchChanged"
         />
-        <button
-          class="primary-button"
-          id="view-add-entry"
-          :disabled="context.services.readOnly"
-          :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
-          @click="openIntake"
-        >
-          <span aria-hidden="true">+</span> {{ t('common.add') }}
-        </button>
       </div>
     </div>
     <template v-if="expense">
@@ -226,7 +213,9 @@ function copy(row: TransactionRow) {
                     ? 'expense.moreRecords'
                     : page.period_counts[kind]
                       ? 'expense.noMatches'
-                      : 'expense.empty',
+                      : kind === 'amortization'
+                        ? 'expense.amortizationEmpty'
+                        : 'expense.empty',
                 )
               }}
             </div>

@@ -1,5 +1,5 @@
 {
-  "intake.accept": "Añadir al sistema",
+  "intake.accept": "Añadir documento",
   "intake.accepted": "Recibido: {id}",
   "intake.acceptedToast": "Documento recibido en {period}",
   "intake.chooseGoogleFolder": "Elegir carpeta de Google Drive",
@@ -15,18 +15,19 @@
   "intake.fileFormats": "PDF, imagen, CSV o TXT de hasta 30 MB",
   "intake.googleDriveHint": "El archivo permanece en tu archivo documental; se registra el enlace original.",
   "intake.googleDriveInvalid": "Introduce un enlace a un archivo de Google Drive.",
-  "intake.googleDrivePlaceholder": "drive.google.com/file/d/...",
+  "intake.googleDrivePlaceholder": "Enlace del menú Compartir de Google Drive",
   "intake.googleDriveUrl": "Enlace al archivo de Google Drive",
   "intake.googleFolderSelected": "Carpeta: {name}",
-  "intake.googlePickerHint": "Google Picker estará disponible cuando se configure el acceso limitado drive.file.",
+  "intake.googlePickerHint": "Podrás elegir un archivo de Google Drive cuando se configure el acceso a Google Picker.",
   "intake.googlePickerUnavailable": "La selección de carpetas de Google Drive aún no está configurada.",
   "intake.incomeFile": "Elige una factura emitida o arrastra un archivo",
   "intake.invalidResponse": "No se pudo confirmar el resultado. Actualiza la lista antes de volver a subir el archivo.",
   "intake.kindAria": "Tipo de asiento",
   "intake.processing": "Extrayendo y registrando…",
+  "intake.quarterMismatch": "La fecha del documento corresponde a {documentQuarter}, pero está seleccionado {selectedQuarter}. Elige {documentQuarter} en la cabecera e inténtalo de nuevo.",
   "intake.selectFile": "Elige un archivo.",
   "intake.sourceAria": "Origen del documento",
   "intake.sourceGoogleDrive": "URL de Google Drive",
   "intake.sourceUpload": "Subir archivo",
-  "intake.title": "Nuevo asiento"
+  "intake.title": "Nuevo documento"
 }

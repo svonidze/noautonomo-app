@@ -15,6 +15,7 @@
   "aeatDocuments.kind.resolution": "Resolución",
   "aeatDocuments.kind.response_receipt": "Justificante de respuesta",
   "aeatDocuments.kind.submission_receipt": "Justificante de presentación",
+  "aeatDocuments.listEmpty": "Aún no hay documentos de la AEAT. Añade un justificante con el botón «Añadir documento de la AEAT» de abajo.",
   "aeatDocuments.notes": "Notas",
   "aeatDocuments.newCase": "Crear un expediente",
   "aeatDocuments.occurredAt": "Fecha y hora",
@@ -25,6 +26,8 @@
   "aeatDocuments.procedure.periodic": "Declaración periódica",
   "aeatDocuments.procedure.rectification": "Rectificación de declaración",
   "aeatDocuments.procedureCode": "Código de procedimiento",
+  "aeatDocuments.receiptNumber": "Número de justificante",
+  "aeatDocuments.reference": "Referencia de la AEAT",
   "aeatDocuments.requestedEffective": "Fecha de efectos solicitada",
   "aeatDocuments.save": "Guardar PDF revisado",
   "aeatDocuments.saved": "Documento de la AEAT guardado",
@@ -38,6 +41,6 @@
   "aeatDocuments.status.responded": "Respuesta presentada",
   "aeatDocuments.status.submitted": "Presentado, pendiente de resolución",
   "aeatDocuments.statusSaved": "Estado del expediente guardado",
-  "aeatDocuments.title": "Documentos de la AEAT",
+  "aeatDocuments.verificationCode": "Código seguro de verificación (CSV)",
   "aeatDocuments.year": "Año"
 }

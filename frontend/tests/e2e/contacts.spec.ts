@@ -15,7 +15,8 @@ const party = (name = 'Synthetic Supplier', revision = 1) => ({
     state: 'unknown',
     subject_id: ID,
     title: name,
-    reasons: [],
+    // Only a record with a reason or an action links to its explanation.
+    reasons: [{ code: 'counterparty_tax_profile_review' }],
     facts: { country_code: 'ES' },
   },
 });
@@ -110,7 +111,7 @@ test('contact-local period, history and expense return preserve global period', 
   await expect(page.locator('#contact-history-body')).toContainText('Synthetic old');
   await page.locator('#contact-operations-results a').first().click();
   await expect(page).toHaveURL(new RegExp(`/expenses/${TX}\\?`));
-  await page.locator('.review-workspace-header > a').click();
+  await page.locator('.expense-detail > .back-link').click();
   await expect(page).toHaveURL(new RegExp(`/contacts/${ID}\\?period=2026-Q2$`));
   await expect(page.locator('a[data-view="dashboard"]')).toHaveAttribute(
     'href',

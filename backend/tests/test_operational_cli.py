@@ -707,6 +707,10 @@ def test_intake_never_posts_document(tmp_path: Path, capsys) -> None:
         stored = db.connection.execute("SELECT lifecycle_status FROM documents").fetchone()
         assert stored["lifecycle_status"] == "extracted"
         assert db.table_counts()["transactions"] == 0
+        # Intake opens the quarter it records into: a ledger fresh from `db init` needs no setup.
+        assert [tuple(row) for row in db.connection.execute("SELECT period_key, status FROM periods")] == [
+            ("2026-Q2", "open")
+        ]
 
 
 def test_income_intake_infers_q3_and_archives_original(tmp_path: Path, capsys) -> None:

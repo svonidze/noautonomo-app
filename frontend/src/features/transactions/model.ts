@@ -51,7 +51,6 @@ export interface TransactionListContext {
   services: ViewServices;
   queryChanged(query: string): void;
   settled(): void;
-  openIntake(): void;
   copy(row: TransactionRow): void;
 }
 export const hasAmount = (value: unknown) => value !== null && value !== undefined && value !== '';

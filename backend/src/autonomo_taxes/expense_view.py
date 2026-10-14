@@ -124,7 +124,8 @@ def expense_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
             bucket["amount_eur"] = (
                 None if bucket["missing_amount_count"] else format(Decimal(bucket["amount_minor"]) / 100, ".2f")
             )
-            del bucket["amount_minor"]
+            # Display aggregate: the rows with an amount, so a partial total is not hidden by one gap.
+            bucket["known_amount_minor"] = bucket.pop("amount_minor")
     return summary
 
 

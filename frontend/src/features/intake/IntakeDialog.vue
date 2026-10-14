@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef } from '
 import { useLocale } from '../../vue/locale.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { message, messageText, type UiMessage } from '../../core/i18n.ts';
+import { formatPeriod } from '../../core/format.ts';
 import {
   currencies,
   loadDraft,
@@ -256,7 +257,9 @@ async function submit() {
     status.value = message('intake.accepted', {
       id: result.system_marker ? String(result.system_marker).slice(0, 8) : t('common.noId'),
     });
-    props.services.notify(message('intake.acceptedToast', { period: result.period }));
+    props.services.notify(
+      message('intake.acceptedToast', { period: formatPeriod(result.period, locale.value) }),
+    );
     delivery = { result, origin };
     if (dialog.value?.open)
       successTimer = setTimeout(() => {
@@ -322,7 +325,7 @@ defineExpose({ open, close, focusDocumentNumber, isBusy: () => busy.value });
       <header class="dialog-header">
         <div>
           <h2>{{ t('intake.title') }}</h2>
-          <p id="vue-intake-period-label">{{ period }}</p>
+          <p id="vue-intake-period-label">{{ formatPeriod(period, locale) }}</p>
         </div>
         <button
           type="button"

@@ -292,9 +292,49 @@ def test_build_posting_preview_uses_dashboard_amount_formula_for_eur_and_missing
     items = {item["transaction_id"]: item for item in preview["items"]}
     assert items[eur["transaction_id"]]["effective_amount_eur_minor"] == 12345
     assert items[eur["transaction_id"]]["effective_amount_eur_formula"] == "amount_eur_minor"
-    assert items[foreign["transaction_id"]]["effective_amount_eur_minor"] == 0
+    assert items[foreign["transaction_id"]]["effective_amount_eur_minor"] is None
     assert items[foreign["transaction_id"]]["effective_amount_eur_formula"] == "missing_foreign_exchange"
     assert preview["summary"]["ready_expense_eur_minor"] == 12345
+
+
+def test_posting_preview_serializes_a_blocked_foreign_item_without_fx_with_a_null_amount(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "ledger.sqlite"
+    with initialize(database) as db:
+        foreign = db.add_transaction(
+            external_key="posting-preview-blocked-usd",
+            period_key="2026-Q3",
+            transaction_date="2026-07-11",
+            booking_date="2026-07-11",
+            entry_type="expense",
+            description="Synthetic USD expense without a rate",
+            amount_minor=9900,
+            currency="USD",
+            original_currency="USD",
+            amount_eur_minor=None,
+            lifecycle_status="approved",
+        )
+        db.add_detailed_tax_treatment(
+            transaction_id=foreign["transaction_id"],
+            treatment_type="invoice_review",
+            tax_code="non_eu_service_expense",
+        )
+
+        preview = build_posting_preview(db, period_key="2026-Q3")
+
+    # The web layer sends this mapping as JSON unchanged.
+    serialized = json.loads(json.dumps(preview))
+    assert [item["transaction_id"] for item in serialized["blocked"]] == [foreign["transaction_id"]]
+    [item] = serialized["blocked"]
+    assert "fx_missing" in {blocker["code"] for blocker in item["blockers"]}
+    # Unknown is not zero: neither amount may read as 0.00 €.
+    assert item["amount_eur"] is None
+    assert item["effective_amount_eur_minor"] is None
+    assert item["effective_amount_eur_formula"] == "missing_foreign_exchange"
+    # Sums over ready rows may still count it as nothing; it is not ready.
+    assert serialized["summary"]["ready_total_eur"] == "0.00"
+    assert serialized["summary"]["ready_expense_eur_minor"] == 0
 
 
 def test_post_batch_returns_retry_later_when_sqlite_is_busy_before_first_commit(
