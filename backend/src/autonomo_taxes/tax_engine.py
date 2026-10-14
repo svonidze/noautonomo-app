@@ -120,6 +120,7 @@ class TaxRow:
     attribution_evidence_ref: str = ""
     attribution_reason: str = ""
     fx_evidence_ref: str = ""
+    counterparty_tax_id: str = ""
 
     def __post_init__(self) -> None:
         if self.kind not in {"income", "expense", "adjustment"}:

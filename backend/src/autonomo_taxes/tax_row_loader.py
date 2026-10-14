@@ -152,6 +152,7 @@ def _to_tax_row(row: dict[str, Any]) -> TaxRow:
         tax_code=row.get("tax_code") or "unknown",
         counterparty_id=row.get("counterparty_id") or "",
         counterparty_name=row.get("counterparty_name") or "",
+        counterparty_tax_id=row.get("counterparty_tax_id") or "",
         country_code=row.get("country_code") or "",
         vat_id=row.get("vat_id") or "",
         include_modelo130=bool(row.get("include_modelo130")),

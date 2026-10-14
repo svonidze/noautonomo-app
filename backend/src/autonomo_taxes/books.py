@@ -164,6 +164,7 @@ def write_accounting_books(database: LedgerDB, output_dir: str | Path, *, period
         counts["tax_registers"] = len(projection["bridge"])
         fields = ("transaction_id", "source_transaction_id", "component", "attribution_id", "tax_date",
                   "document_id", "document_number", "issued_on", "document_source_hash", "counterparty_name",
+                  "counterparty_tax_id", "vat_id", "country_code",
                   "kind", "amount_eur", "taxable_base_eur", "vat_eur", "deductible_irpf_eur",
                   "deductible_vat_eur", "withholding_eur")
         for basis, register in projection["registers"].items():

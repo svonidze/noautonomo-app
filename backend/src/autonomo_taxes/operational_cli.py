@@ -1239,11 +1239,18 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
     _db_arg(filing_build)
     filing_build.add_argument("--period", required=True)
     filing_build.add_argument("--out-dir", type=Path, required=True)
+    filing_build.add_argument("--supplemental-evidence", type=Path,
+                              help="JSON period confirmation for the provisions/disbursements book")
     filing_build.set_defaults(_operational_handler=_cmd_filing_package_build)
     filing_verify = filing_sub.add_parser("verify")
     _db_arg(filing_verify)
     filing_verify.add_argument("--manifest", type=Path, required=True)
     filing_verify.set_defaults(_operational_handler=_cmd_filing_package_verify)
+    filing_integrity = filing_sub.add_parser("integrity", help="Verify archived bytes without the live database")
+    filing_integrity.add_argument("--manifest", type=Path, required=True)
+    filing_integrity.add_argument("--expected-manifest-sha256", required=True,
+                                  help="Manifest hash retained separately in the archive record")
+    filing_integrity.set_defaults(_operational_handler=_cmd_filing_package_integrity)
 
     filings = subparsers.add_parser("filings", help="Persist immutable calculation or filing snapshots")
     filings_sub = filings.add_subparsers(dest="filings_command", required=True)
@@ -4207,7 +4214,10 @@ def _cmd_filing_package_build(args: argparse.Namespace) -> int:
     from .filing_package import write_filing_package
 
     with open_ledger_db(args.db, read_only=True) as db:
-        manifest = write_filing_package(db, args.out_dir, period_key=args.period)
+        evidence = (json.loads(args.supplemental_evidence.read_text(encoding="utf-8"))
+                    if args.supplemental_evidence else None)
+        manifest = write_filing_package(db, args.out_dir, period_key=args.period,
+                                        supplemental_evidence=evidence)
     manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
     _emit(
         {
@@ -4228,6 +4238,15 @@ def _cmd_filing_package_verify(args: argparse.Namespace) -> int:
         result = verify_filing_package(db, args.manifest)
     _emit(result)
     return 0 if result["ok"] else 2
+
+
+def _cmd_filing_package_integrity(args: argparse.Namespace) -> int:
+    from .filing_package import verify_filing_package_integrity
+
+    result = verify_filing_package_integrity(args.manifest,
+        expected_manifest_sha256=args.expected_manifest_sha256)
+    _emit(result)
+    return 0 if result["integrity_ok"] else 2
 
 
 def _cmd_filing_snapshot(args: argparse.Namespace) -> int:

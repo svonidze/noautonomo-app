@@ -53,6 +53,22 @@ def review_values(book):
     return {row['Tax registers for review']: row['AEAT import unsupported'] for row in book['REVIEW']}
 
 
+def test_counterparty_identifiers_survive_tax_dates_and_fx_exports(tmp_path):
+    with initialize(tmp_path / 'db.sqlite') as db:
+        identifier = source(db, tmp_path)
+        db.connection.execute("UPDATE counterparties SET tax_id='TEST-TAX-42', vat_id='TEST-VAT-42'")
+        apply_attribution(db, decision(db, identifier), actor='test-operator')
+        export = write_accounting_books(db, tmp_path / 'books', period_key='2025-Q1')
+        workbook = read_workbook(export.files['tax_registers_xlsx'])
+        for sheet in ('IRPF', 'IVA', 'SOURCES'):
+            assert workbook[sheet]
+            assert all(row['Counterparty tax ID'] == 'TEST-TAX-42' for row in workbook[sheet])
+            assert all(row['Counterparty VAT ID'] == 'TEST-VAT-42' for row in workbook[sheet])
+        projection = json.loads(export.files['tax_registers'].read_text())
+        assert all(row['counterparty_tax_id'] == 'TEST-TAX-42'
+                   for row in projection['registers']['irpf']['rows'])
+
+
 def test_year_boundary_fx_and_annual_totals_are_preserved(tmp_path):
     with initialize(tmp_path / 'db.sqlite') as db:
         identifier = source(db, tmp_path)
@@ -359,13 +375,16 @@ def test_removed_prior_year_attribution_blocks_snapshot_readiness_without_curren
         assert load_tax_rows(db, 2024) == []
         manifest_path = write_filing_package(db, tmp_path / 'old', period_key='2024-Q4')
         manifest = json.loads(manifest_path.read_text())
-        assert {artifact['book'] for artifact in manifest['artifacts']} == {'income', 'expense', 'assets', 'payments'}
+        assert {artifact['book'] for artifact in manifest['artifacts']} == {
+            'income', 'expense', 'assets', 'payments', 'supplemental_book_status'}
         assert manifest['submission_ready'] is False
-        assert manifest['readiness_blockers'] == ['tax_attribution_snapshot_review_required']
+        assert 'tax_attribution_snapshot_review_required' in manifest['readiness_blockers']
         assert [tuple(r) for r in db.connection.execute('SELECT * FROM filing_snapshots')] == before
         assert verify_filing_package(db, manifest_path)['ok'] is True
         db.ensure_period('2023-Q4')
         db.connection.execute("UPDATE periods SET status='closed' WHERE period_key='2023-Q4'")
         db.create_filing_snapshot('2023-Q4', status='filed', filed_on='2024-01-22', payload={'synthetic': True})
         unaffected = write_filing_package(db, tmp_path / 'unaffected', period_key='2023-Q4')
-        assert json.loads(unaffected.read_text())['submission_ready'] is True
+        unaffected_manifest = json.loads(unaffected.read_text())
+        assert 'tax_attribution_snapshot_review_required' not in unaffected_manifest['readiness_blockers']
+        assert unaffected_manifest['submission_ready'] is False

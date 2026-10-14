@@ -17,6 +17,8 @@ REGISTER_COLUMNS = (
     ('withholding_eur', 'Withholding (EUR)'), ('amount_eur', 'Amount (EUR)'),
     ('document_number', 'Document number'), ('issued_on', 'Issue date'),
     ('counterparty_name', 'Counterparty'), ('transaction_id', 'Row ID'),
+    ('counterparty_tax_id', 'Counterparty tax ID'), ('vat_id', 'Counterparty VAT ID'),
+    ('country_code', 'Counterparty country'),
     ('source_transaction_id', 'Source transaction ID'), ('attribution_id', 'Attribution ID'),
     ('document_id', 'Document ID'), ('document_source_hash', 'Document SHA-256'),
     ('attribution_evidence_ref', 'Attribution evidence'), ('fx_evidence_ref', 'FX evidence'),
@@ -27,6 +29,7 @@ SOURCE_COLUMNS = (
     ('amount_eur', 'Source amount (EUR)'), ('taxable_base_eur', 'Source tax base (EUR)'),
     ('vat_eur', 'Source VAT (EUR)'), ('document_number', 'Document number'),
     ('issued_on', 'Issue date'), ('counterparty_name', 'Counterparty'),
+    ('counterparty_tax_id', 'Counterparty tax ID'), ('vat_id', 'Counterparty VAT ID'),
     ('document_id', 'Document ID'), ('document_source_hash', 'Document SHA-256'),
 )
 MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'

@@ -327,6 +327,7 @@ def attach_attributions(db: LedgerDB, rows: Iterable[TaxRow]) -> list[TaxRow]:
                 taxable_base_eur=basis.taxable_base_eur, deductible_irpf_eur=basis.deductible_irpf_eur,
                 tax_code='outside_scope' if is_gain else 'not_subject', include_modelo130=row.include_modelo130,
                 counterparty_id=row.counterparty_id, counterparty_name=row.counterparty_name,
+                counterparty_tax_id=row.counterparty_tax_id,
                 country_code=row.country_code, vat_id=row.vat_id, vat_investment_good=False,
                 component='fx_gain' if is_gain else 'fx_loss', attribution_id=current['attribution_id'], irpf_basis=basis,
                 document_id=row.document_id, document_number=row.document_number,
