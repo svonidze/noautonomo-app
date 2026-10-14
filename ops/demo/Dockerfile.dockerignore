@@ -6,6 +6,13 @@
 !backend/src/
 !backend/src/autonomo_taxes/
 !backend/src/autonomo_taxes/**
+!packages/
+!packages/ui/
+!packages/ui/pyproject.toml
+!packages/ui/setup.py
+!packages/ui/src/
+!packages/ui/src/autonomo_taxes_ui/
+!packages/ui/src/autonomo_taxes_ui/**
 !ops/
 !ops/demo/
 !ops/demo/verify_ui_build.py

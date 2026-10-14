@@ -541,6 +541,7 @@ def _web(database: Path):
         thread.join(timeout=5)
 
 
+@pytest.mark.web
 def test_reta_check_route_returns_the_check_and_read_only_bases(tmp_path: Path) -> None:
     database = _ledger(tmp_path)
     with LedgerDB.open(database) as db:
@@ -573,6 +574,7 @@ def test_reta_check_route_returns_the_check_and_read_only_bases(tmp_path: Path) 
         assert db.table_counts()["reta_base_elections"] == 2
 
 
+@pytest.mark.web
 def test_reta_check_route_reports_inputs_it_cannot_run_without_as_unknown(tmp_path: Path) -> None:
     database = _ledger(tmp_path)
     with _web(database) as (app, get):
