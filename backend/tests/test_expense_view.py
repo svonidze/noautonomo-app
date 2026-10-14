@@ -181,7 +181,8 @@ def test_zero_negative_missing_and_terminal_amounts(tmp_path):
             add_expense(db, status, deduction=500000, status=status)
     result = app.expenses(PERIOD, today=AS_OF)
     bucket = result["summary"]["amortization"]["approved"]
-    assert bucket == {"count": 7, "missing_amount_count": 1, "amount_eur": None}
+    # One row without a deduction hides the total, not the known part: 16000 + 0 - 300.
+    assert bucket == {"count": 7, "missing_amount_count": 1, "amount_eur": None, "known_amount_minor": 15700}
     amounts = {row["document_number"]: row["deductible_irpf_eur"] for row in result["rows"]}
     assert amounts["TEST-INVOICE-zero"] == "0.00"
     assert amounts["TEST-INVOICE-negative"] == "-3.00"

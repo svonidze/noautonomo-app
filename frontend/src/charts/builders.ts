@@ -1,8 +1,25 @@
-import { formatMessage, localeTag, messageIds, type Locale } from '../core/i18n.ts';
-import { eur } from '../core/format.ts';
+import { formatMessage, localeTag, messageIds, quarterNumber, type Locale } from '../core/i18n.ts';
+import { eur, formatPeriod } from '../core/format.ts';
 import type { Analytics, ChartSpec, TaxPoint } from './types.ts';
 
-export function createChartBuilders(locale: Locale) {
+/** Non-zero plotted values (DESIGN.md "Charts"): a chart is drawn from two; with fewer the slot shows
+ * one line, which tells one value apart from none. Values past the last bucket are not plotted. */
+export function chartValueCount(spec: ChartSpec): number {
+  const buckets = spec.buckets?.length ?? 0;
+  const values = [
+    ...(spec.series ?? []).flatMap((series) => series.values.slice(0, buckets)),
+    ...(spec.rows ?? []).flatMap((row) => row.segments.map((segment) => segment.value)),
+    ...(spec.ranges ?? []).map((range) => range.value),
+    spec.measure?.value,
+  ];
+  return values.filter(
+    (value) => typeof value === 'number' && Number.isFinite(value) && value !== 0,
+  ).length;
+}
+
+/** `compactQuarters`: a chart narrower than four «III кв. 2026» labels names the year once, in the
+ * quarter column header, and keeps «III кв.» under each bar (DESIGN.md "Chart sizing"). */
+export function createChartBuilders(locale: Locale, { compactQuarters = false } = {}) {
   const t = (key: string) => formatMessage(key, {}, locale);
   const intlLocale = () => localeTag(locale);
   const statusLabel = (status: string) => t(`statuses.labels.${status}`);
@@ -34,6 +51,24 @@ export function createChartBuilders(locale: Locale) {
     const parsed = new Date(`${bucket}-01T12:00:00`);
     if (Number.isNaN(parsed.getTime())) return String(bucket);
     return new Intl.DateTimeFormat(intlLocale(), { month: 'short' }).format(parsed);
+  }
+
+  function quarterAxis(spec: ChartSpec, periodKeys: string[]) {
+    const years = new Set(periodKeys.map((key) => /^(\d{4})-Q[1-4]$/.exec(key)?.[1]));
+    const [year] = years;
+    if (compactQuarters && years.size === 1 && year) {
+      spec.bucketLabel = formatMessage('charts.bucket.quarterOfYear', { year }, locale);
+      spec.buckets = periodKeys.map((key) =>
+        formatMessage(
+          'charts.bucket.quarterCompact',
+          { quarter: quarterNumber(Number(key.slice(-1)), locale) },
+          locale,
+        ),
+      );
+    } else {
+      spec.bucketLabel = t('charts.bucket.quarter');
+      spec.buckets = periodKeys.map((key) => formatPeriod(key, locale, { short: true }));
+    }
   }
 
   function chartSpecBase(
@@ -157,8 +192,10 @@ export function createChartBuilders(locale: Locale) {
       'charts.taxDue.aria',
       taxChartEmptyMessage(points, 'charts.taxDue.empty'),
     );
-    spec.bucketLabel = t('charts.bucket.quarter');
-    spec.buckets = points.map((point) => point.period_key);
+    quarterAxis(
+      spec,
+      points.map((point) => point.period_key),
+    );
     spec.series = [
       {
         key: 'm130',
@@ -190,8 +227,10 @@ export function createChartBuilders(locale: Locale) {
       'charts.iva.aria',
       taxChartEmptyMessage(points, 'charts.taxDue.empty'),
     );
-    spec.bucketLabel = t('charts.bucket.quarter');
-    spec.buckets = points.map((point) => point.period_key);
+    quarterAxis(
+      spec,
+      points.map((point) => point.period_key),
+    );
     spec.series = [
       {
         key: 'output',
@@ -296,11 +335,14 @@ export function createChartBuilders(locale: Locale) {
 
   function buildCumulativeExpensesSpec(analytics: Analytics) {
     const expenses = analytics.datasets.cumulative_expenses;
+    // Missing-FX rows stay visible even when the known totals are zero (DESIGN.md, Measures).
     const spec = chartSpecBase(
       'cumulative-expenses',
       'charts.cumulativeExpenses.title',
       'charts.cumulativeExpenses.aria',
-      transactionsEmptyMessage(analytics),
+      expenses.missing_fx_transaction_count > 0
+        ? t('charts.empty.missingFx')
+        : transactionsEmptyMessage(analytics),
     );
     spec.bucketLabel = t('charts.bucket.month');
     spec.buckets = expenses.buckets.map(chartMonthLabel);
@@ -405,7 +447,6 @@ export function createChartBuilders(locale: Locale) {
     spec.formatPercent = formatChartPercent;
     spec.showSegmentShares = true;
     spec.tableInitiallyOpen = true;
-    spec.tablePrimaryOnNarrow = true;
     spec.rowLabelWidth = 280;
     spec.rowHeight = 42;
     spec.rows = buckets.map((bucket) => {
@@ -521,10 +562,12 @@ export function createChartBuilders(locale: Locale) {
       'charts.amortization.aria',
       t('charts.amortization.empty'),
     );
-    spec.bucketLabel = t('charts.bucket.quarter');
     spec.note = t('charts.amortization.note');
     const points = amortization.points || [];
-    spec.buckets = points.map((point) => point.period_key);
+    quarterAxis(
+      spec,
+      points.map((point) => point.period_key),
+    );
     spec.series = [
       {
         key: 'amortization',

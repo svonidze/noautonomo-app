@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { formatMessage, type MessageId } from '../../core/i18n.ts';
+import { formatMessage, localeTag, type MessageId } from '../../core/i18n.ts';
 import { eur } from '../../core/format.ts';
 export interface DecisionFieldSpec {
   path: string;
@@ -13,6 +13,7 @@ export interface DecisionFieldSpec {
   max?: string;
   step?: string;
   minor?: boolean;
+  basisPoints?: boolean;
   full?: boolean;
   descriptionId?: string;
 }
@@ -25,10 +26,19 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ change: [value: unknown] }>();
 const { locale, t } = useLocale();
-const display = (value: unknown) => (value == null ? '' : String(value));
+// Amounts are typed in euros and rates in percent; the decision keeps minor units and basis points.
+const scaled = computed(() => !!(props.field.minor || props.field.basisPoints));
+const display = (value: unknown) =>
+  value == null || value === '' ? '' : scaled.value ? String(Number(value) / 100) : String(value);
 const raw = ref(display(props.value));
 function read() {
   const type = props.field.valueType || 'string';
+  if (scaled.value) {
+    const text = String(raw.value).trim();
+    if (!text) return null;
+    const number = Number(text.replace(',', '.'));
+    return Number.isFinite(number) ? Math.round(number * 100) : undefined;
+  }
   if (raw.value === '') return type.startsWith('nullable-') ? null : '';
   if (type === 'integer') return Number.parseInt(raw.value, 10);
   if (type === 'number') return Number(raw.value);
@@ -41,11 +51,23 @@ watch(
     if (read() !== value) raw.value = display(value);
   },
 );
+// Unreadable text keeps the stored value and says so beside the field.
+const unreadable = computed(() => scaled.value && read() === undefined);
+function changed() {
+  const value = read();
+  if (value !== undefined) emit('change', value);
+}
+// The preview shows what the typed text stores, rounded to cents or basis points.
 const preview = computed(() => {
-  const value = Number.parseInt(raw.value, 10);
-  return String(raw.value).trim() && Number.isFinite(value)
-    ? t('review.irpfPreview', { amount: eur(value / 100, locale.value) })
-    : '';
+  const value = read();
+  if (typeof value !== 'number') return '';
+  const amount = props.field.basisPoints
+    ? new Intl.NumberFormat(localeTag(locale.value), {
+        style: 'percent',
+        maximumFractionDigits: 2,
+      }).format(value / 10000)
+    : eur(value / 100, locale.value);
+  return t('review.irpfPreview', { amount });
 });
 </script>
 <template>
@@ -67,7 +89,7 @@ const preview = computed(() => {
     />
     <span
       >{{ formatMessage(field.label, {}, locale) }}
-      <output v-if="field.minor" class="review-irpf-preview" data-eur-preview>{{
+      <output v-if="scaled" class="review-irpf-preview" data-eur-preview>{{
         preview
       }}</output></span
     >
@@ -96,19 +118,27 @@ const preview = computed(() => {
     <input
       v-else-if="field.type !== 'checkbox'"
       v-model="raw"
-      :type="field.type || 'text'"
+      :type="scaled ? 'text' : field.type || 'text'"
       :disabled="disabled"
       :data-decision-path="field.path"
       :data-value-type="field.valueType"
       :min="field.min"
       :max="field.max"
-      :step="field.step"
+      :step="scaled ? undefined : field.step"
       :inputmode="
-        field.valueType === 'integer' ? 'numeric' : field.type === 'number' ? 'decimal' : undefined
+        scaled
+          ? 'decimal'
+          : field.valueType === 'integer'
+            ? 'numeric'
+            : field.type === 'number'
+              ? 'decimal'
+              : undefined
       "
-      @input="emit('change', read())"
+      @input="changed"
     />
     <slot />
-    <p v-if="error" class="review-inline-error" role="alert">{{ error }}</p>
+    <p v-if="unreadable || error" class="review-inline-error" role="alert">
+      {{ unreadable ? t('fields.unreadableAmount') : error }}
+    </p>
   </label>
 </template>

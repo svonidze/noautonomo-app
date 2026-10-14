@@ -78,6 +78,8 @@ def test_shared_shell_injection_and_host_boundary(prepared):
         assert status == 200 and "Set-Cookie" not in headers
         assert json.loads(body)["default_period"] == "2026-Q3"
         assert json.loads(body)["intake_enabled"] is False
+        assert {row["period_key"] for row in json.loads(body)["periods"]} == {"2026-Q1", "2026-Q2", "2026-Q3"}
+        assert all(row["status"] != "missing" for row in json.loads(body)["periods"])
         assert request(server, "GET", "/api/bootstrap")[0] == 200
         for endpoint in ("/api/google-picker/config", "/api/intake", "/api/review/validate", "/api/unknown"):
             assert request(server, "GET", "/demo" + endpoint)[0] == 404
@@ -132,6 +134,21 @@ def test_real_get_models_read_only_no_cache_or_provider_fallback(prepared, monke
             with pytest.raises(sqlite3.OperationalError):
                 connection.execute("UPDATE counterparties SET display_name='blocked'")
         assert not app.config.cache_root.exists()
+    assert tree(prepared) == before
+
+
+def test_private_missing_quarter_reads_do_not_extend_the_public_demo(prepared):
+    before = tree(prepared)
+    with server_for(prepared) as (server, app):
+        for period in ("2026-Q4", "2025-Q4", "2027-Q1"):
+            for endpoint in ("dashboard", "transactions", "expenses", "documents", "issues", "assets", "taxes", "analytics", "review/posting-preview"):
+                status, _, body = request(server, "GET", f"/demo/api/{endpoint}?period={period}")
+                assert status == 404, body
+                assert json.loads(body)["code"] == "period_not_found"
+        with app._connect() as connection:
+            counterparty = connection.execute("SELECT counterparty_id FROM counterparties LIMIT 1").fetchone()[0]
+        status, _, body = request(server, "GET", f"/demo/api/counterparties/{counterparty}/transactions?period=2026-Q4")
+        assert status == 404 and json.loads(body)["code"] == "period_not_found"
     assert tree(prepared) == before
 
 

@@ -1,7 +1,10 @@
+import { createApp, nextTick } from 'vue';
 import { expect, test } from 'vitest';
+import TaxFormCard from '../../src/features/overview/TaxFormCard.vue';
+import { formatDateText } from '../../src/core/format.ts';
 import { createFinancePresentation } from '../../src/features/overview/presentation.ts';
 import { operationRequest } from '../../src/core/operation-request.ts';
-import { normalizeLocale } from '../../src/core/i18n.ts';
+import { normalizeLocale, t } from '../../src/core/i18n.ts';
 import expected from '../fixtures/finance-expected.json' with { type: 'json' };
 for (const row of expected)
   test(`tax status and evidence match reviewed baseline in ${row.locale}`, () => {
@@ -50,4 +53,28 @@ test('missing filed headlines warn only on dashboard, while zero stays a value',
       warnOnMissingHeadline: true,
     }).display_state,
   ).toBe('filed');
+});
+
+test('a due, unfiled return names its deadline in the filing cell and keeps the deadline row', async () => {
+  const form = { form_code: '303', display_state: 'preview', values: {}, headline_value: null };
+  for (const [statutory, filing] of [
+    ['2026-10-20', t('statuses.filingDueBy', { date: formatDateText('2026-10-20', 'ru') }, 'ru')],
+    [null, t('statuses.labels.due', {}, 'ru')],
+  ] as const) {
+    const root = document.createElement('div');
+    document.body.append(root);
+    const app = createApp(TaxFormCard, {
+      code: '303',
+      form,
+      summary: { determination: 'due', filing_status: 'unfiled', statutory_due_on: statutory },
+      refreshing: false,
+    });
+    app.mount(root);
+    await nextTick();
+    const cells = [...root.querySelectorAll('.tax-form-facts dd')].map((cell) => cell.textContent);
+    expect(cells[0]).toBe(filing);
+    expect(cells[1]).toBe(formatDateText(statutory, 'ru'));
+    app.unmount();
+    root.remove();
+  }
 });

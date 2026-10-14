@@ -7,8 +7,12 @@ export interface OverviewContext {
   period: string;
   services: ViewServices;
   copyTarget: string | null;
+  /** The server has a taxpayer profile (`profile_configured` in /api/bootstrap). */
+  profileConfigured: boolean;
   settled(): void;
   refreshCalculation(): Promise<void>;
+  /** Opens the intake dialog; absent while the server does not accept documents. */
+  openIntake?(): void;
   copy(row: TransactionRow): void;
   notify(message: UiMessage | string, error?: boolean): void;
 }
@@ -83,15 +87,29 @@ export interface RetaCheck {
   }[];
 }
 export interface ExpenseScope {
+  /** Null when any row lacks an amount; `known_amount_minor` then sums the rows that have one. */
   amount_eur?: Amount;
+  known_amount_minor?: number;
   count?: number;
   missing_amount_count?: number;
 }
 export interface DashboardData {
   has_tax_attributions?: boolean;
   totals: {
-    actual: { income_eur: Amount; income_transaction_count: number };
-    forecast: { transaction_count?: number };
+    actual: {
+      income_eur: Amount;
+      income_transaction_count: number;
+      /** `income_eur` counts rows without a EUR amount as zero; these name them. */
+      income_known_amount_minor?: number;
+      income_missing_amount_count?: number;
+    };
+    /** Approved, not yet posted; the known amount leaves out rows without a EUR amount. */
+    forecast: {
+      transaction_count?: number;
+      income_transaction_count?: number;
+      income_known_amount_minor?: number;
+      income_missing_amount_count?: number;
+    };
   };
   expense_summary: Record<
     'purchase' | 'amortization',
@@ -99,12 +117,22 @@ export interface DashboardData {
   >;
   obligations: Obligation[];
   tax_forms?: Record<string, FormView>;
+  forecast_as_of?: string | null;
   posting_preview_summary?: Record<string, unknown>;
-  summary?: Record<string, unknown>;
-  readyCount?: number;
-  ready_count?: number;
+  /** Review queue by state: needs review, then approved rows by posting readiness. */
+  posting_summary?: { needs_review: number; ready: number; later: number; blocked: number };
   recent_transactions: TransactionRow[];
+  /** The six most urgent open questions; `open_issue_count` counts all of them. */
   open_issues: { ui_context: HelpContext }[];
+  open_issue_count?: number;
+  /** Review-queue rows of this quarter without a EUR amount. */
+  missing_fx_count?: number;
+  /** Of those, the approved rows: the missing rate blocks their posting. */
+  missing_fx_blocked_count?: number;
+  /** Any quarter has a posted row; until then the overview leads with its first steps. */
+  ledger_has_postings?: boolean;
+  /** This quarter's documents by lifecycle state. */
+  document_counts?: Record<string, number>;
 }
 export interface AssetRow {
   asset_id: string;

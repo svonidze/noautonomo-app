@@ -1,4 +1,5 @@
 import { formatMessage, type Locale } from '../../core/i18n.ts';
+import { formatDateText } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import type {
   ReviewDecision,
@@ -44,11 +45,13 @@ export function getDecision(target: unknown, path: string): unknown {
   for (const key of path.split('.')) result = record(result) ? result[key] : undefined;
   return result;
 }
+// Only a server-reported 'blocked' is blocked: an unsupported item or one without a posting
+// projection is still in review, and an unexpected code reads as the generic 'unknown'.
 export function evaluate(item: WorkItem | null | undefined) {
   const projection = item?.posting_context || item?.ui_context?.posting;
   if (!projection)
     return {
-      category: 'blocked',
+      category: 'needs_review',
       supported: false,
       canApply: false,
       availableOn: null,
@@ -58,12 +61,12 @@ export function evaluate(item: WorkItem | null | undefined) {
     code = item?.ui_context?.state || projection.preview_bucket;
   return {
     category: !supported
-      ? 'blocked'
+      ? 'needs_review'
       : code === 'deferred'
         ? 'later'
         : ['ready', 'blocked', 'needs_review'].includes(code || '')
           ? code!
-          : 'blocked',
+          : 'unknown',
     supported,
     canApply: item?.review_allowed === true,
     availableOn: projection.posting_deferred_until || null,
@@ -186,4 +189,16 @@ export function confirmFx(choice: FxChoice | null, suggestion?: FxSuggestion) {
     raw_observation_hash: null,
     supersedes_rate_id: null,
   };
+}
+/** Server FX note codes in the interface language; an unknown note stays visible as server text. */
+export function fxNoteText(suggestion: { note?: string; rate_date?: string }, locale: Locale) {
+  if (suggestion.note === 'prior_business_day')
+    return formatMessage(
+      'review.fxPriorRate',
+      { date: formatDateText(suggestion.rate_date, locale) },
+      locale,
+    );
+  if (suggestion.note === 'manual_settlement_required')
+    return formatMessage('review.fxUnavailableHint', {}, locale);
+  return formatMessage('review.fxNoteUnknown', { note: suggestion.note || '' }, locale);
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import { eur, formatDateText, formatPeriod } from '../../core/format.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import StatusCell from '../../components/StatusCell.vue';
@@ -71,7 +71,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
       <div class="table-toolbar">
         <div>
           <h2>{{ t('assets.title') }}</h2>
-          <p>{{ t('help.words.allAssets') }}: {{ context.period }}</p>
+          <p>{{ t('help.words.allAssets') }}: {{ formatPeriod(context.period, locale) }}</p>
         </div>
       </div>
       <section class="panel">
@@ -90,7 +90,8 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
                   <TermHelp term="rate" />
                 </th>
                 <th>
-                  {{ t('help.words.scope') }} {{ context.period }} <TermHelp term="forecast" />
+                  {{ t('help.words.scope') }} {{ formatPeriod(context.period, locale) }}
+                  <TermHelp term="forecast" />
                 </th>
                 <th>{{ t('assets.decision') }}</th>
               </tr>
@@ -139,13 +140,13 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
                       {{ money(row.ui_context.amortization.adjustment_minor) }}</small
                     >
                   </div>
-                  <span v-else>{{ t('help.words.none') }}</span>
+                  <span v-else>{{ t('assets.noScheduleCell') }}</span>
                 </td>
                 <td :data-label="t('assets.decision')"><StatusCell :context="row.ui_context" /></td>
               </tr>
               <tr v-if="!rows.length">
                 <td colspan="6">
-                  <div class="empty-state">{{ t('common.noRecords') }}</div>
+                  <div class="empty-state">{{ t('assets.listEmpty') }}</div>
                 </td>
               </tr>
             </tbody>
@@ -160,16 +161,14 @@ const retry = () => (forbidden() ? window.location.reload() : void load());
           :request="context.services.request"
         />
       </section>
-      <section class="panel wf-fields">
-        <label
-          ><span>{{ t('app.inline.equipmentSchedule') }}</span
-          ><select id="asset-plan-select" v-model="selected">
-            <option value=""></option>
-            <option v-for="row in rows" :key="row.asset_id" :value="row.asset_id">
-              {{ row.description || row.asset_code }}
-            </option>
-          </select></label
-        >
+      <section class="panel wf-fields" aria-labelledby="asset-plan-title">
+        <h2 id="asset-plan-title">{{ t('app.inline.equipmentSchedule') }}</h2>
+        <select id="asset-plan-select" v-model="selected" aria-labelledby="asset-plan-title">
+          <option value=""></option>
+          <option v-for="row in rows" :key="row.asset_id" :value="row.asset_id">
+            {{ row.description || row.asset_code }}
+          </option>
+        </select>
         <div id="asset-plan-detail">
           <AssetSchedule
             :read-only="context.services.readOnly"

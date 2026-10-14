@@ -778,7 +778,7 @@ class LedgerDB:
             return existing
 
         if starts_on is None or ends_on is None:
-            starts_on, ends_on = _default_period_bounds(period_key)
+            starts_on, ends_on = default_period_bounds(period_key)
         effective_period_type = period_type or (
             "annual" if len(period_key) == 4 and period_key.isdigit() else "quarter"
         )
@@ -6743,7 +6743,7 @@ def _reject_secret_storage_fields(value: Any) -> None:
 
 def _validate_tax_calendar_payload(payload: Mapping[str, Any]) -> None:
     period_key = str(payload["period_key"])
-    _default_period_bounds(period_key)
+    default_period_bounds(period_key)
     form_code = str(payload["form_code"])
     if form_code not in ALL_FORM_CODES:
         raise ValueError(f"Unsupported tax calendar form_code: {form_code}")
@@ -6883,7 +6883,7 @@ def _effective_asset_base_minor(asset: Mapping[str, Any]) -> int:
     )
 
 
-def _default_period_bounds(period_key: str) -> tuple[str, str]:
+def default_period_bounds(period_key: str) -> tuple[str, str]:
     if len(period_key) == 7 and period_key[4:6] == "-Q":
         year = int(period_key[:4])
         quarter = int(period_key[-1])

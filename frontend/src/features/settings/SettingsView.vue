@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { message, messageText, localeRegistry, type UiMessage } from '../../core/i18n.ts';
+import {
+  formatMessage,
+  message,
+  messageIds,
+  messageText,
+  localeRegistry,
+  type UiMessage,
+} from '../../core/i18n.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
+import { formatDateText } from '../../core/format.ts';
 import BackupStatus from './BackupStatus.vue';
 import {
   emptyProfile,
@@ -35,6 +43,10 @@ let active = true,
 onBeforeUnmount(() => {
   active = false;
 });
+const regime = (tax: 'irpf' | 'iva', code: string) =>
+  messageIds.includes(`settings.regimes.${tax}.${code}`)
+    ? formatMessage(`settings.regimes.${tax}.${code}`, {}, locale.value)
+    : t('settings.regimes.unknown', { code });
 const fingerprint = () => JSON.stringify(draft),
   backupFingerprint = () => JSON.stringify([daily.value, monthly.value]);
 
@@ -173,11 +185,10 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
   <div v-if="loading" class="empty-state" role="status">{{ t('common.loading') }}</div>
   <div v-else-if="failure" class="empty-state" role="alert">
     <p>{{ errorMessage(failure, locale) }}</p>
-    <button @click="load">{{ t('common.retry') }}</button>
+    <button class="secondary-button" @click="load">{{ t('common.retry') }}</button>
   </div>
   <div v-else class="settings-page">
     <p v-if="context.services.readOnly" class="settings-hint">{{ t('demo.readOnlyReason') }}</p>
-    <p class="settings-intro">{{ t('settings.form.intro') }}</p>
     <div class="settings-grid">
       <section class="settings-panel" aria-labelledby="settings-profile-title">
         <h2 id="settings-profile-title">{{ t('settings.form.profile') }}</h2>
@@ -296,7 +307,7 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
                 {{ t('settings.form.monthlyHelp') }}
               </p>
               <p class="settings-warning">{{ t('settings.form.backupNote') }}</p>
-              <button class="primary-button" type="submit">
+              <button class="secondary-button" type="submit">
                 {{ t('settings.form.saveBackups') }}
               </button>
             </fieldset>
@@ -322,7 +333,7 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
             {{ t('settings.form.yearStart') }}: {{ profile.tax_year_start_month || 1 }}
           </p>
           <article v-for="(row, index) in activity" :key="index" class="settings-activity">
-            <h4>{{ row.description }}</h4>
+            <h3>{{ row.description }}</h3>
             <dl>
               <dt>{{ t('settings.form.codes') }}</dt>
               <dd>
@@ -330,9 +341,12 @@ defineExpose({ canLeave, isDirty, isBusy: () => pending.value });
                 {{ row.iae_group_epigraph }}
               </dd>
               <dt>{{ t('settings.form.regimes') }}</dt>
-              <dd>{{ row.irpf_method }} / {{ row.iva_regime }}</dd>
+              <dd>{{ regime('irpf', row.irpf_method) }} / {{ regime('iva', row.iva_regime) }}</dd>
               <dt>{{ t('settings.form.dates') }}</dt>
-              <dd>{{ row.starts_on }} — {{ row.ends_on || t('settings.form.current') }}</dd>
+              <dd>
+                {{ formatDateText(row.starts_on, locale) }} —
+                {{ row.ends_on ? formatDateText(row.ends_on, locale) : t('settings.form.current') }}
+              </dd>
             </dl>
           </article>
           <p v-if="!activity.length" class="settings-hint">{{ t('settings.form.noActivities') }}</p>

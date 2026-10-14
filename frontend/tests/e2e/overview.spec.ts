@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import messages from '../../src/locales/en/workflow.json' with { type: 'json' };
 import analyticsFixture from '../fixtures/analytics.json' with { type: 'json' };
+import toolbar from '../../src/locales/ru/toolbar.json' with { type: 'json' };
+import ruCharts from '../../src/locales/ru/charts.json' with { type: 'json' };
+import enCharts from '../../src/locales/en/charts.json' with { type: 'json' };
+import ruDashboard from '../../src/locales/ru/dashboard.json' with { type: 'json' };
+import statuses from '../../src/locales/ru/statuses.json' with { type: 'json' };
 const ASSET = '55555555-5555-4555-8555-555555555555',
   ENTRY = '66666666-6666-4666-8666-666666666666';
 const asset = {
@@ -189,7 +194,7 @@ test('undecided returns stay distinct from filing exemptions in both locales', a
     'Декларации без решения — проверьте обязательства',
   );
 });
-test('cumulative purchases follow business net and show missing FX beside zero totals in both locales', async ({
+test('cumulative purchases follow business net; zero totals with missing FX read as one line in both locales', async ({
   page,
 }) => {
   const data = structuredClone(analyticsFixture);
@@ -208,8 +213,14 @@ test('cumulative purchases follow business net and show missing FX beside zero t
   });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/dashboard?period=2026-Q3');
+  const analytics = page.locator('details.analytics-details');
+  await expect(analytics).not.toHaveAttribute('open');
+  await analytics.locator(':scope > summary').click();
   const chart = page.locator('#chart-cumulative-expenses');
-  await expect(chart.locator('.chart-note')).toContainText('В расчет не вошли расходы');
+  await expect(chart.locator('.chart-empty')).toHaveText(
+    `${ruCharts['charts.cumulativeExpenses.title']}. ${ruCharts['charts.empty.missingFx']}`,
+  );
+  await expect(chart.locator('svg, .chart-expand-button')).toHaveCount(0);
   expect(
     await page.evaluate(() => {
       const net = document.querySelector('#chart-cumulative-net')!;
@@ -219,17 +230,11 @@ test('cumulative purchases follow business net and show missing FX beside zero t
   ).toBe(true);
   const before = reads;
   await page.locator('[data-locale="en"]').evaluate((button: HTMLElement) => button.click());
-  await expect(chart.locator('figcaption > span')).toHaveText(
-    'Cumulative purchases and IRPF deductions',
+  await expect(chart.locator('.chart-empty')).toHaveText(
+    `${enCharts['charts.cumulativeExpenses.title']}. ${enCharts['charts.empty.missingFx']}`,
   );
-  await expect(chart.locator('.chart-note')).toContainText(
-    'Expense rows without confirmed EUR conversion are excluded: 1.',
-  );
+  await expect(analytics).toHaveAttribute('open', '');
   expect(reads).toBe(before);
-  await expect(chart.locator('.chart-legend li')).toHaveCount(4);
-  await chart.locator('details.chart-data summary').click();
-  await expect(chart.locator('table')).toBeVisible();
-  await expect(chart.locator('table')).toContainText('IRPF deductions: actual');
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
   ).toBe(true);
@@ -264,6 +269,185 @@ test('Vue expanded chart is CSP-safe, uses cached locale data and closes on rout
   await page.locator('a[data-view="income"]').click();
   await expect(page.locator('#vue-chart-businessResult')).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as { csp: string[] }).csp)).toEqual([]);
+});
+test('Calculate on the uncalculated tax card refreshes the quarter and says so', async ({
+  page,
+}) => {
+  let reads = 0;
+  await page.route('**/api/dashboard?**', async (route) => {
+    const data = await (await route.fetch()).json();
+    await route.fulfill({ json: { ...data, tax_forms: {} } });
+    reads++;
+  });
+  const posts: unknown[] = [];
+  await page.route('**/api/dashboard/refresh', (route) => {
+    posts.push(route.request().postDataJSON());
+    return route.fulfill({ json: { status: 'refreshed', period: '2026-Q3' } });
+  });
+  await page.goto('/dashboard?period=2026-Q3');
+  const calculate = page.locator('.metric .calculate-button');
+  await expect(calculate).toHaveCount(1);
+  await calculate.first().click();
+  await expect(page.locator('#toast-message')).toHaveText('Расчёт за III квартал 2026 обновлён');
+  expect(posts).toMatchObject([{ period: '2026-Q3' }]);
+  await expect.poll(() => reads).toBe(2);
+  await expect(calculate.first()).toBeEnabled();
+});
+test('the overview starts with what to do now: the reviewed expense waits in a post row', async ({
+  page,
+}) => {
+  await page.goto('/dashboard?period=2026-Q3');
+  const post = page
+    .locator('.task-list .task-row')
+    .filter({ hasText: 'Провести проверенные операции (1' });
+  await expect(post).toHaveAttribute('href', '/review?period=2026-Q3&tab=posting');
+  await expect(post.locator('.badge')).toHaveText(statuses['statuses.labels.ready']);
+  await expect(
+    page.locator('.posting-banner, #dashboard-ready-banner, .deadline-strip'),
+  ).toHaveCount(0);
+  const order = await page
+    .locator('.task-list, .metric-grid, .dashboard-grid, .analytics-details')
+    .evaluateAll((nodes) => nodes.map((node) => node.className));
+  expect(order).toEqual(['task-list', 'metric-grid', 'dashboard-grid', 'analytics-details']);
+});
+test('a review queue, a blocked row and a due return each link where the work is', async ({
+  page,
+}) => {
+  await page.route('**/api/dashboard?**', async (route) => {
+    const data = await (await route.fetch()).json();
+    const preview = (code: string) => ({
+      form_code: code,
+      display_state: 'preview',
+      values: {},
+      headline_value: '0.00',
+      preview_as_of: '2026-10-01',
+    });
+    await route.fulfill({
+      json: {
+        ...data,
+        posting_summary: { needs_review: 2, ready: 0, later: 0, blocked: 1 },
+        obligations: [
+          {
+            obligation_code: '130',
+            determination: 'due',
+            filing_status: 'unfiled',
+            statutory_due_on: '2026-10-20',
+          },
+        ],
+        tax_forms: { modelo130: preview('130'), modelo303: preview('303') },
+      },
+    });
+  });
+  await page.goto('/dashboard?period=2026-Q3');
+  const rows = page.locator('.task-list .task-row');
+  await expect(rows.locator('strong')).toHaveText([
+    'Проверить документы (2)',
+    'Выяснить, что мешает провести операции (1)',
+    'Подать Modelo 130',
+  ]);
+  expect(await rows.evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual(
+    ['/review?period=2026-Q3', '/review?period=2026-Q3', '/taxes?period=2026-Q3'],
+  );
+  await expect(rows.nth(2).locator('.badge')).toContainText('Нужно подать до');
+  await expect(rows.nth(2).locator('.badge')).toContainText('2026');
+  await rows.nth(2).click();
+  await expect(page).toHaveURL(/\/taxes\?period=2026-Q3$/);
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+});
+test('the calculate row refreshes the quarter and leaves the list once the quarter has a calculation', async ({
+  page,
+}) => {
+  let calculated = false;
+  await page.route('**/api/dashboard?**', async (route) => {
+    const data = await (await route.fetch()).json();
+    const preview = (code: string) => ({
+      form_code: code,
+      display_state: 'preview',
+      values: {},
+      headline_value: '0.00',
+      preview_as_of: '2026-10-09',
+    });
+    await route.fulfill({
+      json: {
+        ...data,
+        tax_forms: calculated ? { modelo130: preview('130'), modelo303: preview('303') } : {},
+      },
+    });
+  });
+  const posts: unknown[] = [];
+  await page.route('**/api/dashboard/refresh', (route) => {
+    posts.push(route.request().postDataJSON());
+    calculated = true;
+    return route.fulfill({ json: { status: 'refreshed', period: '2026-Q3' } });
+  });
+  await page.goto('/dashboard?period=2026-Q3');
+  const calculate = page.locator('button.task-row');
+  await expect(calculate.locator('strong')).toHaveText(
+    ruDashboard['dashboard.task.calculate.title'],
+  );
+  await expect(calculate.locator('.badge')).toHaveText(
+    statuses['statuses.labels.calculation_unavailable'],
+  );
+  await calculate.click();
+  await expect(page.locator('#toast-message')).toHaveText('Расчёт за III квартал 2026 обновлён');
+  expect(posts).toMatchObject([{ period: '2026-Q3' }]);
+  await expect(calculate).toHaveCount(0);
+  const tax = page.locator('.metric').filter({ hasText: ruDashboard['dashboard.taxDue'] });
+  await expect(tax.locator('dd strong')).toHaveText([/0,00/, /0,00/]);
+  await expect(tax.locator('.calculate-button')).toHaveCount(0);
+});
+test('on a phone the first screen lists tasks and draws no chart until Analytics is opened', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/dashboard?period=2026-Q3');
+  await expect(page.locator('.task-row').first()).toBeVisible();
+  const firstScreen = await page.evaluate(() => {
+    const onScreen = (selector: string) =>
+      [...document.querySelectorAll(selector)].filter((node) => {
+        const box = node.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && box.top < window.innerHeight;
+      }).length;
+    return { tasks: onScreen('.task-row'), charts: onScreen('svg.chart-svg') };
+  });
+  expect(firstScreen.tasks).toBeGreaterThan(0);
+  expect(firstScreen.charts).toBe(0);
+  const analytics = page.locator('details.analytics-details');
+  await expect(analytics).not.toHaveAttribute('open');
+  // The section keeps its heading while folded; the summary only shows the charts.
+  await expect(
+    page.getByRole('heading', { level: 2, name: ruDashboard['dashboard.analyticsTitle'] }),
+  ).toBeVisible();
+  await expect(analytics.locator(':scope > summary')).toHaveText(
+    ruDashboard['dashboard.analyticsToggle'],
+  );
+  await analytics.locator(':scope > summary').click();
+  // Opened on a phone, each chart is its data table; the drawing waits behind «Показать график».
+  await expect(page.locator('details.chart-data[open]').first()).toBeVisible();
+  await expect(page.locator('details.chart-plot').first()).not.toHaveAttribute('open');
+  await expect(page.locator('svg.chart-svg:visible')).toHaveCount(0);
+  await expect(analytics.locator(':scope > summary')).toHaveText(
+    ruDashboard['dashboard.analyticsToggleOpen'],
+  );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+  ).toBe(true);
+});
+test('the refresh shortcut is captioned on wide screens and stays hidden where it does not apply', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/taxes?period=2026-Q3');
+  const refresh = page.locator('#refresh-button');
+  await expect(refresh.locator('.refresh-label')).toHaveText(toolbar['toolbar.refresh']);
+  await expect(refresh).toHaveAccessibleName(toolbar['toolbar.refresh']);
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await expect(refresh.locator('.refresh-label')).toBeHidden();
+  await expect(refresh).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.locator('a[data-view="settings"]').click();
+  await expect(page.locator('#settings-profile-form')).toBeVisible();
+  await expect(refresh).toBeHidden();
 });
 test('RETA check is its own read-only section after the tax forms, separate from the headline', async ({
   page,
@@ -316,14 +500,14 @@ test('RETA check is its own read-only section after the tax forms, separate from
     });
   });
   await page.reload();
-  await expect(card.locator('.badge')).toHaveText('Below the tramo');
+  await expect(card.locator('.badge')).toHaveText('Below the bracket');
   await expect(card.locator('[data-reta="additional"]')).toHaveText('€920.30');
   await expect(card.locator('[data-reta="refund"]')).toHaveText('€0.00');
   await expect(card.locator('[data-reta="locked"]')).toHaveText('€460.15');
   await expect(card.locator('tbody td').nth(4)).toHaveText('Synthetic TGSS resolution');
   await expect(page.locator('.tax-hero')).not.toContainText('920');
   await page.locator('[data-locale="ru"]').click();
-  await expect(card.locator('.badge')).toHaveText('Ниже tramo');
+  await expect(card.locator('.badge')).toHaveText('Ниже ступени');
   await expect(card.locator('[data-reta="additional"]')).toContainText('920,30');
   expect(reads).toBe(1);
 });

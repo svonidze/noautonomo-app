@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
@@ -11,11 +11,20 @@ import {
   type UiMessage,
 } from '../../core/i18n.ts';
 import { operationRequest } from '../../core/operation-request.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import {
+  aeatCodeLabel,
+  eur,
+  formatDateText,
+  formatPeriod,
+  taxCodeLabel,
+} from '../../core/format.ts';
+import { focusById } from '../../core/focus.ts';
+import { followSpaLink, documentHref, viewHref } from '../../vue/services.ts';
+import { fxNoteText } from './guided-helpers.ts';
 import type { Counterparty } from '../contacts/model.ts';
 import WorkflowField from './WorkflowField.vue';
 import DocumentPreview from '../../components/DocumentPreview.vue';
-import { documentHref } from '../../vue/services.ts';
+import RemainingList, { type RemainingItem } from './RemainingList.vue';
 import {
   chooseRule,
   copyProposal,
@@ -25,6 +34,7 @@ import {
   factsFields,
   taxFields,
   technicalFields,
+  fieldId,
   fieldValue,
   setField,
   type ExpensePayload,
@@ -45,22 +55,62 @@ const suppliers = shallowRef<Counterparty[]>([]),
   posted = shallowRef<PostedExpense>();
 const error = shallowRef<unknown>(),
   notice = shallowRef<UiMessage | string>(''),
-  busy = ref(false);
+  busy = ref(false),
+  confirming = ref(false);
 const supplierSearch = ref(''),
   settlementRate = ref(''),
   settlementReference = ref(''),
   technicalOpen = ref(false),
+  moreOpen = ref(false),
+  ruleOpen = ref(false),
   savedInputs = ref('');
+// A matched supplier or activity, and the expense type, read as text until «Изменить» opens them.
+const shown = reactive({ supplier: false, activity: false, kind: false });
 let active = true,
   generation = 0,
   request: ReturnType<typeof operationRequest> | null = null;
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 const base = () => `/api/expense-workflows/${encodeURIComponent(props.context.transactionId)}`;
+const queueUrl = computed(() => `/review?${new URLSearchParams({ period: props.context.period })}`);
 const current = (revision: number) => active && generation === revision;
+const steps = [
+  { id: 'wf-document', label: 'workflow.steps.document' },
+  { id: 'wf-taxes', label: 'workflow.steps.taxes' },
+  { id: 'wf-preview', label: 'workflow.steps.preview' },
+] as const;
+const step = ref<string>(steps[0].id);
+let observer: IntersectionObserver | undefined;
 onBeforeUnmount(() => {
   active = false;
   generation++;
+  observer?.disconnect();
 });
+function goToStep(id: string) {
+  step.value = id;
+  focusById(`${id}-title`, 'start');
+}
+// The highlighted step follows the reading position where the browser reports it; the links work
+// without it.
+watch(
+  () => !!(draft.value && payload.value) && !posted.value,
+  async (visible) => {
+    observer?.disconnect();
+    observer = undefined;
+    if (!visible || typeof IntersectionObserver !== 'function') return;
+    await nextTick();
+    if (!active) return;
+    observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) if (entry.isIntersecting) step.value = entry.target.id;
+      },
+      { rootMargin: '-30% 0px -60% 0px' },
+    );
+    for (const { id } of steps) {
+      const section = document.getElementById(id);
+      if (section) observer.observe(section);
+    }
+  },
+);
 async function load() {
   const revision = ++generation,
     context = props.context;
@@ -89,6 +139,10 @@ async function load() {
     // Before browser defaults: the server proposal was calculated without them.
     savedInputs.value = proposalInputs(payload.value);
     if (!context.services.readOnly) defaults(payload.value, value.deduction_rules);
+    shown.supplier = !matchedSupplier.value;
+    shown.activity = !chosenActivity.value;
+    shown.kind = false;
+    ruleOpen.value = !!payload.value.deduction;
   } catch (failure) {
     if (current(revision)) error.value = failure;
   } finally {
@@ -106,6 +160,7 @@ watch(
     settlementRate.value = '';
     settlementReference.value = '';
     technicalOpen.value = false;
+    moreOpen.value = false;
     void load();
   },
   { immediate: true },
@@ -115,18 +170,85 @@ const retryLoad = () =>
     ? window.location.reload()
     : void load();
 const tax = computed(() => payload.value!.decision.tax_treatment);
+const MANUAL_ISSUES = ['document_structural_review', 'document_classification_review'];
 const manual = computed(() =>
-  draft.value?.source.issues.some((issue) =>
-    ['document_structural_review', 'document_classification_review'].includes(issue.issue_code),
+  draft.value?.source.issues.some((issue) => MANUAL_ISSUES.includes(issue.issue_code)),
+);
+// The server previews verified PDF, JPEG and PNG originals only; anything else is a link.
+const previewable = computed(() => {
+  const document = draft.value?.source.document;
+  return document?.mime_type
+    ? ['application/pdf', 'image/jpeg', 'image/png'].includes(document.mime_type)
+    : /\.(pdf|jpe?g|png)$/i.test(document?.evidence_filename || '');
+});
+const matchedSupplier = computed(() =>
+  payload.value?.facts.counterparty_id && !payload.value.supplier
+    ? suppliers.value.find(
+        (party) => party.counterparty_id === payload.value!.facts.counterparty_id,
+      )
+    : undefined,
+);
+const chosenActivity = computed(() =>
+  draft.value?.activities.find(
+    (activity) => activity.business_activity_id === payload.value?.facts.business_activity_id,
   ),
+);
+async function change(part: keyof typeof shown, id: string) {
+  shown[part] = true;
+  await nextTick();
+  document.getElementById(id)?.focus();
+}
+// The server asks for this reason when an approval is withdrawn or a source fact is corrected, so
+// a first review shows it only after such a correction (or when it already holds text).
+const sourceFacts = [
+  'document_number',
+  'issued_on',
+  'transaction_date',
+  'booking_date',
+  'currency',
+  'gross_minor',
+  'counterparty_id',
+];
+const changeReasonShown = computed(
+  () =>
+    !['received', 'extracted', 'needs_review'].includes(
+      draft.value?.source.transaction?.lifecycle_status || '',
+    ) ||
+    !!payload.value?.change_reason ||
+    sourceFacts.some(
+      (key) =>
+        (payload.value?.facts[key] ?? null) !== (draft.value?.source_values.facts[key] ?? null),
+    ),
+);
+// The currency and the booking date are usually EUR and the transaction date; other values unfold.
+const factField = (path: string) => factsFields.find((field) => field.path === path)!;
+const mainFacts = [
+  'facts.document_number',
+  'facts.gross_minor',
+  'facts.issued_on',
+  'facts.transaction_date',
+].map(factField);
+const moreFacts = ['facts.currency', 'facts.booking_date'].map(factField);
+watch(
+  () =>
+    !!payload.value &&
+    (payload.value.facts.currency !== 'EUR' ||
+      payload.value.facts.booking_date !== payload.value.facts.transaction_date),
+  (unusual) => {
+    if (unusual) moreOpen.value = true;
+  },
 );
 const sourceUrl = computed(() => {
   locale.value;
   return documentHref(props.context.services, draft.value?.source.document.document_id || '');
 });
-const visibleTaxes = computed(() =>
-  taxFields.filter(
-    (field) => !payload.value?.asset || !field.path.endsWith('deductible_irpf_minor'),
+// The document's amounts with the rate beside its IVA, then the reviewer's deductions.
+const taxField = (name: string) =>
+  taxFields.find((field) => field.path === `decision.tax_treatment.${name}`)!;
+const taxFacts = ['taxable_base_minor', 'vat_minor', 'rate_basis_points'].map(taxField);
+const taxDecisions = computed(() =>
+  ['deductible_vat_minor', ...(payload.value?.asset ? [] : ['deductible_irpf_minor'])].map(
+    taxField,
   ),
 );
 const allowedTaxes = computed(() =>
@@ -142,10 +264,6 @@ const allowedTaxes = computed(() =>
       ].includes(code),
   ),
 );
-const taxLabel = (code: string) =>
-  messageIds.includes(`taxCodeLabels.${code}`)
-    ? formatMessage(`taxCodeLabels.${code}`, {}, locale.value)
-    : code;
 function invalidate() {
   proposed.value = undefined;
   request = null;
@@ -251,8 +369,8 @@ const saveOnly = () =>
   task(async (revision) => {
     if (await save(revision)) invalidate();
   });
-const preview = () =>
-  task(async (revision) => {
+async function preview() {
+  await task(async (revision) => {
     if (!(await save(revision))) return;
     const value = (await props.context.services.request(base() + '/preview', {
       method: 'POST',
@@ -269,21 +387,33 @@ const preview = () =>
       draft.value!.draft_version,
     );
   });
-const confirm = () =>
-  task(async (revision) => {
-    if (!request || !proposed.value) return;
-    const result = (await props.context.services.request(base() + '/confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    })) as PostedExpense;
-    if (current(revision)) {
-      if (result.transaction_id !== props.context.transactionId)
-        throw new Error('review.invalidWorkItem');
-      posted.value = result;
-      notice.value = '';
-    }
-  });
+  if (!proposed.value || error.value || busy.value || !active) return;
+  await nextTick();
+  step.value = 'wf-preview';
+  focusById('wf-preview-title', 'start');
+}
+async function confirm() {
+  if (props.context.services.readOnly || busy.value) return;
+  confirming.value = true;
+  try {
+    await task(async (revision) => {
+      if (!request || !proposed.value) return;
+      const result = (await props.context.services.request(base() + '/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      })) as PostedExpense;
+      if (current(revision)) {
+        if (result.transaction_id !== props.context.transactionId)
+          throw new Error('review.invalidWorkItem');
+        posted.value = result;
+        notice.value = '';
+      }
+    });
+  } finally {
+    confirming.value = false;
+  }
+}
 const followUp = () =>
   task(async (revision) => {
     const result = (await props.context.services.request(base() + '/follow-up', {
@@ -384,6 +514,46 @@ const previewRule = computed(() => {
         });
   return `${irpf}; ${vat}`;
 });
+const fxTarget = computed(() =>
+  ['exact', 'prior'].includes(draft.value?.fx_suggestion?.status || '')
+    ? 'wf-use-fx'
+    : 'wf-settlement-rate',
+);
+const factPaths: Record<string, string> = {
+  transaction_date: 'facts.transaction_date',
+  taxable_base_minor: 'decision.tax_treatment.taxable_base_minor',
+  vat_minor: 'decision.tax_treatment.vat_minor',
+  area_share: 'decision.tax_treatment.deductible_ratio',
+};
+const remaining = computed<RemainingItem[]>(() => {
+  if (!draft.value || !payload.value) return [];
+  const items = draft.value.source.issues.map((issue) => {
+    const key = `issues.messages.${issue.issue_code}`;
+    return {
+      id: fieldId(
+        MANUAL_ISSUES.includes(issue.issue_code) ? 'manual_review_reason' : 'decision.reason',
+      ),
+      text: formatMessage(messageIds.includes(key) ? key : 'issues.default', {}, locale.value),
+    };
+  });
+  if (payload.value.decision.tax_treatment.rate_basis_points == null)
+    items.push({
+      id: fieldId('decision.tax_treatment.rate_basis_points'),
+      text: t('workflow.remaining.ivaRate'),
+    });
+  const rate = payload.value.facts.currency !== 'EUR' && !payload.value.fx;
+  if (rate) items.push({ id: fxTarget.value, text: t('workflow.remaining.rate') });
+  for (const name of stale.value ? [] : (proposal.value?.missing ?? []))
+    if (!(rate && name === 'eur_amount'))
+      items.push({
+        id:
+          name === 'eur_amount'
+            ? fxTarget.value
+            : fieldId(factPaths[name] ?? `deduction.facts.${name}`),
+        text: t('workflow.remaining.fact', { fact: ruleText(`expenseRules.fact.${name}`) }),
+      });
+  return items;
+});
 function useFx(settlement = false) {
   if (props.context.services.readOnly) return;
   if (!payload.value || busy.value) return;
@@ -408,8 +578,13 @@ function useFx(settlement = false) {
       };
   invalidate();
 }
-const money = (value: number | null | undefined) =>
-  value == null ? '—' : (Number(value) / 100).toFixed(2);
+/** EUR as everywhere else («121,00 €»); a purchase in another currency keeps its code. */
+const money = (value: number | null | undefined, currency = 'EUR') =>
+  value == null
+    ? '—'
+    : currency === 'EUR'
+      ? eur(Number(value) / 100, locale.value)
+      : `${(Number(value) / 100).toFixed(2)} ${currency}`;
 const supplierFields: FieldSpec[] = [
   { path: 'supplier.display_name', label: 'workflow.name' },
   { path: 'supplier.country_code', label: 'workflow.countryEsUs' },
@@ -419,8 +594,11 @@ const supplierFields: FieldSpec[] = [
 const purposeFields: FieldSpec[] = [
   { path: 'decision.business_purpose', label: 'workflow.businessPurpose' },
   { path: 'decision.reason', label: 'workflow.decisionReason' },
-  { path: 'change_reason', label: 'workflow.reasonForFactCorrectionInvalidatingApproval' },
 ];
+const changeReasonField: FieldSpec = {
+  path: 'change_reason',
+  label: 'workflow.reasonForFactCorrectionInvalidatingApproval',
+};
 const assetFields: FieldSpec[] = [
   { path: 'asset.description', label: 'workflow.description' },
   { path: 'asset.placed_in_service_on', label: 'workflow.inServiceDate', type: 'date' },
@@ -446,9 +624,15 @@ const supplierHidden = (party: Counterparty) =>
 </script>
 <template>
   <section ref="root" class="section-stack expense-workflow">
+    <a
+      class="text-button back-link"
+      :href="viewHref(context.services, queueUrl)"
+      @click="followSpaLink($event, context.services.navigate)"
+      ><span aria-hidden="true">←</span> {{ t('workflow.backToQueue') }}</a
+    >
     <header class="panel-header">
       <h2>{{ t('workflow.reviewAndPostExpense') }}</h2>
-      <span>{{ draft?.source.period.period_key }}</span>
+      <span>{{ formatPeriod(draft?.source.period.period_key, locale) }}</span>
     </header>
     <p v-if="context.services.readOnly" class="review-alert">{{ t('demo.readOnlyReason') }}</p>
     <div class="wf-message" role="status">{{ messageText(notice, locale) }}</div>
@@ -470,6 +654,7 @@ const supplierHidden = (party: Counterparty) =>
       }}<button
         type="button"
         id="wf-reset"
+        class="secondary-button"
         :disabled="context.services.readOnly || busy"
         @click="reset"
         :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
@@ -478,28 +663,50 @@ const supplierHidden = (party: Counterparty) =>
       </button>
     </div>
     <section v-if="posted" class="panel wf-fields">
-      <strong>{{ t('workflow.postedInLedger') }}</strong>
+      <h2>{{ t('workflow.postedTitle') }}</h2>
       <p>{{ t('workflow.thisIsNotAPaymentOrTaxFiling') }}</p>
       <template v-if="posted.follow_up_pending"
         ><p>{{ t('workflow.refreshOrInboxCleanupNeedsRetryDoNotRepost') }}</p>
         <button
           id="wf-follow-up"
           type="button"
+          class="secondary-button"
           :disabled="context.services.readOnly || busy"
           @click="followUp"
           :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
         >
           {{ t('workflow.retryFollowUp') }}
         </button></template
-      ><button id="wf-open-posted" type="button" :disabled="busy" @click="context.onPosted(posted)">
+      ><button
+        id="wf-open-posted"
+        type="button"
+        class="primary-button"
+        :disabled="busy"
+        @click="context.onPosted(posted)"
+      >
         {{ t('workflow.openExpense') }}
       </button>
     </section>
     <template v-else-if="draft && payload">
-      <div class="wf-layout">
+      <nav class="wf-steps" :aria-label="t('workflow.steps.label')">
+        <ol>
+          <li v-for="(item, index) in steps" :key="item.id">
+            <a
+              :href="`#${item.id}`"
+              :aria-current="step === item.id ? 'step' : undefined"
+              @click.prevent="goToStep(item.id)"
+              ><span class="wf-step-number">{{ index + 1 }}</span> {{ t(item.label) }}</a
+            >
+          </li>
+        </ol>
+      </nav>
+      <RemainingList :items="remaining" />
+      <div class="wf-layout" :class="{ 'wf-layout-compact': !previewable }">
         <aside class="panel wf-source">
-          <a :href="sourceUrl" target="_blank" rel="noreferrer">{{ t('workflow.openOriginal') }}</a
+          <h3>{{ t('workflow.sourceTitle') }}</h3>
+          <a :href="sourceUrl" target="_blank" rel="noreferrer">{{ t('common.openDocument') }}</a
           ><DocumentPreview
+            v-if="previewable"
             :services="context.services"
             :document-id="draft.source.document.document_id"
             :title="t('workflow.sourceDocument')"
@@ -507,507 +714,639 @@ const supplierHidden = (party: Counterparty) =>
         </aside>
         <form id="wf-form" class="panel wf-fields" @submit.prevent="preview">
           <fieldset :disabled="busy">
-            <h3>{{ t('workflow.documentFacts') }}</h3>
-            <div class="wf-grid">
-              <WorkflowField
-                :read-only="context.services.readOnly"
-                v-for="field in factsFields"
-                :key="field.path"
-                :field="field"
-                :model-value="fieldValue(payload, field.path)"
-                @update:model-value="update(field.path, $event)"
-              />
-            </div>
-            <label
-              ><span>{{ t('workflow.findSupplierByNameTaxId') }}</span
-              ><input id="wf-supplier-search" v-model="supplierSearch" type="search"
-            /></label>
-            <label
-              ><span>{{ t('workflow.supplier') }}</span
-              ><select
-                data-p="facts.counterparty_id"
-                :value="payload.facts.counterparty_id ?? ''"
-                @input="select('facts.counterparty_id', $event)"
-                :disabled="context.services.readOnly"
+            <section id="wf-document" class="wf-step">
+              <h2 id="wf-document-title" tabindex="-1">
+                {{ t('workflow.steps.documentTitle') }}
+              </h2>
+              <div class="wf-grid">
+                <WorkflowField
+                  :read-only="context.services.readOnly"
+                  v-for="field in mainFacts"
+                  :key="field.path"
+                  :field="field"
+                  :currency="
+                    field.path === 'facts.gross_minor'
+                      ? String(payload.facts.currency || '')
+                      : undefined
+                  "
+                  :model-value="fieldValue(payload, field.path)"
+                  @update:model-value="update(field.path, $event)"
+                />
+              </div>
+              <details
+                class="wf-more"
+                :open="moreOpen"
+                @toggle="moreOpen = ($event.target as HTMLDetailsElement).open"
               >
-                <option value=""></option>
-                <option
-                  v-for="party in suppliers"
-                  :key="party.counterparty_id"
-                  :value="party.counterparty_id"
-                  :hidden="supplierHidden(party)"
+                <summary>
+                  {{
+                    t('workflow.moreFacts', {
+                      currency: String(payload.facts.currency || '—'),
+                      date: formatDateText(payload.facts.booking_date, locale),
+                    })
+                  }}
+                </summary>
+                <div class="wf-grid">
+                  <WorkflowField
+                    :read-only="context.services.readOnly"
+                    v-for="field in moreFacts"
+                    :key="field.path"
+                    :field="field"
+                    :model-value="fieldValue(payload, field.path)"
+                    @update:model-value="update(field.path, $event)"
+                  />
+                </div>
+              </details>
+              <p v-if="matchedSupplier && !shown.supplier" class="wf-chosen">
+                <span>{{ t('workflow.supplier') }}</span>
+                <strong
+                  >{{ matchedSupplier.display_name }} ·
+                  {{ matchedSupplier.tax_id || matchedSupplier.vat_id || '—' }}</strong
                 >
-                  {{ party.display_name }} · {{ party.tax_id || party.vat_id || '—' }}
-                </option>
-              </select></label
-            >
-            <button
-              id="wf-new-supplier"
-              class="secondary-button"
-              type="button"
-              @click="newSupplier"
-              :disabled="context.services.readOnly"
-              :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
-            >
-              {{ t('workflow.newSupplier') }}
-            </button>
-            <div v-if="payload.supplier" class="wf-grid">
-              <WorkflowField
-                :read-only="context.services.readOnly"
-                v-for="field in supplierFields"
-                :key="field.path"
-                :field="field"
-                :model-value="fieldValue(payload, field.path)"
-                @update:model-value="update(field.path, $event)"
-              />
-            </div>
-            <label
-              ><span>{{ t('workflow.businessActivity') }}</span
-              ><select
-                data-p="facts.business_activity_id"
-                :value="payload.facts.business_activity_id ?? ''"
-                @input="select('facts.business_activity_id', $event)"
-                :disabled="context.services.readOnly"
-              >
-                <option value=""></option>
-                <option
-                  v-for="activity in draft.activities"
-                  :key="activity.business_activity_id"
-                  :value="activity.business_activity_id"
+                <button
+                  type="button"
+                  class="text-button"
+                  data-reveals="wf-supplier-search"
+                  :aria-label="t('workflow.changeSupplier')"
+                  @click="change('supplier', 'wf-supplier-search')"
                 >
-                  {{ activity.description }}
-                </option>
-              </select></label
-            >
-            <WorkflowField
-              :read-only="context.services.readOnly"
-              v-for="field in purposeFields"
-              :key="field.path"
-              :field="field"
-              :model-value="fieldValue(payload, field.path)"
-              @update:model-value="update(field.path, $event)"
-            />
-            <label class="wf-check"
-              ><input
-                type="checkbox"
-                data-p="decision.document_valid"
-                :checked="payload.decision.document_valid === true"
-                @input="check('decision.document_valid', $event)"
-                :disabled="context.services.readOnly"
-              /><span>{{
-                t('workflow.originalIsReadableFactsAndAmountsHaveBeenChecked')
-              }}</span></label
-            >
-            <WorkflowField
-              :read-only="context.services.readOnly"
-              v-if="manual"
-              :field="{
-                path: 'manual_review_reason',
-                label: 'workflow.manualReviewExplanationAfterExtractionIssue',
-              }"
-              :model-value="payload.manual_review_reason"
-              @update:model-value="update('manual_review_reason', $event)"
-            />
-            <h3>{{ t('workflow.treatmentAndDeductionsEur') }}</h3>
-            <label
-              ><span>{{ t('workflow.expenseType') }}</span
-              ><select
-                id="wf-kind"
-                :value="payload.asset ? 'asset' : 'ordinary'"
-                @change="setKind"
-                :disabled="context.services.readOnly"
-              >
-                <option value="ordinary">{{ t('workflow.ordinaryExpense') }}</option>
-                <option value="asset">{{ t('workflow.equipment') }}</option>
-              </select></label
-            >
-            <label
-              ><span>{{ t('workflow.taxClassification') }}</span
-              ><select
-                data-p="decision.tax_treatment.tax_code"
-                :value="tax.tax_code ?? ''"
-                @input="select('decision.tax_treatment.tax_code', $event)"
-                :disabled="context.services.readOnly"
-              >
-                <option value=""></option>
-                <option v-for="code in allowedTaxes" :key="code" :value="code">
-                  {{ taxLabel(code) }}
-                </option>
-              </select></label
-            >
-            <div class="wf-grid">
-              <WorkflowField
-                :read-only="context.services.readOnly"
-                v-for="field in visibleTaxes"
-                :key="field.path"
-                :field="field"
-                :model-value="fieldValue(payload, field.path)"
-                @update:model-value="update(field.path, $event)"
-              />
-            </div>
-            <section v-if="rules.length" id="wf-rule" class="wf-rule">
-              <h3>{{ t('expenseRules.title') }}</h3>
-              <p>{{ t('expenseRules.intro') }}</p>
-              <label
-                ><span>{{ t('expenseRules.select') }}</span
+                  {{ t('workflow.change') }}
+                </button>
+              </p>
+              <template v-else>
+                <label
+                  ><span>{{ t('workflow.findSupplierByNameTaxId') }}</span
+                  ><input id="wf-supplier-search" v-model="supplierSearch" type="search"
+                /></label>
+                <label
+                  ><span>{{ t('workflow.supplier') }}</span
+                  ><select
+                    :id="fieldId('facts.counterparty_id')"
+                    data-p="facts.counterparty_id"
+                    :value="payload.facts.counterparty_id ?? ''"
+                    @input="select('facts.counterparty_id', $event)"
+                    :disabled="context.services.readOnly"
+                  >
+                    <option value=""></option>
+                    <option
+                      v-for="party in suppliers"
+                      :key="party.counterparty_id"
+                      :value="party.counterparty_id"
+                      :hidden="supplierHidden(party)"
+                    >
+                      {{ party.display_name }} · {{ party.tax_id || party.vat_id || '—' }}
+                    </option>
+                  </select></label
+                >
+                <button
+                  id="wf-new-supplier"
+                  class="secondary-button"
+                  type="button"
+                  @click="newSupplier"
+                  :disabled="context.services.readOnly"
+                  :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+                >
+                  {{ t('workflow.newSupplier') }}
+                </button>
+                <div v-if="payload.supplier" class="wf-grid">
+                  <WorkflowField
+                    :read-only="context.services.readOnly"
+                    v-for="field in supplierFields"
+                    :key="field.path"
+                    :field="field"
+                    :model-value="fieldValue(payload, field.path)"
+                    @update:model-value="update(field.path, $event)"
+                  />
+                </div>
+              </template>
+              <p v-if="chosenActivity && !shown.activity" class="wf-chosen">
+                <span>{{ t('workflow.businessActivity') }}</span>
+                <strong>{{ chosenActivity.description }}</strong>
+                <button
+                  type="button"
+                  class="text-button"
+                  data-reveals="wf-facts-business_activity_id"
+                  :aria-label="t('workflow.changeActivity')"
+                  @click="change('activity', fieldId('facts.business_activity_id'))"
+                >
+                  {{ t('workflow.change') }}
+                </button>
+              </p>
+              <label v-else
+                ><span>{{ t('workflow.businessActivity') }}</span
                 ><select
-                  id="wf-rule-select"
-                  :value="payload.deduction?.rule_id ?? ''"
-                  @change="onRule"
+                  :id="fieldId('facts.business_activity_id')"
+                  data-p="facts.business_activity_id"
+                  :value="payload.facts.business_activity_id ?? ''"
+                  @input="select('facts.business_activity_id', $event)"
                   :disabled="context.services.readOnly"
                 >
-                  <option value="">{{ t('expenseRules.noRule') }}</option>
-                  <option v-for="item in rules" :key="item.id" :value="item.id">
-                    {{
-                      item.id === parserRule
-                        ? t('expenseRules.fromParser', { rule: ruleName(item.id) })
-                        : ruleName(item.id)
-                    }}
+                  <option value=""></option>
+                  <option
+                    v-for="activity in draft.activities"
+                    :key="activity.business_activity_id"
+                    :value="activity.business_activity_id"
+                  >
+                    {{ activity.description }}
                   </option>
                 </select></label
               >
-              <div v-if="rule && payload.deduction" class="wf-grid">
-                <template v-for="name in rule.facts" :key="name">
-                  <WorkflowField
-                    :read-only="context.services.readOnly"
-                    v-if="name === 'area_share'"
-                    :field="{
-                      path: 'decision.tax_treatment.deductible_ratio',
-                      label: 'expenseRules.fact.area_share',
-                      kind: 'ratio',
-                      type: 'number',
-                    }"
-                    :model-value="tax.deductible_ratio"
-                    @update:model-value="update('decision.tax_treatment.deductible_ratio', $event)"
-                  />
-                  <label v-else-if="['persons', 'persons_disabled', 'days'].includes(name)"
-                    ><span>{{ ruleText(`expenseRules.fact.${name}`) }}</span
-                    ><input
-                      type="number"
-                      min="0"
-                      max="366"
-                      step="1"
-                      :data-p="`deduction.facts.${name}`"
-                      :value="payload.deduction.facts[name] ?? ''"
-                      @input="setCount(name, $event)"
-                      :readonly="context.services.readOnly"
-                  /></label>
-                  <label v-else-if="name === 'evidence_confirmed'" class="wf-check"
-                    ><input
-                      type="checkbox"
-                      data-p="deduction.facts.evidence_confirmed"
-                      :checked="payload.deduction.facts.evidence_confirmed === true"
-                      @input="check('deduction.facts.evidence_confirmed', $event)"
-                      :disabled="context.services.readOnly"
-                    /><span>{{ t('expenseRules.fact.evidence_confirmed') }}</span></label
-                  >
-                  <label v-else
-                    ><span>{{ ruleText(`expenseRules.fact.${name}`) }}</span
+              <label class="wf-check"
+                ><input
+                  :id="fieldId('decision.document_valid')"
+                  type="checkbox"
+                  data-p="decision.document_valid"
+                  :checked="payload.decision.document_valid === true"
+                  @input="check('decision.document_valid', $event)"
+                  :disabled="context.services.readOnly"
+                /><span>{{
+                  t('workflow.originalIsReadableFactsAndAmountsHaveBeenChecked')
+                }}</span></label
+              >
+              <WorkflowField
+                :read-only="context.services.readOnly"
+                v-if="manual"
+                :field="{
+                  path: 'manual_review_reason',
+                  label: 'workflow.manualReviewExplanationAfterExtractionIssue',
+                }"
+                :model-value="payload.manual_review_reason"
+                @update:model-value="update('manual_review_reason', $event)"
+              />
+              <WorkflowField
+                :read-only="context.services.readOnly"
+                v-if="changeReasonShown"
+                :field="changeReasonField"
+                :model-value="payload.change_reason"
+                @update:model-value="update('change_reason', $event)"
+              />
+            </section>
+            <section id="wf-taxes" class="wf-step">
+              <h2 id="wf-taxes-title" tabindex="-1">{{ t('workflow.steps.taxesTitle') }}</h2>
+              <p v-if="!shown.kind" class="wf-chosen">
+                <span>{{ t('workflow.expenseType') }}</span>
+                <strong>{{
+                  t(payload.asset ? 'workflow.equipment' : 'workflow.ordinaryExpense')
+                }}</strong>
+                <button
+                  type="button"
+                  class="text-button"
+                  data-reveals="wf-kind"
+                  :aria-label="t('workflow.changeExpenseType')"
+                  @click="change('kind', 'wf-kind')"
+                >
+                  {{ t('workflow.change') }}
+                </button>
+              </p>
+              <label v-else
+                ><span>{{ t('workflow.expenseType') }}</span
+                ><select
+                  id="wf-kind"
+                  :value="payload.asset ? 'asset' : 'ordinary'"
+                  @change="setKind"
+                  :disabled="context.services.readOnly"
+                >
+                  <option value="ordinary">{{ t('workflow.ordinaryExpense') }}</option>
+                  <option value="asset">{{ t('workflow.equipment') }}</option>
+                </select></label
+              >
+              <label
+                ><span>{{ t('workflow.taxClassification') }}</span
+                ><select
+                  :id="fieldId('decision.tax_treatment.tax_code')"
+                  data-p="decision.tax_treatment.tax_code"
+                  :value="tax.tax_code ?? ''"
+                  @input="select('decision.tax_treatment.tax_code', $event)"
+                  :disabled="context.services.readOnly"
+                >
+                  <option value=""></option>
+                  <option v-for="code in allowedTaxes" :key="code" :value="code">
+                    {{ taxCodeLabel(code, locale) }}
+                  </option>
+                </select></label
+              >
+              <div class="wf-grid wf-grid-facts">
+                <WorkflowField
+                  :read-only="context.services.readOnly"
+                  v-for="field in taxFacts"
+                  :key="field.path"
+                  :field="field"
+                  :model-value="fieldValue(payload, field.path)"
+                  @update:model-value="update(field.path, $event)"
+                />
+              </div>
+              <div class="wf-grid">
+                <WorkflowField
+                  :read-only="context.services.readOnly"
+                  v-for="field in taxDecisions"
+                  :key="field.path"
+                  :field="field"
+                  :model-value="fieldValue(payload, field.path)"
+                  @update:model-value="update(field.path, $event)"
+                />
+              </div>
+              <details
+                v-if="rules.length"
+                id="wf-rule"
+                class="wf-rule"
+                :open="ruleOpen"
+                @toggle="ruleOpen = ($event.target as HTMLDetailsElement).open"
+              >
+                <summary>
+                  {{
+                    t('expenseRules.summary', {
+                      rule: rule ? ruleName(rule.id) : t('expenseRules.noRule'),
+                    })
+                  }}
+                </summary>
+                <div class="wf-rule-body">
+                  <p>{{ t('expenseRules.intro') }}</p>
+                  <label
+                    ><span>{{ t('expenseRules.select') }}</span
                     ><select
-                      :data-p="`deduction.facts.${name}`"
-                      :value="
-                        payload.deduction.facts[name] == null
-                          ? ''
-                          : String(payload.deduction.facts[name])
-                      "
-                      @input="select(`deduction.facts.${name}`, $event, true)"
+                      id="wf-rule-select"
+                      :value="payload.deduction?.rule_id ?? ''"
+                      @change="onRule"
                       :disabled="context.services.readOnly"
                     >
-                      <option value=""></option>
-                      <option value="true">{{ t('expenseRules.yes') }}</option>
-                      <option value="false">{{ t('expenseRules.no') }}</option>
+                      <option value="">{{ t('expenseRules.noRule') }}</option>
+                      <option v-for="item in rules" :key="item.id" :value="item.id">
+                        {{
+                          item.id === parserRule
+                            ? t('expenseRules.fromParser', { rule: ruleName(item.id) })
+                            : ruleName(item.id)
+                        }}
+                      </option>
                     </select></label
                   >
-                </template>
-              </div>
-              <small v-if="rule?.facts.includes('area_share')">{{
-                t('expenseRules.areaHint')
-              }}</small>
-              <small v-if="rule?.facts.includes('evidence_confirmed')">{{
-                t('expenseRules.evidencePrompt')
-              }}</small>
-              <div v-if="rule" id="wf-rule-card" class="wf-rule-card">
-                <div class="wf-rule-live" aria-live="polite">
-                  <template v-if="proposal">
-                    <p>
-                      <strong>{{ ruleText(`expenseRules.status.${proposal.status}`) }}</strong>
-                      <span
-                        v-if="proposal.risk"
-                        class="badge wf-risk"
-                        :class="riskBadge[proposal.risk]"
-                        >{{ ruleText(`expenseRules.risk.${proposal.risk}`) }}</span
+                  <div v-if="rule && payload.deduction" class="wf-grid">
+                    <template v-for="name in rule.facts" :key="name">
+                      <WorkflowField
+                        :read-only="context.services.readOnly"
+                        v-if="name === 'area_share'"
+                        :field="{
+                          path: 'decision.tax_treatment.deductible_ratio',
+                          label: 'expenseRules.fact.area_share',
+                          kind: 'ratio',
+                          type: 'number',
+                        }"
+                        :model-value="tax.deductible_ratio"
+                        @update:model-value="
+                          update('decision.tax_treatment.deductible_ratio', $event)
+                        "
+                      />
+                      <label v-else-if="['persons', 'persons_disabled', 'days'].includes(name)"
+                        ><span>{{ ruleText(`expenseRules.fact.${name}`) }}</span
+                        ><input
+                          :id="fieldId(`deduction.facts.${name}`)"
+                          type="number"
+                          min="0"
+                          max="366"
+                          step="1"
+                          :data-p="`deduction.facts.${name}`"
+                          :value="payload.deduction.facts[name] ?? ''"
+                          @input="setCount(name, $event)"
+                          :readonly="context.services.readOnly"
+                      /></label>
+                      <label v-else-if="name === 'evidence_confirmed'" class="wf-check"
+                        ><input
+                          :id="fieldId('deduction.facts.evidence_confirmed')"
+                          type="checkbox"
+                          data-p="deduction.facts.evidence_confirmed"
+                          :checked="payload.deduction.facts.evidence_confirmed === true"
+                          @input="check('deduction.facts.evidence_confirmed', $event)"
+                          :disabled="context.services.readOnly"
+                        /><span>{{ t('expenseRules.fact.evidence_confirmed') }}</span></label
                       >
-                    </p>
-                    <dl v-if="proposal.irpf_minor != null" class="review-facts-list">
-                      <div>
-                        <dt>{{ t('expenseRules.irpfCeiling') }}</dt>
-                        <dd>{{ eur(proposal.irpf_minor / 100, locale) }}</dd>
-                      </div>
-                      <div>
-                        <dt>{{ t('expenseRules.vatCeiling') }}</dt>
-                        <dd>
-                          {{
-                            proposal.vat_minor == null
-                              ? t('expenseRules.vatManual')
-                              : eur(proposal.vat_minor / 100, locale)
-                          }}
-                        </dd>
-                      </div>
-                    </dl>
-                  </template>
-                  <p v-else>{{ t('expenseRules.saveToCalculate') }}</p>
-                  <p v-if="proposal && stale" class="wf-rule-stale">
-                    {{ t('expenseRules.saveToRecalculate') }}
-                  </p>
-                </div>
-                <template v-if="proposal">
-                  <template v-if="proposal.missing.length"
-                    ><p>{{ t('expenseRules.missingTitle') }}</p>
-                    <ul class="wf-rule-missing">
-                      <li v-for="name in proposal.missing" :key="name">
-                        {{ ruleText(`expenseRules.fact.${name}`) }}
-                      </li>
-                    </ul></template
-                  >
-                  <ul class="wf-rule-explanation">
-                    <li v-for="(note, index) in proposal.explanation" :key="index">
-                      {{
-                        ruleText(
-                          `expenseRules.code.${note.code}`,
-                          explanationValues(note.params, locale),
-                        )
-                      }}
-                    </li>
-                  </ul>
-                  <p class="wf-rule-risk">
-                    {{ ruleText(`expenseRules.riskReason.${proposal.rule_id}`) }}
-                  </p>
-                  <details v-if="proposal.sources?.length">
-                    <summary>{{ t('expenseRules.sources') }}</summary>
-                    <ul>
-                      <li v-for="source in proposal.sources" :key="source.url + source.title">
-                        <a :href="source.url" target="_blank" rel="noreferrer">{{
-                          source.title
-                        }}</a>
-                        ·
-                        {{
-                          t('expenseRules.sourceChecked', {
-                            date: formatDateText(source.checked_on, locale),
-                          })
-                        }}
-                        <template v-if="source.source_kind === 'secondary'">
-                          · {{ t('expenseRules.secondary') }}</template
+                      <label v-else
+                        ><span>{{ ruleText(`expenseRules.fact.${name}`) }}</span
+                        ><select
+                          :id="fieldId(`deduction.facts.${name}`)"
+                          :data-p="`deduction.facts.${name}`"
+                          :value="
+                            payload.deduction.facts[name] == null
+                              ? ''
+                              : String(payload.deduction.facts[name])
+                          "
+                          @input="select(`deduction.facts.${name}`, $event, true)"
+                          :disabled="context.services.readOnly"
                         >
-                      </li>
-                    </ul>
-                  </details>
-                  <p v-if="copyPair" class="wf-rule-pair">{{ copyPair }}</p>
-                  <button
-                    id="wf-rule-copy"
-                    type="button"
-                    class="secondary-button"
-                    :disabled="context.services.readOnly || stale || !proposal.suggested"
-                    :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
-                    @click="copyIntoFields"
-                  >
-                    {{ t('expenseRules.copy') }}
-                  </button>
-                </template>
-              </div>
-            </section>
-            <label
-              ><span>{{ t('workflow.ivaPurchaseClassification') }}</span
-              ><select
+                          <option value=""></option>
+                          <option value="true">{{ t('expenseRules.yes') }}</option>
+                          <option value="false">{{ t('expenseRules.no') }}</option>
+                        </select></label
+                      >
+                    </template>
+                  </div>
+                  <small v-if="rule?.facts.includes('area_share')">{{
+                    t('expenseRules.areaHint')
+                  }}</small>
+                  <small v-if="rule?.facts.includes('evidence_confirmed')">{{
+                    t('expenseRules.evidencePrompt')
+                  }}</small>
+                  <div v-if="rule" id="wf-rule-card" class="wf-rule-card">
+                    <div class="wf-rule-live" aria-live="polite">
+                      <template v-if="proposal">
+                        <p>
+                          <strong>{{ ruleText(`expenseRules.status.${proposal.status}`) }}</strong>
+                          <span
+                            v-if="proposal.risk"
+                            class="badge wf-risk"
+                            :class="riskBadge[proposal.risk]"
+                            >{{ ruleText(`expenseRules.risk.${proposal.risk}`) }}</span
+                          >
+                        </p>
+                        <dl v-if="proposal.irpf_minor != null" class="review-facts-list">
+                          <div>
+                            <dt>{{ t('expenseRules.irpfCeiling') }}</dt>
+                            <dd>{{ eur(proposal.irpf_minor / 100, locale) }}</dd>
+                          </div>
+                          <div>
+                            <dt>{{ t('expenseRules.vatCeiling') }}</dt>
+                            <dd>
+                              {{
+                                proposal.vat_minor == null
+                                  ? t('expenseRules.vatManual')
+                                  : eur(proposal.vat_minor / 100, locale)
+                              }}
+                            </dd>
+                          </div>
+                        </dl>
+                      </template>
+                      <p v-else>{{ t('expenseRules.saveToCalculate') }}</p>
+                      <p v-if="proposal && stale" class="wf-rule-stale">
+                        {{ t('expenseRules.saveToRecalculate') }}
+                      </p>
+                    </div>
+                    <template v-if="proposal">
+                      <template v-if="proposal.missing.length"
+                        ><p>{{ t('expenseRules.missingTitle') }}</p>
+                        <ul class="wf-rule-missing">
+                          <li v-for="name in proposal.missing" :key="name">
+                            {{ ruleText(`expenseRules.fact.${name}`) }}
+                          </li>
+                        </ul></template
+                      >
+                      <ul class="wf-rule-explanation">
+                        <li v-for="(note, index) in proposal.explanation" :key="index">
+                          {{
+                            ruleText(
+                              `expenseRules.code.${note.code}`,
+                              explanationValues(note.params, locale),
+                            )
+                          }}
+                        </li>
+                      </ul>
+                      <p class="wf-rule-risk">
+                        {{ ruleText(`expenseRules.riskReason.${proposal.rule_id}`) }}
+                      </p>
+                      <details v-if="proposal.sources?.length">
+                        <summary>{{ t('expenseRules.sources') }}</summary>
+                        <ul>
+                          <li v-for="source in proposal.sources" :key="source.url + source.title">
+                            <a :href="source.url" target="_blank" rel="noreferrer">{{
+                              source.title
+                            }}</a>
+                            ·
+                            {{
+                              t('expenseRules.sourceChecked', {
+                                date: formatDateText(source.checked_on, locale),
+                              })
+                            }}
+                            <template v-if="source.source_kind === 'secondary'">
+                              · {{ t('expenseRules.secondary') }}</template
+                            >
+                          </li>
+                        </ul>
+                      </details>
+                      <p v-if="copyPair" class="wf-rule-pair">{{ copyPair }}</p>
+                      <button
+                        id="wf-rule-copy"
+                        type="button"
+                        class="secondary-button"
+                        :disabled="context.services.readOnly || stale || !proposal.suggested"
+                        @click="copyIntoFields"
+                        :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+                      >
+                        {{ t('expenseRules.copy') }}
+                      </button>
+                    </template>
+                  </div>
+                </div>
+              </details>
+              <h3 id="wf-vat-title">{{ t('review.vatInvestment') }}</h3>
+              <select
+                :id="fieldId('decision.tax_treatment.vat_investment_good')"
                 data-p="decision.tax_treatment.vat_investment_good"
+                aria-labelledby="wf-vat-title"
                 :value="tax.vat_investment_good == null ? '' : String(tax.vat_investment_good)"
                 @input="select('decision.tax_treatment.vat_investment_good', $event, true)"
                 :disabled="context.services.readOnly"
               >
                 <option value=""></option>
                 <option value="false">{{ t('workflow.currentPurchaseForIva') }}</option>
-                <option value="true">{{ t('workflow.ivaInvestmentGood') }}</option>
-              </select></label
-            ><small>{{
-              t('workflow.irpfDepreciationDoesNotDetermineTheIvaInvestmentClassification')
-            }}</small>
-            <template v-if="payload.asset"
-              ><h3>{{ t('workflow.equipmentAndSchedule') }}</h3>
-              <div class="wf-grid">
-                <WorkflowField
-                  :read-only="context.services.readOnly"
-                  v-for="field in assetFields"
-                  :key="field.path"
-                  :field="field"
-                  :model-value="fieldValue(payload, field.path)"
-                  @update:model-value="update(field.path, $event)"
-                />
-                <label
-                  ><span>{{ t('workflow.assetCategory') }}</span
-                  ><select
-                    data-p="asset.aeat_asset_type"
-                    :value="payload.asset.aeat_asset_type ?? ''"
-                    @input="select('asset.aeat_asset_type', $event)"
-                    :disabled="context.services.readOnly"
-                  >
-                    <option value=""></option>
-                    <option
-                      v-for="item in [
-                        ['23', 'workflow.computerElectronic'],
-                        ['21', 'workflow.machinery'],
-                        ['24', 'workflow.furniture'],
-                        ['25', 'workflow.installations'],
-                        ['28', 'workflow.tools'],
-                        ['29', 'workflow.otherEquipment'],
-                      ]"
-                      :key="item[0]"
-                      :value="item[0]"
-                    >
-                      {{ formatMessage(item[1], {}, locale) }}
-                    </option>
-                  </select></label
-                >
-                <label
-                  ><span>{{ t('workflow.depreciation') }}</span
-                  ><select
-                    data-p="asset.method"
-                    :value="payload.asset.method ?? ''"
-                    @input="select('asset.method', $event)"
-                    :disabled="context.services.readOnly"
-                  >
-                    <option value=""></option>
-                    <option value="immediate">
-                      {{ t('workflow.immediateNewLowValueEquipment') }}
-                    </option>
-                    <option value="linear">{{ t('workflow.linearSchedule') }}</option>
-                  </select></label
-                >
-                <WorkflowField
-                  :read-only="context.services.readOnly"
-                  v-if="payload.asset.method === 'linear'"
-                  :field="{
-                    path: 'asset.annual_rate_basis_points',
-                    label: 'workflow.reviewedAnnualRate',
-                    kind: 'rate',
-                    type: 'number',
-                  }"
-                  :model-value="payload.asset.annual_rate_basis_points"
-                  @update:model-value="update('asset.annual_rate_basis_points', $event)"
-                />
-              </div>
-              <label class="wf-check"
-                ><input
-                  type="checkbox"
-                  data-p="asset.new_equipment"
-                  :checked="payload.asset.new_equipment === true"
-                  @input="check('asset.new_equipment', $event)"
-                  :disabled="context.services.readOnly"
-                /><span>{{ t('workflow.equipmentWasAcquiredNew') }}</span></label
+                <option value="true">{{ t('workflow.ivaInvestmentGood') }}</option></select
               ><small>{{
-                t('workflow.futureDepreciationRemainsPlannedUntilExplicitlyPosted')
-              }}</small></template
-            >
-            <section v-if="payload.facts.currency !== 'EUR'">
-              <h3>{{ t('workflow.eurConversion') }}</h3>
-              <p>
-                {{
-                  draft.fx_suggestion?.note ||
-                  draft.fx_suggestion?.eur_per_unit ||
-                  t('workflow.saveTheDraftToRefreshTheRateSuggestion')
-                }}
-              </p>
-              <button
-                id="wf-use-fx"
-                type="button"
-                :disabled="
-                  context.services.readOnly ||
-                  !['exact', 'prior'].includes(draft.fx_suggestion?.status || '')
-                "
-                @click="useFx()"
-                :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
-              >
-                {{ t('workflow.confirmSuggestedEcbRate') }}</button
-              ><label
-                ><span>{{ t('workflow.documentedSettlementRate') }}</span
-                ><input
-                  id="wf-settlement-rate"
-                  v-model="settlementRate"
-                  type="number"
-                  step="0.000001"
-                  :readonly="context.services.readOnly" /></label
-              ><label
-                ><span>{{ t('workflow.settlementEvidenceReference') }}</span
-                ><input
-                  id="wf-settlement-ref"
-                  v-model="settlementReference"
-                  :readonly="context.services.readOnly" /></label
-              ><button
-                id="wf-settlement"
-                type="button"
-                @click="useFx(true)"
-                :disabled="context.services.readOnly"
-                :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
-              >
-                {{ t('workflow.useSettlementRate') }}</button
-              ><small>{{ payload.fx ? t('workflow.rateSelectedCheckTaxAmountsInEur') : '' }}</small>
-            </section>
-            <details
-              :open="technicalOpen"
-              @toggle="technicalOpen = ($event.target as HTMLDetailsElement).open"
-            >
-              <summary>{{ t('workflow.additionalTaxDecisionFields') }}</summary>
-              <div class="wf-grid">
-                <label
-                  ><span>{{ t('workflow.aeatDocumentType') }}</span
-                  ><select
-                    data-p="decision.tax_treatment.aeat_invoice_type"
-                    :value="tax.aeat_invoice_type ?? ''"
-                    @input="select('decision.tax_treatment.aeat_invoice_type', $event)"
-                    :disabled="context.services.readOnly"
-                  >
-                    <option value=""></option>
-                    <option
-                      v-for="value in draft.allowed_values.aeat_invoice_type || []"
-                      :key="value"
-                      :value="value"
+                t('workflow.irpfDepreciationDoesNotDetermineTheIvaInvestmentClassification')
+              }}</small>
+              <WorkflowField
+                :read-only="context.services.readOnly"
+                v-for="field in purposeFields"
+                :key="field.path"
+                :field="field"
+                :model-value="fieldValue(payload, field.path)"
+                @update:model-value="update(field.path, $event)"
+              />
+              <template v-if="payload.asset"
+                ><h3>{{ t('workflow.equipmentAndSchedule') }}</h3>
+                <div class="wf-grid">
+                  <WorkflowField
+                    :read-only="context.services.readOnly"
+                    v-for="field in assetFields"
+                    :key="field.path"
+                    :field="field"
+                    :model-value="fieldValue(payload, field.path)"
+                    @update:model-value="update(field.path, $event)"
+                  />
+                  <label
+                    ><span>{{ t('workflow.assetCategory') }}</span
+                    ><select
+                      :id="fieldId('asset.aeat_asset_type')"
+                      data-p="asset.aeat_asset_type"
+                      :value="payload.asset.aeat_asset_type ?? ''"
+                      @input="select('asset.aeat_asset_type', $event)"
+                      :disabled="context.services.readOnly"
                     >
-                      {{ value }}
-                    </option>
-                  </select></label
+                      <option value=""></option>
+                      <option
+                        v-for="item in [
+                          ['23', 'workflow.computerElectronic'],
+                          ['21', 'workflow.machinery'],
+                          ['24', 'workflow.furniture'],
+                          ['25', 'workflow.installations'],
+                          ['28', 'workflow.tools'],
+                          ['29', 'workflow.otherEquipment'],
+                        ]"
+                        :key="item[0]"
+                        :value="item[0]"
+                      >
+                        {{ formatMessage(item[1], {}, locale) }}
+                      </option>
+                    </select></label
+                  >
+                  <label
+                    ><span>{{ t('workflow.depreciation') }}</span
+                    ><select
+                      :id="fieldId('asset.method')"
+                      data-p="asset.method"
+                      :value="payload.asset.method ?? ''"
+                      @input="select('asset.method', $event)"
+                      :disabled="context.services.readOnly"
+                    >
+                      <option value=""></option>
+                      <option value="immediate">
+                        {{ t('workflow.immediateNewLowValueEquipment') }}
+                      </option>
+                      <option value="linear">{{ t('workflow.linearSchedule') }}</option>
+                    </select></label
+                  >
+                  <WorkflowField
+                    :read-only="context.services.readOnly"
+                    v-if="payload.asset.method === 'linear'"
+                    :field="{
+                      path: 'asset.annual_rate_basis_points',
+                      label: 'workflow.reviewedAnnualRate',
+                      kind: 'rate',
+                      type: 'number',
+                    }"
+                    :model-value="payload.asset.annual_rate_basis_points"
+                    @update:model-value="update('asset.annual_rate_basis_points', $event)"
+                  />
+                </div>
+                <label class="wf-check"
+                  ><input
+                    :id="fieldId('asset.new_equipment')"
+                    type="checkbox"
+                    data-p="asset.new_equipment"
+                    :checked="payload.asset.new_equipment === true"
+                    @input="check('asset.new_equipment', $event)"
+                    :disabled="context.services.readOnly"
+                  /><span>{{ t('workflow.equipmentWasAcquiredNew') }}</span></label
+                ><small>{{
+                  t('workflow.futureDepreciationRemainsPlannedUntilExplicitlyPosted')
+                }}</small></template
+              >
+              <section v-if="payload.facts.currency !== 'EUR'">
+                <h3>{{ t('workflow.eurConversion') }}</h3>
+                <p>
+                  {{
+                    draft.fx_suggestion?.note
+                      ? fxNoteText(draft.fx_suggestion, locale)
+                      : draft.fx_suggestion?.eur_per_unit ||
+                        t('workflow.saveTheDraftToRefreshTheRateSuggestion')
+                  }}
+                </p>
+                <button
+                  id="wf-use-fx"
+                  type="button"
+                  class="secondary-button"
+                  :disabled="
+                    context.services.readOnly ||
+                    !['exact', 'prior'].includes(draft.fx_suggestion?.status || '')
+                  "
+                  @click="useFx()"
+                  :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+                >
+                  {{ t('workflow.confirmSuggestedEcbRate') }}</button
+                ><label
+                  ><span>{{ t('workflow.documentedSettlementRate') }}</span
+                  ><input
+                    id="wf-settlement-rate"
+                    v-model="settlementRate"
+                    type="number"
+                    step="0.000001"
+                    :readonly="context.services.readOnly" /></label
+                ><label
+                  ><span>{{ t('workflow.settlementEvidenceReference') }}</span
+                  ><input
+                    id="wf-settlement-ref"
+                    v-model="settlementReference"
+                    :readonly="context.services.readOnly" /></label
+                ><button
+                  id="wf-settlement"
+                  type="button"
+                  class="secondary-button"
+                  @click="useFx(true)"
+                  :disabled="context.services.readOnly"
+                  :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+                >
+                  {{ t('workflow.useSettlementRate') }}</button
+                ><small>{{
+                  payload.fx ? t('workflow.rateSelectedCheckTaxAmountsInEur') : ''
+                }}</small>
+              </section>
+              <details
+                :open="technicalOpen"
+                @toggle="technicalOpen = ($event.target as HTMLDetailsElement).open"
+              >
+                <summary>{{ t('workflow.additionalTaxDecisionFields') }}</summary>
+                <div class="wf-grid">
+                  <label
+                    ><span>{{ t('workflow.aeatDocumentType') }}</span
+                    ><select
+                      :id="fieldId('decision.tax_treatment.aeat_invoice_type')"
+                      data-p="decision.tax_treatment.aeat_invoice_type"
+                      :value="tax.aeat_invoice_type ?? ''"
+                      @input="select('decision.tax_treatment.aeat_invoice_type', $event)"
+                      :disabled="context.services.readOnly"
+                    >
+                      <option value=""></option>
+                      <option
+                        v-for="value in draft.allowed_values.aeat_invoice_type || []"
+                        :key="value"
+                        :value="value"
+                      >
+                        {{ aeatCodeLabel('invoiceType', value, locale) }}
+                      </option>
+                    </select></label
+                  ><WorkflowField
+                    :read-only="context.services.readOnly"
+                    v-for="field in visibleTechnical"
+                    :key="field.path"
+                    :field="field"
+                    :model-value="fieldValue(payload, field.path)"
+                    @update:model-value="update(field.path, $event)"
+                  />
+                </div>
+                <label class="wf-check"
+                  ><input
+                    :id="fieldId('decision.tax_treatment.aeat_reverse_charge')"
+                    type="checkbox"
+                    data-p="decision.tax_treatment.aeat_reverse_charge"
+                    :checked="tax.aeat_reverse_charge === true"
+                    @input="check('decision.tax_treatment.aeat_reverse_charge', $event)"
+                    :disabled="context.services.readOnly"
+                  /><span>{{ t('workflow.reverseCharge') }}</span></label
+                ><label v-for="form in [130, 303, 347]" :key="form" class="wf-check"
+                  ><input
+                    :id="fieldId(`decision.tax_treatment.include_modelo${form}`)"
+                    type="checkbox"
+                    :data-p="`decision.tax_treatment.include_modelo${form}`"
+                    :checked="tax[`include_modelo${form}`] === true"
+                    @input="check(`decision.tax_treatment.include_modelo${form}`, $event)"
+                    :disabled="context.services.readOnly"
+                  /><span>Modelo {{ form }}</span></label
                 ><WorkflowField
                   :read-only="context.services.readOnly"
-                  v-for="field in visibleTechnical"
-                  :key="field.path"
-                  :field="field"
-                  :model-value="fieldValue(payload, field.path)"
-                  @update:model-value="update(field.path, $event)"
+                  :field="{
+                    path: 'decision.tax_treatment.notes',
+                    label: 'workflow.decisionNoteAndSource',
+                  }"
+                  :model-value="tax.notes"
+                  @update:model-value="update('decision.tax_treatment.notes', $event)"
                 />
-              </div>
-              <label class="wf-check"
-                ><input
-                  type="checkbox"
-                  data-p="decision.tax_treatment.aeat_reverse_charge"
-                  :checked="tax.aeat_reverse_charge === true"
-                  @input="check('decision.tax_treatment.aeat_reverse_charge', $event)"
-                  :disabled="context.services.readOnly"
-                /><span>{{ t('workflow.reverseCharge') }}</span></label
-              ><label v-for="form in [130, 303, 347]" :key="form" class="wf-check"
-                ><input
-                  type="checkbox"
-                  :data-p="`decision.tax_treatment.include_modelo${form}`"
-                  :checked="tax[`include_modelo${form}`] === true"
-                  @input="check(`decision.tax_treatment.include_modelo${form}`, $event)"
-                  :disabled="context.services.readOnly"
-                /><span>Modelo {{ form }}</span></label
-              ><WorkflowField
-                :read-only="context.services.readOnly"
-                :field="{
-                  path: 'decision.tax_treatment.notes',
-                  label: 'workflow.decisionNoteAndSource',
-                }"
-                :model-value="tax.notes"
-                @update:model-value="update('decision.tax_treatment.notes', $event)"
-              />
-            </details>
+              </details>
+            </section>
             <footer class="wf-actions">
               <button
                 type="button"
@@ -1020,75 +1359,73 @@ const supplierHidden = (party: Counterparty) =>
                 {{ t('workflow.saveDraft') }}</button
               ><button
                 type="submit"
-                class="primary-button"
+                :class="proposed ? 'secondary-button' : 'primary-button'"
                 :disabled="context.services.readOnly || draft.conflict"
                 :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
               >
-                {{ t('workflow.previewResult') }}
+                {{ t(proposed ? 'workflow.recalculate' : 'workflow.previewResult') }}
               </button>
             </footer>
           </fieldset>
         </form>
       </div>
-      <section
-        v-if="proposed"
-        id="wf-preview"
-        class="panel wf-fields"
-        :aria-label="t('workflow.postingPreview')"
-      >
-        <h3>{{ t('workflow.beforePosting') }}</h3>
-        <p>{{ proposed.supplier }} · {{ proposed.period }}</p>
-        <dl class="review-facts-list">
-          <div>
-            <dt>{{ t('workflow.purchase') }}</dt>
-            <dd>{{ money(proposed.gross_minor) }} {{ proposed.currency }}</dd>
+      <section id="wf-preview" class="panel wf-fields wf-step">
+        <h2 id="wf-preview-title" tabindex="-1">{{ t('workflow.steps.previewTitle') }}</h2>
+        <template v-if="proposed">
+          <p>{{ proposed.supplier }} · {{ formatPeriod(proposed.period, locale) }}</p>
+          <dl class="review-facts-list">
+            <div>
+              <dt>{{ t('workflow.purchase') }}</dt>
+              <dd>{{ money(proposed.gross_minor, proposed.currency) }}</dd>
+            </div>
+            <div>
+              <dt>IVA</dt>
+              <dd>{{ money(proposed.deductible_vat_minor) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('workflow.irpfDeductionNow') }}</dt>
+              <dd>{{ money(proposed.deductible_irpf_minor) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('workflow.laterDepreciation') }}</dt>
+              <dd>{{ money(proposed.future_depreciation_minor) }}</dd>
+            </div>
+            <div v-if="previewRule" id="wf-preview-rule">
+              <dt>{{ t('expenseRules.title') }}</dt>
+              <dd>{{ previewRule }}</dd>
+            </div>
+          </dl>
+          <div v-if="proposed.schedule.length" class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ t('workflow.period') }}</th>
+                  <th>{{ t('workflow.recognitionDate') }}</th>
+                  <th>EUR</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, index) in proposed.schedule" :key="index">
+                  <td>{{ formatPeriod(row.period_key, locale) }}</td>
+                  <td>{{ formatDateText(row.recognition_on, locale) }}</td>
+                  <td>{{ money(row.amount_minor) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div>
-            <dt>IVA</dt>
-            <dd>{{ money(proposed.deductible_vat_minor) }} EUR</dd>
-          </div>
-          <div>
-            <dt>{{ t('workflow.irpfDeductionNow') }}</dt>
-            <dd>{{ money(proposed.deductible_irpf_minor) }} EUR</dd>
-          </div>
-          <div>
-            <dt>{{ t('workflow.laterDepreciation') }}</dt>
-            <dd>{{ money(proposed.future_depreciation_minor) }} EUR</dd>
-          </div>
-          <div v-if="previewRule" id="wf-preview-rule">
-            <dt>{{ t('expenseRules.title') }}</dt>
-            <dd>{{ previewRule }}</dd>
-          </div>
-        </dl>
-        <div v-if="proposed.schedule.length" class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>{{ t('workflow.period') }}</th>
-                <th>{{ t('workflow.recognitionDate') }}</th>
-                <th>EUR</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, index) in proposed.schedule" :key="index">
-                <td>{{ row.period_key }}</td>
-                <td>{{ row.recognition_on || '—' }}</td>
-                <td>{{ money(row.amount_minor) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p>{{ t('workflow.onlyThisExpenseAndTheShownDepreciationNoPayment') }}</p>
-        <button
-          id="wf-confirm"
-          class="primary-button"
-          type="button"
-          :disabled="context.services.readOnly || busy"
-          @click="confirm"
-          :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
-        >
-          {{ t('workflow.confirmAndPost') }}
-        </button>
+          <p>{{ t('workflow.onlyThisExpenseAndTheShownDepreciationNoPayment') }}</p>
+          <button
+            id="wf-confirm"
+            class="primary-button"
+            type="button"
+            :disabled="context.services.readOnly || busy"
+            @click="confirm"
+            :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+          >
+            {{ t(confirming ? 'review.submitting' : 'workflow.confirmAndPost') }}
+          </button>
+        </template>
+        <p v-else>{{ t('workflow.steps.previewPending') }}</p>
       </section>
     </template>
   </section>

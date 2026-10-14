@@ -83,17 +83,22 @@ test('income copy buttons and document links retain accessible native contracts'
   await expect(page.locator('#transactions-table')).toContainText('<Synthetic>');
   await expect(page.locator('#transactions-table synthetic')).toHaveCount(0);
 });
-test('dashboard approved banner opens posting for its current quarter', async ({ page }) => {
+test('the dashboard post row opens posting for its current quarter', async ({ page }) => {
   await page.route(/\/api\/dashboard\?/, async (route) => {
     const response = await route.fetch();
     const data = await response.json();
     await route.fulfill({
-      json: { ...data, posting_preview_summary: { approved_count: 1, ready_count: 1 } },
+      json: {
+        ...data,
+        posting_summary: { needs_review: 0, ready: 1, later: 0, blocked: 0 },
+        posting_preview_summary: { approved_count: 1, ready_count: 1 },
+      },
     });
   });
   await page.goto('/dashboard?period=2026-Q3');
-  await page.locator('.posting-banner button').click();
+  await page.locator('a.task-row[href*="tab=posting"]').click();
   await expect(page).toHaveURL(/\/review\?period=2026-Q3&tab=posting$/);
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
 });
 test('a late failed detail read cannot replace a successful new page', async ({ page }) => {
   let release!: () => void;

@@ -2,10 +2,17 @@
   "transactions.amount": "Сумма",
   "transactions.counterpartyDocument": "Контрагент / документ",
   "transactions.date": "Дата",
-  "transactions.emptyIncome": "Доходов в этом периоде пока нет. Нажмите «Добавить», чтобы принять счёт.",
+  "transactions.incomeEmpty": "Доходов в этом квартале пока нет. Добавьте счёт кнопкой «Добавить документ».",
   "transactions.irpfDeduction": "Вычет IRPF",
+  "transactions.jurisdictions.ES": "Испания",
   "transactions.noCounterparty": "Без контрагента",
   "transactions.noMatches": "По запросу ничего не найдено.",
+  "transactions.periodTitle": "Операции за {period}",
   "transactions.search": "Поиск по контрагенту или номеру",
-  "transactions.status": "Статус"
+  "transactions.status": "Статус",
+  "transactions.types.adjustment": "Корректировка",
+  "transactions.types.expense": "Расход",
+  "transactions.types.income": "Доход",
+  "transactions.types.invoice_review": "Проверка счёта",
+  "transactions.types.non_invoice_review": "Проверка расхода без счёта"
 }

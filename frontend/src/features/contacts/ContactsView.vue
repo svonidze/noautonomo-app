@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
 import { followSpaLink, viewHref } from '../../vue/services.ts';
-import { formatDateText } from '../../core/format.ts';
+import { formatDateText, formatPeriod } from '../../core/format.ts';
 import { ApiError } from '../../core/http.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { formatMessage, message, messageIds } from '../../core/i18n.ts';
@@ -292,8 +292,8 @@ const facts = computed(() => {
     code = `parties.legalForms.${value.legal_form || 'unknown'}`;
   return [
     [t('contacts.country'), value.country_code === 'ZZ' ? null : value.country_code],
-    ['NIF', value.tax_id],
-    ['VAT ID', value.vat_id],
+    [t('fields.taxId'), value.tax_id],
+    [t('fields.vatId'), value.vat_id],
     [
       t('fields.legalForm'),
       messageIds.includes(code) ? formatMessage(code, {}, locale.value) : value.legal_form,
@@ -317,7 +317,7 @@ defineExpose({
   <div :aria-busy="loading" :class="context.contactId ? 'section-stack contact-detail' : ''">
     <a
       v-if="context.contactId"
-      class="text-button contact-back-link"
+      class="text-button back-link"
       :href="viewHref(context.services, '/contacts')"
       @click="navigate"
       ><span aria-hidden="true">←</span> {{ t('contacts.back') }}</a
@@ -344,10 +344,7 @@ defineExpose({
       </details>
     </div>
     <template v-else-if="!context.contactId">
-      <div class="table-toolbar">
-        <h2>{{ t('contacts.title') }}</h2>
-      </div>
-      <section class="panel">
+      <section class="panel" aria-labelledby="page-title">
         <div class="table-wrap" id="contacts-list-wrap">
           <table>
             <thead>
@@ -369,7 +366,7 @@ defineExpose({
                       ?
                     </button></template
                   ><span v-else-if="index === 6" class="sr-only">{{ t('contacts.actions') }}</span
-                  ><template v-else>{{ key ? t(key) : 'NIF / VAT ID' }}</template>
+                  ><template v-else>{{ t(key || 'contacts.taxIds') }}</template>
                 </th>
               </tr>
             </thead>
@@ -390,7 +387,7 @@ defineExpose({
                   >
                 </td>
                 <td :data-label="t('contacts.country')">{{ row.country_code || '—' }}</td>
-                <td data-label="NIF / VAT ID">{{ row.vat_id || row.tax_id || '—' }}</td>
+                <td :data-label="t('contacts.taxIds')">{{ row.vat_id || row.tax_id || '—' }}</td>
                 <td data-label="ROI"><StatusCell :context="row.ui_context" /></td>
                 <td :data-label="t('contacts.transactions')">{{ row.transaction_count }}</td>
                 <td :data-label="t('contacts.last')">
@@ -413,7 +410,7 @@ defineExpose({
               </tr>
               <tr v-if="!rows.length">
                 <td colspan="7">
-                  <div class="empty-state">{{ t('common.noRecords') }}</div>
+                  <div class="empty-state">{{ t('contacts.listEmpty') }}</div>
                 </td>
               </tr>
             </tbody>
@@ -477,7 +474,9 @@ defineExpose({
               "
             >
               <option value="">{{ t('contacts.allPeriods') }}</option>
-              <option v-for="period in periods" :key="period" :value="period">{{ period }}</option>
+              <option v-for="period in periods" :key="period" :value="period">
+                {{ formatPeriod(period, locale) }}
+              </option>
             </select></label
           >
         </header>
@@ -494,7 +493,7 @@ defineExpose({
           <p v-else-if="operationBusy && !operations.length" role="status">
             {{ t('common.loading') }}
           </p>
-          <p v-else-if="!operations.length">{{ t('contacts.noOperations') }}</p>
+          <p v-else-if="!operations.length">{{ t('contacts.operationsEmpty') }}</p>
           <div class="contact-page-actions">
             <small v-if="total !== null">{{
               t('contacts.shown', { count: operations.length, total })

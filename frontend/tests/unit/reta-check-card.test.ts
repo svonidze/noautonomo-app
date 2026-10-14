@@ -84,7 +84,7 @@ test('ok shows the tramo, known zero estimates and read-only bases in EN and RU'
   expect(text('h2')).toBe('RETA bracket check 2026');
   expect(root.textContent).toContain(en['reta.disclaimer']);
   expect(text('[role="status"]')).toContain(`to ${formatDateText('2026-06-30', 'en')}.`);
-  expect(text('dl')).toContain('General table, tramo 1');
+  expect(text('dl')).toContain('General table, bracket 1');
   expect(text('dl')).toContain('€1,189.54 to €1,700.00');
   expect(text('dl')).toContain('€1,263.98');
   expect(text('[data-reta="additional"]')).toBe('€0.00');
@@ -98,21 +98,24 @@ test('ok shows the tramo, known zero estimates and read-only bases in EN and RU'
     [...row.querySelectorAll('td')].map((cell) => cell.textContent),
   );
   expect(rows[0]!.slice(1)).toEqual([
-    'Tarifa plana',
+    'Reduced flat-rate contribution (tarifa plana)',
     '—',
     'Individual',
     'Synthetic TGSS resolution A',
   ]);
   expect(rows[1]![2]).toBe('€1,300.00');
-  expect(root.textContent).toContain('autonomo-tax reta base add');
+  expect(root.textContent).toContain(en['reta.basesHint']);
+  expect(root.textContent).not.toContain('autonomo-tax');
   expect(root.querySelector('input, button, form')).toBeNull();
 
   await inRussian();
   expect(text('.badge')).toBe(ru['reta.status.ok']);
-  expect(text('h2')).toBe('Проверка tramo RETA за 2026');
-  expect(text('dl')).toContain('Общая таблица, tramo 1');
+  expect(text('h2')).toBe('Проверка ступени RETA за 2026');
+  expect(text('dl')).toContain('Общая таблица, ступень 1');
   expect(text('[data-reta="additional"]')).toMatch(/^0,00\s€$/);
-  expect(root.querySelector('tbody td:nth-child(2)')!.textContent).toBe('Tarifa plana');
+  expect(root.querySelector('tbody td:nth-child(2)')!.textContent).toBe(
+    'Льготный фиксированный взнос (tarifa plana)',
+  );
   expect(root.querySelector('tbody td:nth-child(4)')!.textContent).toBe('Индивидуальный');
 });
 
@@ -197,7 +200,7 @@ test('null estimates read as a dash, distinct from a known zero', async () => {
     }),
   );
   expect(root.querySelector('.badge')!.className).toContain('status-neutral');
-  expect(text('dl')).toContain('General table, tramo 1');
+  expect(text('dl')).toContain('General table, bracket 1');
   for (const key of ['additional', 'refund', 'locked'])
     expect(text(`[data-reta="${key}"]`)).toBe('—');
   expect(text('dl')).toContain('€1,263.98');
@@ -253,6 +256,7 @@ test('a period change remounts the card: one fetch per mount, and a late reply i
     period,
     services: { request, navigate: vi.fn() },
     copyTarget: null,
+    profileConfigured: false,
     settled: vi.fn(),
     refreshCalculation: vi.fn(async () => {}),
     copy: vi.fn(),

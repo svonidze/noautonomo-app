@@ -1,5 +1,6 @@
 {
   "expenseRules.title": "Правило вычета",
+  "expenseRules.summary": "Правило вычета: {rule}",
   "expenseRules.select": "Правило для этого расхода",
   "expenseRules.noRule": "Без правила — ввести вручную",
   "expenseRules.fromParser": "{rule} (по распознаванию документа)",
@@ -53,9 +54,9 @@
   "expenseRules.fact.eur_amount": "Подтверждённые суммы в EUR (курс)",
   "expenseRules.fact.taxable_base_minor": "Налоговая база, EUR",
   "expenseRules.fact.vat_minor": "IVA по счёту, EUR",
-  "expenseRules.fact.transaction_date": "Дата учёта",
+  "expenseRules.fact.transaction_date": "Дата операции",
   "expenseRules.code.rule_unknown": "Этого правила нет в установленном каталоге.",
-  "expenseRules.code.rule_not_valid_on_date": "Правило действует с {valid_from}{valid_to, select, none {} other { по {valid_to}}}; дата расхода — {transaction_date}.",
+  "expenseRules.code.rule_not_valid_on_date": "Правило действует с {valid_from}{valid_to, select, none {} other { по {valid_to}}}; дата расхода — {transaction_date}",
   "expenseRules.code.equipment_not_covered": "Правило не охватывает оборудование; для оборудования выберите «Без правила».",
   "expenseRules.code.one_day_per_draft": "Черновик охватывает {days} дн.; правило питания рассчитано на один день в черновике. Выберите «Без правила» или разделите расход.",
   "expenseRules.code.irpf_never": "Не вычитается для IRPF ни при каких условиях.",

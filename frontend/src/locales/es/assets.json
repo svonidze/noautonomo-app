@@ -5,6 +5,8 @@
   "assets.cost": "Coste",
   "assets.decision": "Estado contable",
   "assets.inService": "En servicio",
+  "assets.listEmpty": "Los equipos aparecen cuando revisas un gasto de tipo «Equipo».",
+  "assets.noScheduleCell": "Sin entradas en el calendario",
   "assets.rate": "Tipo",
   "assets.schedule": "Calendario",
   "assets.title": "Activos y amortización"

@@ -32,7 +32,7 @@
   ordinary analytics/locale path remains the default for the private app.
 
 ## Source of truth
-- Status: Active; refreshed 2026-10-05 (clarity redesign round 2 proposed, see docs/plans/ui-clarity-redesign.md).
+- Status: Active; refreshed 2026-10-10 (clarity redesign round 2 stages 0–7 implemented, stage 8 pending the owner).
 - Surfaces: Expenses, dashboard expense metrics, recent operations, and the analytics charts documented below.
 - Evidence: `local_web.py`, the Vue frontend under `frontend/src` (`features/`,
   `shell/`, `charts/`, `help/`), `web_ui/styles.css`, the accepted
@@ -91,7 +91,7 @@
 
 ## Content voice
 - Plain RU/EN labels; no new accounting abbreviations beyond the existing IRPF/IVA terms.
-- Use “Дата учёта”, “Документ от”, “Амортизация за квартал”, “Проверено, не проведено”.
+- Use “Дата учёта”, “Дата документа”, “Амортизация за квартал”, “Проверено, ещё не проведено”.
 - A source-book attachment is a source document, not necessarily the original supplier invoice.
 - Asset matching inferred from party and document date is labelled as inferred.
 
@@ -214,19 +214,40 @@ navigation added by the clarity redesign.
   issues). The active tab travels in `?tab=`; `queue` is the implied default
   and never appears in the URL; unknown values normalize to queue in the
   current history entry; review and expense detail routes never carry a tab;
-  a period switch preserves the active tab. The dashboard posting banner
-  deep-links to the posting tab via `data-nav-tab`.
-- The workspace posting-readiness chip (`reviewCategoryBadge`) maps the
-  evaluation categories ready/later/blocked/needs_review onto the
-  status-help tone classes with localized labels; an unexpected category
-  degrades to the neutral tone with the generic status label, never a raw
-  token.
+  a period switch preserves the active tab. The dashboard task list's
+  posting row links to the posting tab.
+- The queue's summary cards are filter toggles (`aria-pressed`; «Все»
+  resets; component state, not the URL). Each queue row offers one next
+  action chosen by its server state: «Провести» to the posting tab at
+  `#posting-row-<id>` (ready), «Почему» (deferred), and for a row that still
+  needs work (needs_review, received, extracted, blocked, unknown)
+  «Открыть проверку» when the server offers its review action, otherwise
+  «Что мешает» («Почему» for an unknown state). A row whose action opens
+  the explanation shows no second link in its status cell. An unknown state
+  counts as unknown, never as blocked. The aging chart draws from ten queued
+  rows; below that one line names the oldest row's age.
+- The posting tab lists the ready rows before anything is posted, then the
+  deferred and blocked ones; the row named by `#posting-row-<id>` is
+  highlighted and scrolled into view (a router navigation does not update
+  `:target`, so the tab marks and focuses it). Posting rows offer only the
+  server's actions (their queue rows'); the client never makes up a review
+  link. Archive-transfer counts sit under «Технические детали». A row
+  without a EUR amount shows «—» and says so; the posting preview sends
+  `null` for it, never `0`.
+- The guided review has one status block: the server's status cell (badge
+  and one line) beside the title. Alerts below it say why the fields are
+  locked and never repeat the status label or the same sentence twice. A
+  missing rate is an item in «Что осталось»; «Курс не выбран» appears inline
+  only after a confirmation attempt. The reject panel stays folded below
+  the main action row.
 - When a work item cannot be posted (later or blocked), every decision field
   is disabled and a banner explains why; the reject panel stays usable.
   Confirm and reject show a busy "Submitting" state while a request is in
-  flight. Minor-unit integer inputs carry a live euro preview
-  (`minorUnitEurPreview`): a known zero previews as 0.00 €, missing or
-  non-numeric input previews nothing.
+  flight. Minor-unit amounts are typed in euros and basis-point rates in
+  percent, with a comma or a dot; the decision keeps minor units and basis
+  points, and a live preview (`minorUnitEurPreview`) shows the stored value: a
+  known zero previews as 0.00 €, an empty field stores null and previews
+  nothing, and unreadable input keeps the stored value and says so inline.
 - The intake dialog keeps a versioned draft in
   `localStorage["autonomo.intake-draft"]` (`{schema: 1, values}`): restored
   on reopen unless a copy-flow prefill wins, cleared by a successful submit,
@@ -242,7 +263,7 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 
 ## Clarity redesign (round 2)
 
-- Status: Draft, proposed 2026-10-05 in docs/plans/ui-clarity-redesign.md.
+- Status: Active (stages 0–7 implemented; stage 8 pending).
 - Screen purpose: an owner without accounting training must see what to do
   now, what each figure means and where to act; an operator keeps dense
   tables, codes and facts on the same screens.
@@ -261,22 +282,25 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   internal services; headings name the current step). Transferable: hierarchy
   and status feedback. Not transferable: GOV.UK typography, colours and the
   one-question flow.
-- Acceptance: every route renders exactly one primary action outside open
-  dialogs; RU catalogs contain no Latin service words outside the allowed
-  term list; every blocking status shows an action or its owner; every empty
+- Acceptance: every route and form state (read-only detail pages have none)
+  renders exactly one primary action outside open dialogs; RU catalogs
+  contain no Latin service words outside the allowed term list; every
+  blocking status shows an action or its owner; every empty
   state names the next step; charts render only with at least two non-zero
   points; dashboard first screen at 375 px shows tasks, not charts.
 - Precedence: where this section disagrees with an earlier section, this
   section states the target state; the earlier text stays in force until the
-  stage that ships the rule rewrites it. Known conflicts: the all-zero chart
-  rule and the reserved height of empty chart slots (rewritten by stages 3–4),
-  and «Документ от» under Content voice (rewritten by stage 1).
+  stage that ships the rule rewrites it. Stages 1, 3 and 4 rewrote the older
+  text («Документ от» under Content voice, the reserved height of empty chart
+  slots), so the note now covers only stage 8.
 
 ### Page grammar
 - Header: h1 title, one-line purpose, one primary action. Sections start at
   h2, nested at h3; no heading repeats the title; no section without a heading.
 - One primary button per screen; secondary and text buttons for the rest.
-  Disabled controls explain why in visible text, never only in `title`.
+  Disabled controls explain why in visible text, never only in `title`. A
+  `<summary>` styled as the primary button is acceptable when the page's main
+  action is to open an inline form (AEAT documents).
 - Technical values (AEAT codes, minor units, basis points, identifiers) live
   behind `<details>`; a shown code always follows its human label.
 
@@ -284,7 +308,12 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
 - One catalog (`statuses.*`) supplies every lifecycle, readiness, filing and
   calculation label; see the canonical table in the plan. Synonym keys are
   removed. A status cell is a badge plus at most one line of reason; the
-  details link appears only when a reason or an action exists.
+  link to the explanation ends that line only when the record still needs
+  work (needs_review, received, extracted, blocked, unknown) and the server
+  offers its review («Что сделать» / "What to do"), or when it has reasons
+  («Почему» / "Why"). On a ready, deferred or finished record a review link
+  is navigation, not a task: the explanation lists it under «Связанные
+  действия» / "Related actions" instead of «Следующие действия».
 - Unknown, zero and not applicable are worded, not dashed, whenever the
   missing piece has a known cause: "Not calculated yet. Calculate",
   "242.00 € plus 1 operation without a EUR amount".
@@ -294,19 +323,128 @@ The behavior is pinned by `frontend/tests/unit/core.test.ts` (state helpers),
   control. An empty ledger shows a four-step start list on the dashboard
   until the first posting; an empty review queue distinguishes "no documents
   in this quarter" from "everything reviewed".
+- The start list («Начало работы» / "Getting started") replaces the task list
+  while `/api/dashboard` reports `ledger_has_postings: false` (no posted or
+  filed row in any quarter; a payload without the field keeps the task list).
+  Its rows: fill in the profile (`/settings`; done when `/api/bootstrap`
+  reports `profile_configured`), add a first document (opens the intake
+  dialog; done once the quarter has a document or a transaction; disabled
+  with the reason when the server does not accept documents), review and
+  post it (`/review`; can start once a transaction or a document of the
+  quarter waits for review) and calculate the quarter
+  (`/taxes`; waits for the first posting, after which the task list offers
+  the calculation). Each row has one tag from `statuses.steps.*`: «Сделано»
+  (positive), «Можно начать» (pending) or «Не начато» (neutral, waiting for
+  an earlier step). The rows are task rows, never primary buttons. The
+  sidebar names the owner only when `profile_configured` is true.
+- `/api/bootstrap` always offers the current calendar quarter: without a
+  row it is listed as `status: "missing"` beside the quarters that have rows
+  (no row is created). The default is the current quarter if it has a row,
+  else the latest quarter with a row, else the current quarter. A ledger
+  straight from `db init` has no quarter: it is offered the current quarter
+  and the one before it, where the first document may be dated. The read
+  endpoints answer a valid quarter without a row with empty data
+  (`period.status: "missing"`, zero counts, empty lists), never 400/404;
+  malformed keys still fail. The first document's intake creates the
+  quarter's row. Calculation needs that row: until then
+  `/api/dashboard/refresh` answers 409 `period_missing` with the text
+  `taxes.periodEmpty`, and the posting tab reads the quarter as open with
+  nothing to post. Intake refuses a document dated in another quarter than
+  the selected one with 400 `quarter_mismatch` and the text
+  `intake.quarterMismatch`, which names both quarters.
+- An empty review queue reads «В этом квартале нет документов на проверку»
+  when the quarter has no document, sends to the documents tab
+  (`review.queueEmpty.documentsWaiting`) when documents still wait for
+  review without a transaction (intake could not read their amount), and
+  reads «Все документы квартала проверены» otherwise.
+- `frontend/tests/unit/plain-language.test.ts` checks every RU key matching
+  `/\.(empty|none|noRecords|queueEmpty)\b|Empty$/`: the text names the next
+  step with an action word («Добавьте», «Откройте», «Нажмите», «Проверьте»,
+  «Рассчитайте», «Заполните», «Выберите») or a form of «появиться». «Нет»
+  and a second sentence count only when that sentence names the step
+  («Открытых вопросов нет. Новых документов тоже.» does not). Chart empties
+  (`charts.*`) are exempt: below the data threshold a chart prints one line,
+  and the list above it names the next step.
+
+#### Empty states
+
+| Screen | Empty text key | Next step |
+|---|---|---|
+| Overview, first run | start list `dashboard.start.*` | the four steps: profile, first document, review and post it, calculate the quarter |
+| Overview, task list | `dashboard.tasksEmpty`, then `dashboard.calculatedAsOf` | none due now: tasks appear with a document or a filing deadline |
+| Overview, recent operations | `dashboard.recentEmpty` | «Добавить документ» in the header |
+| Overview, analytics | `charts.*.empty`, `charts.empty.*` (one line) | the task or start list above |
+| Income | `transactions.incomeEmpty`; search: `transactions.noMatches` | «Добавить документ»; change the search |
+| Expenses | `expense.empty`; depreciation: `expense.amortizationEmpty`; search: `expense.noMatches`; later pages: `expense.moreRecords` | «Добавить документ»; post the equipment schedule on «Активы»; change the search; «Показать ещё» |
+| Review, queue | `review.queueEmpty.noDocuments`, `review.queueEmpty.documentsWaiting` or `review.queueEmpty.allReviewed` | «Добавить документ»; the «Документы и вопросы» tab; new documents join the queue |
+| Review, posting | `review.postingEmpty` | the «Очередь» tab |
+| Review, documents and issues | `review.documentsEmpty`, `issues.none` | added documents and new issues appear there |
+| Expense card | `expense.treatmentEmpty` | the review of the expense |
+| Assets | `assets.listEmpty`; a cell of an asset without schedule entries this quarter reads `assets.noScheduleCell` (a cell label, not an empty state) | review an expense of the type «Оборудование» |
+| Taxes | form card `statuses.labels.calculation_unavailable`; Calculate on a quarter without records: `taxes.periodEmpty`; RETA bases: `reta.basesEmpty` | «Рассчитать»; «Добавить документ» first; the operator records bases from the TGSS resolution |
+| Counterparties | `contacts.listEmpty`; a counterparty's period: `contacts.operationsEmpty` | add a first document; choose another period |
+| AEAT documents | `aeatDocuments.listEmpty`; filters: `transactions.noMatches` | «Добавить документ AEAT» below the table; change the filters |
+| Settings | `settings.form.empty` | fill in and save the profile |
 
 ### Charts
-- A chart renders only when its dataset has at least two non-zero buckets;
-  otherwise the slot shows one line of text. Dashboard charts sit below the
-  task list and quarter figures; on narrow screens the data table is primary
-  and the chart is collapsed. The queue aging chart renders from ten queued
-  items.
+- A chart renders only when its dataset has at least two non-zero values
+  (each series counts per bucket); otherwise the slot shows one line of text.
+  Dashboard charts sit below the task list and quarter figures; on narrow
+  screens the data table is primary and the chart is collapsed. The queue
+  aging chart renders from ten queued items.
+
+### Narrow screens
+- At 760 px and below the sidebar folds into one bar, no taller than 112 px
+  at 375 px: the brand mark, the current section and «Меню» / "Menu" (a
+  button with `aria-expanded` and `aria-controls="primary-nav"`). The brand
+  name, the owner and the links open below the bar; folded, the name and the
+  owner stay visually hidden but readable to screen readers. Escape while
+  focus is inside the bar, a link or any route change closes the menu, and
+  closing from inside the bar returns focus to the button. Routes, ids and
+  `data-view` stay as on wide screens; the active link carries
+  `aria-current="page"`.
+- Every chart opens as its data table; the drawing and its legend wait in a
+  closed «Показать график» / "Show chart" below the table. The dialog
+  expansion is unchanged.
+- Tables and filters stay inside their panels at every width: the AEAT
+  filters are `repeat(auto-fit, minmax(min(180px, 100%), 1fr))` inside the
+  panel padding, «Modelo» never breaks, and the queue's action column is as
+  wide as its one control.
+- `frontend/tests/e2e/mobile.spec.ts` pins the bar height, the menu by
+  keyboard, folded charts and no horizontal scroll on five screens, and the
+  AEAT filters and the queue actions at 1440 px.
 
 ### Accessibility tokens
 - Control borders at least 3:1 against the surface; focus ring
-  `--accent-dark` 2 px; warning text token at least 4.5:1; disabled primary
+  `--accent-dark` 2 px; warning text token at least 4.5:1; disabled
   buttons use `cursor: not-allowed`; pointer targets at least 24×24 CSS px
   or spaced per SC 2.5.8.
+- Ratios by the WCAG 2.2 relative-luminance formula, against the surface
+  `#ffffff` / the page `#f4f6f5`:
+
+  | Token | Value | Used for | Ratio |
+  |---|---|---|---|
+  | `--control-border` | `#828d89` | input, select and textarea borders | 3.43 / 3.16 (3.04 on `--surface-muted`) |
+  | `--focus-ring` | `#0b6b59` (= `--accent-dark`) | every focus outline, 2 px solid, offset 2 px | 6.44 / 5.93 |
+  | `--warning-text` | `#8a5110` | warning text (`.fx-card-status.warning`) | 6.43 / 5.93 |
+  | `--muted-on-soft` | `#5c6663` | small text on the soft fills: queue filter-card labels, FX choice notes | 4.97 `--accent-soft` / 5.29 `--warning-soft` / 4.86 `--danger-soft` / 5.01 `--info-soft` |
+
+  They replace field borders `#cbd4d0` (1.51:1), the ring `#65bfa8` (2.19:1)
+  and warning text in `--warning` (4.23 / 3.90); `--muted` `#66706d` stays
+  for small text on the surface and the page but reads 4.19 on
+  `--danger-soft` and 4.28 on `--accent-soft`. The plan's example border
+  `#8a9691` reaches only 2.82:1 on the page colour.
+- Two dark surfaces take their own ring: the sidebar keeps `#6dd2b8`
+  (8.21:1 on `--sidebar`; `--focus-ring` is 2.32:1 there), and the toast's
+  close button rings in its own white text (13.45:1 on the toast, 7.91:1 on
+  the error toast; `--focus-ring` is 2.09 / 1.23 there). The «Меню» button
+  border uses `--sidebar-muted` (6.58:1).
+- `--warning` stays the expense series colour in charts, a graphic at
+  4.23:1 (≥ 3:1), never text. Badge text already passes: pending `#714307`
+  on `--warning-soft` 7.45, attention 7.73, positive 7.19, neutral 7.19.
+- Pointer targets: `.term-help` 26 px; a text action in a table cell and a
+  status «Почему»/«Что сделать» button at least 24 px tall; a link inside a
+  sentence (`.inline-button`) uses the inline exception.
 
 ## Analytics and charts
 
@@ -454,14 +592,14 @@ Additional rules:
 
 | View | Charts |
 |---|---|
-| Dashboard | monthly income vs deductible expenses; quarterly tax cash due; IVA position (27/45/71 + disposition); tax reserve bullet; cumulative business net; cumulative purchases and IRPF deductions immediately after business net |
+| Dashboard (in «Аналитика» after the task list, quarter figures and recent operations; folded on phones) | monthly income vs deductible expenses; quarterly tax cash due; IVA position (27/45/71 + disposition); tax reserve bullet; cumulative business net; cumulative purchases and IRPF deductions immediately after business net |
 | Taxes | year-over-year YTD comparison (decision support, never final Renta) |
 | Expenses | expense structure by AEAT concept (deductible / non-deductible / unclassified) |
 | Review | queue aging by age bucket and status |
 | Contacts | top customers with an "Other" fold |
 | Assets | amortization per quarter (`include_in_books = 1` only) |
 
-From stage 3 of the clarity redesign, rendering is gated by the threshold policy in [Clarity redesign (round 2)](#clarity-redesign-round-2): a chart draws only when its dataset has at least two non-zero buckets; the queue aging chart draws from ten queued items; below the threshold the slot shows one line of text. Dashboard charts sit below the task list and quarter figures.
+Rendering is gated by the threshold policy in [Clarity redesign (round 2)](#clarity-redesign-round-2): a chart draws only when its dataset has at least two non-zero values; the queue aging chart draws from ten queued items; below the threshold the slot shows one line of text. Dashboard charts sit below the task list and quarter figures.
 
 ### Chart sizing and expansion
 
@@ -478,7 +616,11 @@ Narrow charts thin their bucket labels deterministically — every Nth label
 when a band falls under 34px — and the horizontal-bar label column shrinks
 from 150 toward 90 below roughly 500px. Thinning removes labels only; every
 value stays in the data table and in the mark titles. Quarterly charts have
-too few buckets to thin.
+too few buckets to thin; their buckets use the short period form («III кв. 2026»,
+"Q3 2026") so four quarters fit a half-width chart. A chart drawn narrower than 400
+units (a phone, or any narrow slot) names the year once, in the quarter
+column header («Квартал, 2026»), and reads «III кв.» / "Q3" under each bar
+and in its table.
 
 Each non-empty chart carries one expand control in its caption. It re-renders
 the same spec in the shared `#chart-dialog` at dialog width — no nested
@@ -496,9 +638,10 @@ assigned". The table is initially expanded, adds the gross total, and shows
 each deductible/non-deductible amount with its share of a positive gross total.
 Shares are unavailable for zero or negative totals, negative components, or a
 component sum that does not equal the gross total. On narrow screens and at
-browser zoom that triggers the same breakpoint, the labelled table replaces
-the dense SVG plot as the primary view. Every table cell retains its column
-label when rows reflow into cards.
+browser zoom that triggers the same breakpoint, the labelled table is the
+primary view and the plot folds behind «Показать график», as for every chart
+(see Narrow screens). Every table cell retains its column label when rows
+reflow into cards.
 
 ### Color and pattern semantics
 
@@ -538,8 +681,10 @@ Distinguish, in this order: analytics fetch failed → "could not load"; some
 transactions lack FX → missing-FX message; only unreviewed rows exist →
 unreviewed message; forms filed without extractable values → filed-without-
 values message; calculation blocked (reserve) → blocked message; otherwise →
-plain no-data message. All-zero data is a real chart with a zero baseline,
-not an empty state.
+plain no-data message. Below the data threshold the slot shows one line instead
+of a figure: without a non-zero value, the chart title and this message (all-zero
+data included; the cumulative-purchases slot names missing exchange rates first);
+with exactly one, that the chart needs a second value (`charts.singleValue`).
 
 ### Documented deltas
 
@@ -591,3 +736,18 @@ service stops or full-root backups. Keep the current palette, components and RU/
   post-commit refresh/cleanup failures offer repair without reposting.
 - Reuse label/focus/error patterns at desktop and 375px width. The original must
   remain accessible if embedding fails. One expense or asset per workflow.
+- The form reads as three in-page steps under a strip of anchors («1 Документ ·
+  2 Налоги · 3 Итог»; no new routes). «Что осталось» above them lists the
+  source's open questions, a missing IVA or EUR rate and the rule's missing
+  facts, each a link that focuses the control settling it (opening a fold on
+  the way). By default at most 14 controls show: a matched supplier or
+  activity and the expense type are text with «Изменить», the currency and
+  booking date fold while they are EUR and the transaction date, and the rule
+  folds until one is chosen. The IVA rate stays visible beside the invoice
+  IVA, because the server requires it on every preview. The three dates carry
+  one-line hints; the correction reason appears only for an approved record
+  or a corrected source fact, the cases in which the server asks for it, and
+  while it holds text. After «Проверить итог» the result scrolls into view
+  and takes focus, and «Подтвердить и провести» becomes the one primary
+  action. Without a previewable original (PDF, JPEG, PNG) the source is one
+  compact line with «Открыть документ».

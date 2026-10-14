@@ -24,7 +24,6 @@
   "settings.form.identityError": "El identificador está ahora protegido por el historial contable. Carga los datos actuales.",
   "settings.form.inherit": "Gestionado por el operador",
   "settings.form.interface": "Interfaz",
-  "settings.form.intro": "Datos del contribuyente, conservación de copias e idioma de la interfaz.",
   "settings.form.language": "Idioma de la interfaz",
   "settings.form.languageNote": "El idioma solo se recuerda en este navegador. Los datos del contribuyente y los borradores de configuración no se guardan en el almacenamiento del navegador.",
   "settings.form.lastSuccess": "Últimas ejecuciones correctas",
@@ -61,5 +60,10 @@
   "settings.form.uploadDisabled": "El almacenamiento externo no estaba configurado para esta ejecución",
   "settings.form.uploadFailed": "La subida externa falló",
   "settings.form.uploadPending": "La subida externa aún no ha terminado",
-  "settings.form.yearStart": "Mes de inicio del ejercicio fiscal"
+  "settings.form.yearStart": "Mes de inicio del ejercicio fiscal",
+  "settings.regimes.irpf.estimacion_directa": "Estimación directa",
+  "settings.regimes.irpf.estimacion_directa_normal": "Estimación directa normal",
+  "settings.regimes.irpf.estimacion_directa_simplificada": "Estimación directa simplificada",
+  "settings.regimes.iva.general": "Régimen general de IVA",
+  "settings.regimes.unknown": "Régimen {code}"
 }

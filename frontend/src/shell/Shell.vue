@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useShell } from './controller.ts';
 import { routeUrl, views } from './routes.ts';
 import { useLocale } from '../vue/locale.ts';
 import { formatMessage, messageText } from '../core/i18n.ts';
 import { errorMessage } from '../core/error-message.ts';
+import { formatPeriod } from '../core/format.ts';
 import { followSpaLink } from '../vue/services.ts';
 const {
   runtime,
@@ -58,6 +59,35 @@ const title = computed(() =>
           locale.value,
         ),
 );
+// Without a profile the server names the brand, which the line above already shows.
+const profileName = computed(() =>
+  bootstrap.value?.profile_configured ? bootstrap.value.profile_name : t('brand.subtitle'),
+);
+const lead = computed(() =>
+  route.value?.view === 'contact-detail'
+    ? t('contacts.cardLead')
+    : route.value?.view === 'expense-detail'
+      ? t('expense.lead')
+      : route.value?.view === 'review' && detail.value
+        ? t('review.detailLead')
+        : formatMessage(
+            `${shellMessageKey('titles', route.value?.view || 'dashboard')}Lead`,
+            {},
+            locale.value,
+          ),
+);
+// Narrow screens fold the navigation behind «Меню». Closing it from inside the bar returns focus to
+// the toggle, so the keyboard never lands on a hidden link.
+const menuOpen = ref(false),
+  sidebar = ref<HTMLElement>(),
+  menuToggle = ref<HTMLButtonElement>();
+function closeMenu() {
+  if (!menuOpen.value) return;
+  const inside = sidebar.value?.contains(document.activeElement);
+  menuOpen.value = false;
+  if (inside) menuToggle.value?.focus();
+}
+watch(route, closeMenu);
 const refreshLabel = computed(() =>
   t(
     route.value?.view === 'contact-detail'
@@ -69,36 +99,46 @@ const refreshLabel = computed(() =>
 );
 </script>
 <template>
-  <aside class="sidebar">
+  <aside ref="sidebar" class="sidebar" :class="{ 'menu-open': menuOpen }" @keydown.esc="closeMenu">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">A</span
       ><span
-        ><strong>Autónomo</strong><small>{{ t('brand.subtitle') }}</small></span
+        ><strong>Autónomo</strong><small id="profile-name">{{ profileName }}</small></span
       >
     </div>
-    <nav class="primary-nav" :aria-label="t('nav.aria')">
+    <span v-if="navView" class="nav-current" aria-hidden="true">{{
+      formatMessage(shellMessageKey('nav', navView), {}, locale)
+    }}</span>
+    <button
+      ref="menuToggle"
+      type="button"
+      class="nav-toggle"
+      :aria-expanded="menuOpen"
+      aria-controls="primary-nav"
+      @click="menuOpen = !menuOpen"
+    >
+      <span aria-hidden="true">☰</span> {{ t('nav.menu') }}
+    </button>
+    <nav id="primary-nav" class="primary-nav" :aria-label="t('nav.aria')">
       <a
         v-for="(item, index) in views"
         :key="item"
         class="nav-item"
         :class="{ active: navView === item }"
+        :aria-current="navView === item ? 'page' : undefined"
         :href="href(routeUrl(item, period, { tab: reviewTab }))"
         :data-view="item"
         data-spa
-        @click="followSpaLink($event, navigate)"
+        @click="
+          closeMenu();
+          followSpaLink($event, navigate);
+        "
         ><span aria-hidden="true">{{ icons[index] }}</span
         ><span :data-i18n="shellMessageKey('nav', item)">{{
           formatMessage(shellMessageKey('nav', item))
         }}</span></a
       >
     </nav>
-    <a
-      class="sidebar-footer storage-settings-link"
-      :href="href('/settings')"
-      data-spa
-      @click="followSpaLink($event, navigate)"
-      ><span aria-hidden="true">⚙</span><span>{{ t('storage.settings') }}</span></a
-    >
   </aside>
   <main class="workspace">
     <aside v-if="runtime.readOnly" class="public-demo-banner" aria-label="Demo">
@@ -108,9 +148,9 @@ const refreshLabel = computed(() =>
       <a :href="publicLinks.blog">{{ t('demo.blog') }}</a>
     </aside>
     <header class="topbar">
-      <div>
+      <div class="page-heading">
         <h1 id="page-title">{{ title }}</h1>
-        <p id="profile-name">{{ bootstrap?.profile_name || 'Autónomo' }}</p>
+        <p id="page-lead">{{ lead }}</p>
       </div>
       <div class="topbar-actions">
         <div class="locale-control" role="group" :aria-label="t('locale.aria')">
@@ -143,7 +183,7 @@ const refreshLabel = computed(() =>
               :key="item.period_key"
               :value="item.period_key"
             >
-              {{ item.period_key }}
+              {{ formatPeriod(item.period_key, locale) }}
             </option>
           </select></label
         >
@@ -159,24 +199,37 @@ const refreshLabel = computed(() =>
           "
           @click="refresh"
         >
-          ↻
+          <span class="refresh-icon" aria-hidden="true">↻</span
+          ><span class="refresh-label">{{ refreshLabel }}</span>
         </button>
-        <button
-          id="new-entry-button"
-          class="primary-button"
-          :hidden="detail || ['settings', 'aeat-documents'].includes(route?.view || '')"
-          :disabled="runtime.readOnly || !bootstrap?.intake_enabled"
-          :title="
-            runtime.readOnly
-              ? t('demo.readOnlyReason')
-              : bootstrap?.intake_enabled
-                ? ''
-                : t('intake.disabledReason')
+        <div
+          class="new-entry"
+          :hidden="
+            !route ||
+            detail ||
+            ['settings', 'aeat-documents'].includes(route?.view || '') ||
+            (route?.view === 'review' && reviewTab === 'posting')
           "
-          @click="add"
         >
-          <span aria-hidden="true">+</span> <span>{{ t('common.add') }}</span>
-        </button>
+          <button
+            id="new-entry-button"
+            class="primary-button"
+            :disabled="runtime.readOnly || !bootstrap?.intake_enabled"
+            :aria-describedby="
+              runtime.readOnly || (bootstrap && !bootstrap.intake_enabled)
+                ? 'new-entry-disabled'
+                : undefined
+            "
+            @click="add"
+          >
+            <span aria-hidden="true">+</span> <span>{{ t('common.add') }}</span>
+          </button>
+          <small
+            v-if="runtime.readOnly || (bootstrap && !bootstrap.intake_enabled)"
+            id="new-entry-disabled"
+            >{{ t(runtime.readOnly ? 'demo.readOnlyReason' : 'intake.disabledReason') }}</small
+          >
+        </div>
       </div>
     </header>
     <section id="app" class="content" data-vue-owned :aria-busy="loading">

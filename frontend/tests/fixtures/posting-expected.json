@@ -98,7 +98,7 @@
         "postingDeferredUntil": null,
         "structuredReasons": [],
         "documentId": null,
-        "message": "posted_cleanup_failed · проведено, очистка не завершена",
+        "message": "posted_cleanup_failed · проведено, перенос оригиналов в архив не завершён",
         "reasons": [],
         "cleanupApplied": false,
         "cleanupBlocked": true,

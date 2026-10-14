@@ -2,7 +2,14 @@
 import TaxAttributionDetails from './TaxAttributionDetails.vue';
 import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '../../vue/locale.ts';
-import { eur, formatDateText } from '../../core/format.ts';
+import {
+  aeatCodeLabel,
+  codeLabel,
+  eur,
+  formatDateText,
+  formatPeriod,
+  taxCodeLabel,
+} from '../../core/format.ts';
 import { errorMessage } from '../../core/error-message.ts';
 import { ApiError } from '../../core/http.ts';
 import {
@@ -19,6 +26,7 @@ import { followSpaLink, documentHref, viewHref } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import DecisionField, { type DecisionFieldSpec } from './DecisionField.vue';
 import FxCard from './FxCard.vue';
+import RemainingList from './RemainingList.vue';
 import {
   clone,
   merge,
@@ -160,16 +168,17 @@ const evaluation = computed(() => (item.value ? evaluate(item.value) : null));
 const disabled = computed(
   () => props.context.services.readOnly || busy.value || !evaluation.value?.canApply,
 );
-const status = computed(() =>
-  evaluation.value?.category === 'later'
-    ? t('review.postingLater', { date: formatDateText(evaluation.value.availableOn, locale.value) })
-    : t(
-        evaluation.value?.category === 'blocked'
-          ? 'review.postingBlocked'
-          : evaluation.value?.category === 'needs_review'
-            ? 'review.needsReview'
-            : 'review.postingReady',
-      ),
+// A missing rate is named once in «Что осталось» while it can be entered; the inline alert waits
+// for a confirmation attempt.
+const remaining = computed(() =>
+  item.value &&
+  evaluation.value?.canApply &&
+  needsFx(state.value.transaction) &&
+  item.value.fx_suggestion &&
+  item.value.fx_suggestion.status !== 'existing' &&
+  !confirmFx(fx.value, item.value.fx_suggestion)
+    ? [{ id: 'review-fx-settlement-rate', text: t('workflow.remaining.rate') }]
+    : [],
 );
 const errorText = computed(() =>
   failure.value?.message
@@ -183,14 +192,16 @@ function update(path: string, value: unknown) {
   failure.value = undefined;
   persist(packet.value);
 }
-const taxLabel = (value: string) =>
-  messageIds.includes(`taxCodeLabels.${value}`)
-    ? formatMessage(`taxCodeLabels.${value}`, {}, locale.value)
-    : value;
-const options = (values: string[], blank = true) => [
+const options = (values: string[], label: (value: string) => string, blank = true) => [
   ...(blank ? [{ value: '', label: '' }] : []),
-  ...values.map((value) => ({ value, label: value })),
+  ...values.map((value) => ({ value, label: label(value) })),
 ];
+const aeatOptions = (group: 'invoiceType' | 'qualification' | 'exemption', field: string) =>
+  options(packet.value.allowed_values?.[field] || [], (value) =>
+    aeatCodeLabel(group, value, locale.value),
+  );
+const partyOptions = (group: 'roiStatus' | 'legalForms', values: string[]) =>
+  options(values, (value) => formatMessage(`parties.${group}.${value}`, {}, locale.value), false);
 const boolOptions = computed(() => [
   { value: '', label: '' },
   { value: 'true', label: t('common.yes') },
@@ -247,11 +258,11 @@ const guidedFields = computed<DecisionFieldSpec[]>(() => [
           'export',
           'outside_scope',
           'reverse_charge',
-          'withholding_service',
-          'withholding_rent',
+          'professional_withholding',
+          'rent_withholding',
           'unknown',
         ]
-      ).map((value) => ({ value, label: taxLabel(value) })),
+      ).map((value) => ({ value, label: taxCodeLabel(value, locale.value) })),
     ],
   },
   ...(['', 'ZZ'].includes(String(state.value.counterparty?.country_code || ''))
@@ -266,7 +277,7 @@ const technicalFields = computed<DecisionFieldSpec[]>(() => [
     path: 'tax_treatment.aeat_invoice_type',
     label: 'fields.invoiceType',
     type: 'select',
-    options: options(packet.value.allowed_values?.aeat_invoice_type || []),
+    options: aeatOptions('invoiceType', 'aeat_invoice_type'),
   },
   { path: 'tax_treatment.aeat_operation_key', label: 'fields.operationKey' },
   {
@@ -274,14 +285,14 @@ const technicalFields = computed<DecisionFieldSpec[]>(() => [
     label: 'fields.operationQualification',
     type: 'select',
     valueType: 'nullable-string',
-    options: options(packet.value.allowed_values?.aeat_operation_qualification || []),
+    options: aeatOptions('qualification', 'aeat_operation_qualification'),
   },
   {
     path: 'tax_treatment.aeat_exemption_code',
     label: 'fields.exemptionCode',
     type: 'select',
     valueType: 'nullable-string',
-    options: options(packet.value.allowed_values?.aeat_exemption_code || []),
+    options: aeatOptions('exemption', 'aeat_exemption_code'),
   },
   {
     path: 'tax_treatment.aeat_reverse_charge',
@@ -329,6 +340,7 @@ const technicalFields = computed<DecisionFieldSpec[]>(() => [
     type: 'number',
     min: '0',
     valueType: 'integer',
+    basisPoints: true,
   },
   ...([130, 303, 347] as const).map(
     (code, index) =>
@@ -349,14 +361,14 @@ const technicalFields = computed<DecisionFieldSpec[]>(() => [
     label: 'fields.roiStatus',
     type: 'select',
     valueType: 'nullable-string',
-    options: options(['unknown', 'registered', 'not_registered'], false),
+    options: partyOptions('roiStatus', ['unknown', 'registered', 'not_registered']),
   },
   {
     path: 'counterparty_changes.legal_form',
     label: 'fields.legalForm',
     type: 'select',
     valueType: 'nullable-string',
-    options: options(['unknown', 'individual', 'legal_entity', 'public_body'], false),
+    options: partyOptions('legalForms', ['unknown', 'individual', 'legal_entity', 'public_body']),
   },
 ]);
 function value(path: string) {
@@ -417,11 +429,7 @@ const issueRows = computed(() =>
       resolution,
       auto: coverage.length > 0 && coverage.every((key) => answered[key]),
       count: coverage.length,
-      label: formatMessage(
-        messageIds.includes(key) ? key : 'issues.messages.default',
-        {},
-        locale.value,
-      ),
+      label: formatMessage(messageIds.includes(key) ? key : 'issues.default', {}, locale.value),
     };
   }),
 );
@@ -509,6 +517,12 @@ const retry = () =>
 </script>
 <template>
   <div ref="root" class="review-workspace">
+    <a
+      class="text-button back-link"
+      :href="viewHref(context.services, backUrl)"
+      @click="followSpaLink($event, context.services.navigate)"
+      ><span aria-hidden="true">←</span> {{ t('review.workspaceBack') }}</a
+    >
     <p v-if="loading" role="status">{{ t('common.loading') }}</p>
     <div v-else-if="loadError" class="empty-state state-error" role="alert">
       <p>{{ errorMessage(loadError, locale) }}</p>
@@ -523,14 +537,7 @@ const retry = () =>
       </button>
     </div>
     <template v-else-if="item && ui && evaluation">
-      <StatusCell :context="item.ui_context" />
       <div class="review-workspace-header">
-        <a
-          class="secondary-button review-back-link"
-          :href="viewHref(context.services, backUrl)"
-          @click="followSpaLink($event, context.services.navigate)"
-          >{{ t('review.workspaceBack') }}</a
-        >
         <div class="review-workspace-title">
           <h2>
             {{
@@ -547,37 +554,27 @@ const retry = () =>
             }}
           </p>
         </div>
-        <div class="review-workspace-status">
-          <span
-            class="badge"
-            :class="`status-${evaluation.category === 'ready' ? 'positive' : evaluation.category === 'blocked' ? 'attention' : 'pending'}`"
-            >{{ formatMessage(`review.category.${evaluation.category}`, {}, locale) }}</span
-          ><strong>{{ status }}</strong>
-        </div>
+        <StatusCell class="review-workspace-status" :context="item.ui_context" />
       </div>
       <div v-if="!evaluation.supported" class="review-alert error" role="alert">
         <strong>{{ t('review.unsupported') }}</strong>
-        <p>
-          {{
-            evaluation.reasonKey
-              ? formatMessage(evaluation.reasonKey, {}, locale)
-              : item.unavailable_reason || t('review.unknownSupport')
-          }}
+        <p v-if="evaluation.reasonKey && evaluation.reasonKey !== 'review.unsupported'">
+          {{ formatMessage(evaluation.reasonKey, {}, locale) }}
         </p>
       </div>
-      <div v-if="evaluation.category === 'later'" class="review-alert warning" role="alert">
-        <strong>{{ t('review.summaryLater') }}</strong>
-        <p>{{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}</p>
-        <p>{{ t('review.formDisabledHint') }}</p>
-      </div>
       <div
-        v-if="evaluation.supported && evaluation.category === 'blocked'"
+        v-if="['later', 'blocked'].includes(evaluation.category)"
         class="review-alert warning"
         role="alert"
       >
-        <strong>{{ t('review.category.blocked') }}</strong>
+        <p v-if="evaluation.availableOn">
+          {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
+        </p>
         <p>{{ t('review.formDisabledHint') }}</p>
       </div>
+      <p v-else-if="!evaluation.canApply && evaluation.availableOn" class="review-alert warning">
+        {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
+      </p>
       <div
         v-if="failure && ['general', 'document_valid'].includes(failure.target)"
         class="review-alert error"
@@ -585,20 +582,18 @@ const retry = () =>
       >
         {{ errorText }}
       </div>
-      <p v-if="!evaluation.canApply && evaluation.availableOn" class="review-alert warning">
-        {{ t('review.future', { date: formatDateText(evaluation.availableOn, locale) }) }}
-      </p>
       <TaxAttributionDetails
         :attribution="item?.tax_attribution"
         :source-date="state.transaction.transaction_date"
         :entry-type="state.transaction.entry_type"
       />
       <p v-if="context.services.readOnly" class="review-alert">{{ t('demo.readOnlyReason') }}</p>
+      <RemainingList :items="remaining" />
       <form id="review-form" class="review-form" @submit.prevent="submit('approve')">
         <section class="panel review-panel">
           <header class="panel-header">
-            <h2>{{ t('review.factsTitle') }}</h2>
-            <small>{{ state.period.period_key }}</small>
+            <h3>{{ t('review.factsTitle') }}</h3>
+            <small>{{ formatPeriod(state.period.period_key, locale) }}</small>
           </header>
           <div class="review-facts-summary">
             <dl class="review-facts-list">
@@ -655,14 +650,16 @@ const retry = () =>
               :href="documentHref(context.services, state.document.document_id)"
               target="_blank"
               rel="noreferrer"
-              >{{ t('review.documentLink') }}</a
+              >{{ t('common.openDocument') }}</a
             >
           </div>
         </section>
         <section class="panel review-panel">
           <header class="panel-header">
-            <h2>{{ t('review.questionsTitle') }}</h2>
-            <small>{{ state.transaction.entry_type || 'invoice' }}</small>
+            <h3>{{ t('review.questionsTitle') }}</h3>
+            <small>{{
+              codeLabel('transactions.types', state.transaction.entry_type, locale)
+            }}</small>
           </header>
           <div class="review-guided-grid">
             <template v-for="field in guidedFields" :key="field.path"
@@ -689,18 +686,6 @@ const retry = () =>
             :error="inline('fx_rate')"
             @change="changeFx"
           />
-          <p
-            v-if="
-              needsFx(state.transaction) &&
-              item.fx_suggestion &&
-              item.fx_suggestion.status !== 'existing' &&
-              !fx
-            "
-            class="review-inline-error fx-needed"
-            role="alert"
-          >
-            {{ t('review.fxNeeded') }}
-          </p>
           <div v-if="issueRows.length" class="review-issues-grid">
             <article
               v-for="row in issueRows"
@@ -718,7 +703,10 @@ const retry = () =>
                   )
                 }}</span>
               </header>
-              <p>{{ row.issue.message || '' }}</p>
+              <details v-if="row.issue.message">
+                <summary>{{ t('issues.serverMessage') }}</summary>
+                <p>{{ row.issue.message }}</p>
+              </details>
               <p v-if="row.auto" class="review-auto-close-hint">
                 {{ t('review.issueAutoResolveHint', { labels: row.count }) }}
               </p>
@@ -769,9 +757,29 @@ const retry = () =>
         </section>
         <section class="panel review-panel">
           <header class="panel-header">
-            <h2>{{ t('review.result') }}</h2>
+            <h3>{{ t('review.result') }}</h3>
             <small>{{ t('review.confirmHint') }}</small>
           </header>
+          <div class="review-actions">
+            <button
+              type="button"
+              class="secondary-button"
+              id="review-refresh-button"
+              :disabled="busy"
+              @click="load(true)"
+            >
+              {{ t('common.refresh') }}</button
+            ><button
+              type="submit"
+              class="primary-button"
+              id="review-primary-button"
+              :disabled="disabled"
+              :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
+              :data-locked="!evaluation.canApply || undefined"
+            >
+              {{ t(busy ? 'review.submitting' : 'review.confirmAction') }}
+            </button>
+          </div>
           <details
             class="review-reject-panel"
             :open="ui.rejectOpen"
@@ -819,26 +827,6 @@ const retry = () =>
               </div>
             </div>
           </details>
-          <div class="review-actions">
-            <button
-              type="button"
-              class="secondary-button"
-              id="review-refresh-button"
-              :disabled="busy"
-              @click="load(true)"
-            >
-              {{ t('common.refresh') }}</button
-            ><button
-              type="submit"
-              class="primary-button"
-              id="review-primary-button"
-              :disabled="context.services.readOnly || disabled"
-              :data-locked="!evaluation.canApply || undefined"
-              :title="context.services.readOnly ? t('demo.readOnlyReason') : undefined"
-            >
-              {{ t(busy ? 'review.submitting' : 'review.confirmAction') }}
-            </button>
-          </div>
         </section>
       </form>
     </template>

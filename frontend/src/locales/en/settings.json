@@ -24,7 +24,6 @@
   "settings.form.identityError": "The identifier is now protected by accounting history. Load the current data.",
   "settings.form.inherit": "Operator managed",
   "settings.form.interface": "Interface",
-  "settings.form.intro": "Taxpayer details, backup retention and interface language.",
   "settings.form.language": "Interface language",
   "settings.form.languageNote": "Language is remembered only in this browser. Taxpayer details and settings drafts are not stored in browser storage.",
   "settings.form.lastSuccess": "Last successful runs",
@@ -61,5 +60,10 @@
   "settings.form.uploadDisabled": "Offsite storage was not configured for this run",
   "settings.form.uploadFailed": "Offsite upload failed",
   "settings.form.uploadPending": "Offsite upload has not completed yet",
-  "settings.form.yearStart": "Tax year start month"
+  "settings.form.yearStart": "Tax year start month",
+  "settings.regimes.irpf.estimacion_directa": "Direct estimation",
+  "settings.regimes.irpf.estimacion_directa_normal": "Direct estimation, normal",
+  "settings.regimes.irpf.estimacion_directa_simplificada": "Direct estimation, simplified",
+  "settings.regimes.iva.general": "General VAT regime",
+  "settings.regimes.unknown": "Regime {code}"
 }

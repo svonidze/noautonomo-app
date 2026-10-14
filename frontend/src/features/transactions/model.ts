@@ -7,6 +7,7 @@ export interface TransactionRow {
   lifecycle_status: string;
   document_status?: string;
   transaction_date: string;
+  created_at?: string | null;
   period_key: string;
   description?: string;
   counterparty_name?: string;
@@ -51,7 +52,6 @@ export interface TransactionListContext {
   services: ViewServices;
   queryChanged(query: string): void;
   settled(): void;
-  openIntake(): void;
   copy(row: TransactionRow): void;
 }
 export const hasAmount = (value: unknown) => value !== null && value !== undefined && value !== '';

@@ -1,13 +1,21 @@
 {
+  "taxCodeLabels.domestic_expense": "Gasto en España (sin IVA)",
   "taxCodeLabels.domestic_input": "Gasto en España",
   "taxCodeLabels.domestic_output": "Ingreso en España (sujeto)",
   "taxCodeLabels.domestic_output_zero": "Ingreso en España (tipo cero)",
+  "taxCodeLabels.domestic_reverse_charge_expense": "Inversión del sujeto pasivo en España",
+  "taxCodeLabels.eu_goods_expense": "Bienes de la UE",
   "taxCodeLabels.eu_goods_income": "Ingreso: bienes de la UE",
+  "taxCodeLabels.eu_service_expense": "Servicios de la UE",
   "taxCodeLabels.eu_service_income": "Ingreso: servicios de la UE",
   "taxCodeLabels.export": "Exportación",
+  "taxCodeLabels.import_goods_expense": "Importación de bienes",
+  "taxCodeLabels.import_service_expense": "Importación de servicios",
+  "taxCodeLabels.non_eu_service_expense": "Servicios de fuera de la UE",
+  "taxCodeLabels.nonresident_income": "Renta de no residentes (IRNR)",
   "taxCodeLabels.outside_scope": "No sujeto",
+  "taxCodeLabels.professional_withholding": "Retención de IRPF: profesionales",
+  "taxCodeLabels.rent_withholding": "Retención de IRPF: alquiler",
   "taxCodeLabels.reverse_charge": "Inversión del sujeto pasivo del IVA",
-  "taxCodeLabels.unknown": "Código sin definir",
-  "taxCodeLabels.withholding_rent": "Retención de IRPF: alquiler",
-  "taxCodeLabels.withholding_service": "Retención de IRPF: servicios"
+  "taxCodeLabels.unknown": "Código sin definir"
 }

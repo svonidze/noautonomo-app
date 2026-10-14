@@ -139,9 +139,11 @@ export function preview(value: unknown, period: string): PostingPreview {
     ready = Array.isArray(raw.ready) ? items(raw.ready) : legacy.filter((row) => row.readyToPost),
     deferred = items(raw.deferred),
     blocked = items(raw.blocked);
+  // A quarter without a row yet (a fresh ledger) is not closed: its first document opens it.
+  const status = text(raw.period_status || raw.status || 'open') || 'open';
   return {
     period: text(raw.period || period),
-    periodStatus: text(raw.period_status || raw.status || 'open') || 'open',
+    periodStatus: status === 'missing' ? 'open' : status,
     generatedAt: (raw.generated_at || raw.as_of || null) as string | null,
     asOf: (raw.as_of || null) as string | null,
     summary: summary(raw.summary || raw.posting_summary, { ready, deferred, blocked }),
@@ -210,7 +212,9 @@ export const postItems = (rows: PostingItem[]) =>
     transaction_id: row.transactionId || transactionId(row.reviewId),
     expected_row_version: row.expectedRowVersion,
   }));
-export const helpContext = (row: PostingItem) => ({
+/** The status context of a posting row. `actions` are the server's own actions for that transaction
+ * (its queue row's); the client never makes up a review link. */
+export const helpContext = (row: PostingItem, actions: unknown = []) => ({
   domain: 'transaction',
   title: row.description,
   state: row.previewBucket || row.rowStatus || 'unknown',
@@ -220,6 +224,6 @@ export const helpContext = (row: PostingItem) => ({
     blockers: row.structuredReasons || [],
   },
   reasons: [],
-  actions: row.transactionId ? [{ kind: 'review', transaction_id: row.transactionId }] : [],
+  actions: Array.isArray(actions) ? actions : [],
   facts: { transaction_date: row.transactionDate },
 });

@@ -3,7 +3,6 @@
   "issues.messages.amount_mismatch": "El importe no coincide con el origen. Concilia el documento, la moneda y la base imponible.",
   "issues.messages.counterparty_tax_profile_review": "Revisa el país y la identificación fiscal de la contraparte antes de contabilizar.",
   "issues.messages.deductibility_pending_confirmation": "Confirma el importe que se puede deducir.",
-  "issues.messages.default": "Se requiere revisión manual.",
   "issues.messages.document_classification_review": "No se pudo clasificar el documento de forma fiable.",
   "issues.messages.foreign_counterparty_identity_missing": "Falta la identificación fiscal verificada de la contraparte extranjera.",
   "issues.messages.income_before_activity_start": "El ingreso tiene una fecha anterior al inicio registrado de la actividad. Aclara el contrato o la factura antes de contabilizar.",
@@ -16,6 +15,7 @@
   "issues.messages.nonresident_payee_legal_form_review": "La forma jurídica del perceptor extranjero sigue pendiente de revisión.",
   "issues.messages.nonresident_professional_irnr_review": "Se requiere una revisión aparte del IRNR después del pago al profesional extranjero.",
   "issues.messages.transaction_tax_review": "Revisa la finalidad profesional y el tratamiento del IRPF y del IVA.",
-  "issues.none": "Sin incidencias abiertas",
+  "issues.none": "Sin incidencias abiertas: todos los documentos revisados son coherentes. Si hay discrepancias entre documentos, las incidencias aparecen aquí.",
+  "issues.serverMessage": "Mensaje del servidor",
   "issues.sourceDetails": "Datos de origen"
 }

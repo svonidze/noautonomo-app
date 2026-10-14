@@ -35,6 +35,7 @@ export interface PostingPreview {
   period: string;
   periodStatus: string;
   generatedAt: string | null;
+  /** Server accounting date, including the frozen date of the read-only demo. */
   asOf: string | null;
   summary: PostingSummary;
   ready: PostingItem[];
@@ -61,6 +62,8 @@ export interface ReviewDocument {
   total_eur?: Amount;
   source_available: boolean;
 }
+/** Document states that still wait for review: the documents tab lists them. */
+export const waitingDocumentStates = ['received', 'extracted', 'needs_review'];
 export interface OverviewData {
   rows: ReviewRow[];
   issues: { ui_context: HelpContext }[];

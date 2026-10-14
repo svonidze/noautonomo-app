@@ -65,7 +65,7 @@ test('closed intake leaves a dirty rename untouched without prompting and permit
     await dialog.dismiss();
   });
   upload.release();
-  await expect(page.locator('#toast')).toContainText('2026-Q3');
+  await expect(page.locator('#toast')).toContainText('III квартал 2026');
   expect(confirmations).toBe(0);
   await expect(page.locator('#vue-counterparty-name-input')).toHaveValue(
     'Synthetic unsaved rename',
@@ -99,7 +99,7 @@ test('closed intake does not interrupt a pending rename or submit it twice', asy
     await dialog.dismiss();
   });
   upload.release();
-  await expect(page.locator('#toast')).toContainText('2026-Q3');
+  await expect(page.locator('#toast')).toContainText('III квартал 2026');
   await expect(page.locator('#vue-counterparty-name-dialog')).toBeVisible();
   await expect(page.locator('#vue-counterparty-name-input')).toHaveValue(
     'Synthetic unsaved rename',

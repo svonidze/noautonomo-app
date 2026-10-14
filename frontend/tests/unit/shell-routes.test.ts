@@ -5,6 +5,7 @@ import {
   routeUrl,
   safeReturnUrl,
   copyTarget,
+  knownPeriod,
 } from '../../src/shell/routes.ts';
 import { retentionPayload } from '../../src/features/settings/model.ts';
 const periods = [
@@ -35,6 +36,23 @@ test('copy target chooses an open current quarter before the existing fallback',
   expect(copyTarget(periods, true, new Date(2026, 8, 1))).toBe('2026-Q3');
   expect(copyTarget(periods, false)).toBeNull();
   expect(copyTarget(periods, true, new Date(2027, 0, 1))).toBe('2026-Q3');
+  // A fresh ledger: bootstrap offers the current quarter before its first record creates the row.
+  expect(copyTarget([{ period_key: '2026-Q4', status: 'missing' }], true)).toBe('2026-Q4');
+  expect(copyTarget([{ period_key: '2026-Q2', status: 'closed' }], true)).toBeNull();
+  // It offers the quarter that just ended too: selectable, while a copy still goes to today's.
+  const fresh = [
+    { period_key: '2026-Q4', status: 'missing' },
+    { period_key: '2026-Q3', status: 'missing' },
+  ];
+  expect(knownPeriod('?period=2026-q3', fresh)).toBe('2026-Q3');
+  expect(copyTarget(fresh, true, new Date(2026, 9, 10))).toBe('2026-Q4');
+  // Beside quarters with rows, a current quarter without one is offered too, and selectable.
+  const started = [
+    { period_key: '2026-Q4', status: 'missing' },
+    { period_key: '2026-Q3', status: 'open' },
+  ];
+  expect(knownPeriod('?period=2026-Q4', started)).toBe('2026-Q4');
+  expect(copyTarget(started, true, new Date(2026, 9, 10))).toBe('2026-Q4');
 });
 
 test('AEAT document registry is global and never carries a quarter', () => {

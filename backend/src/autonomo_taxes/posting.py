@@ -87,14 +87,18 @@ def build_posting_preview(
     today: date | None = None,
     inbox_root: Path | None = None,
     archive_root: Path | None = None,
+    missing_ok: bool = False,
 ) -> dict[str, Any]:
+    """``missing_ok``: a valid quarter without a row yet (a fresh ledger) previews as ``missing``
+    with nothing to post instead of failing."""
     effective_today = today or date.today()
     period = db.connection.execute(
         "SELECT period_id, period_key, status FROM periods WHERE period_key = ?",
         (period_key,),
     ).fetchone()
-    if period is None:
+    if period is None and not missing_ok:
         raise LedgerDbError(f"Unknown period: {period_key}")
+    period_status = str(period["status"]) if period is not None else "missing"
     items = [
         evaluate_transaction_posting(db, transaction, today=today)
         for transaction in db.list_transactions(period_key=period_key)
@@ -120,8 +124,8 @@ def build_posting_preview(
     blocked = [item for item in approved if item["preview_bucket"] == "blocked"]
     return {
         "period": period_key,
-        "period_status": str(period["status"]),
-        "reason_code": "period_not_open" if str(period["status"]) in {"closed", "amended"} else None,
+        "period_status": period_status,
+        "reason_code": "period_not_open" if period_status in {"closed", "amended"} else None,
         "as_of": effective_today.isoformat(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
@@ -554,7 +558,8 @@ def _effective_amount_eur_fields(
     currency = str(transaction.get("original_currency") or transaction["currency"]).upper()
     if currency == "EUR":
         return int(transaction["amount_minor"]), "amount_minor_when_currency_is_eur"
-    return 0, "missing_foreign_exchange"
+    # Unknown, not zero: the item says so; preview sums still count it as nothing.
+    return None, "missing_foreign_exchange"
 
 
 def _posting_preview_item(
@@ -608,7 +613,11 @@ def _posting_preview_item(
         "document_id": evaluation.document_id,
         "effective_amount_eur_minor": evaluation.effective_amount_eur_minor,
         "effective_amount_eur_formula": evaluation.effective_amount_eur_formula,
-        "amount_eur": _eur_string(int(evaluation.effective_amount_eur_minor or 0)),
+        "amount_eur": (
+            None
+            if evaluation.effective_amount_eur_minor is None
+            else _eur_string(evaluation.effective_amount_eur_minor)
+        ),
         "tax_treatments": list(evaluation.tax_treatments),
         "blocking_issues": list(evaluation.blocking_issues),
         "linked_document_approved": evaluation.linked_document_approved,

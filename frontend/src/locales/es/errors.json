@@ -1,5 +1,5 @@
 {
-  "errors.apiReturnedHtml": "La API devolvió HTML en lugar de datos. Probablemente hay otro servidor en {origin}. Detén ese servidor o ejecuta autonomo-web en otro puerto.",
+  "errors.apiReturnedHtml": "El servidor devolvió una página web en lugar de datos. Probablemente hay otro servidor en {origin}. Detén ese servidor o ejecuta autonomo-web en otro puerto.",
   "errors.malformedJson": "Respuesta JSON mal formada de {url} ({status}).",
   "errors.unexpectedNonJson": "Respuesta inesperada de {url} que no es JSON ({status}).",
   "errors.deduction_facts_missing": "La regla de deducción seleccionada necesita más datos. Complétalos en la ficha de la regla y guarda el borrador.",

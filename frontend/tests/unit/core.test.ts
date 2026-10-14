@@ -7,7 +7,14 @@ import {
   setLocale,
   subscribeLocale,
 } from '../../src/core/i18n.ts';
-import { eur, formatDateText, escapeHtml } from '../../src/core/format.ts';
+import {
+  aeatCodeLabel,
+  eur,
+  formatDateText,
+  formatPeriod,
+  escapeHtml,
+  taxCodeLabel,
+} from '../../src/core/format.ts';
 import { fetchJSON, ApiError, type HttpResponse } from '../../src/core/http.ts';
 
 describe('locale messages and private values', () => {
@@ -51,6 +58,20 @@ describe('locale messages and private values', () => {
     expect(eur('1234.56', 'ru')).not.toBe(eur('1234.56', 'en'));
     expect(formatDateText('not-a-date', 'ru')).toBe('not-a-date');
     expect(escapeHtml('<script>')).toBe('&lt;script&gt;');
+  });
+  test.each([
+    ['2026-Q4', 'ru', 'IV квартал 2026'],
+    ['2026-Q1', 'ru', 'I квартал 2026'],
+    ['2026-Q4', 'en', 'Q4 2026'],
+    ['2026', 'ru', '2026'],
+    ['2026-Q5', 'en', '2026-Q5'],
+    ['', 'en', ''],
+  ])('period %s reads in %s as %s', (key, locale, expected) => {
+    expect(formatPeriod(key, locale)).toBe(expected);
+  });
+  test('a chart axis gets the short quarter form', () => {
+    expect(formatPeriod('2026-Q3', 'ru', { short: true })).toBe('III кв. 2026');
+    expect(formatPeriod('2026-Q3', 'en', { short: true })).toBe('Q3 2026');
   });
 });
 
@@ -126,6 +147,25 @@ test('additive error messages retain legacy text when a server key is unknown', 
   expect(errorMessage(error, 'en')).toBe(formatMessage('contacts.invalidName', {}, 'en'));
 });
 
+test('a quarter mismatch names both quarters the way the header names them', async () => {
+  const { errorMessage } = await import('../../src/core/error-message.ts');
+  const error = new ApiError('Invoice date belongs to 2026-Q3, not 2026-Q4');
+  error.messageCode = 'intake.quarterMismatch';
+  error.params = { documentQuarter: '2026-Q3', selectedQuarter: '2026-Q4' };
+  for (const locale of ['ru', 'en'])
+    expect(errorMessage(error, locale)).toBe(
+      formatMessage(
+        'intake.quarterMismatch',
+        {
+          documentQuarter: formatPeriod('2026-Q3', locale),
+          selectedQuarter: formatPeriod('2026-Q4', locale),
+        },
+        locale,
+      ),
+    );
+  expect(errorMessage(error, 'en')).toContain('Choose Q3 2026 in the header');
+});
+
 test('transport and fallback errors keep message codes that re-render in the current locale', async () => {
   const { errorMessage, errorDescriptor } = await import('../../src/core/error-message.ts');
   const call = (options: Parameters<typeof fetchJSON>[1], payload: HttpResponse) =>
@@ -156,30 +196,6 @@ test('transport and fallback errors keep message codes that re-render in the cur
   )) as ApiError;
   expect(server.messageCode).toBeUndefined();
   expect(errorDescriptor(server)).toBe('Synthetic server text');
-});
-
-test('dashboard banners follow the plural categories of the interface language', () => {
-  expect(t('dashboard.readyBanner', { count: 1 }, 'ru')).toBe(
-    '1 операция уже проверена и может быть проведена',
-  );
-  expect(t('dashboard.readyBanner', { count: 5 }, 'ru')).toBe(
-    '5 операций уже проверены и могут быть проведены',
-  );
-  expect(t('dashboard.readyBanner', { count: 22 }, 'ru')).toBe(
-    '22 операции уже проверены и могут быть проведены',
-  );
-  expect(t('dashboard.readyBanner', { count: 1 }, 'en')).toBe(
-    '1 reviewed transaction can be posted now',
-  );
-  expect(t('dashboard.postingBannerTitle', { count: 1 }, 'en')).toBe(
-    '1 approved transaction is waiting to post',
-  );
-  expect(t('dashboard.postingBannerTitle', { count: 3 }, 'ru')).toBe(
-    '3 подтвержденные операции ждут проведения',
-  );
-  expect(t('dashboard.postingBannerTitle', { count: 11 }, 'ru')).toBe(
-    '11 подтвержденных операций ждут проведения',
-  );
 });
 
 test('bare diagnostic keys requiring parameters stay safe to render', async () => {
@@ -220,4 +236,23 @@ test('a parameterized fallback code degrades to the HTTP status instead of escap
   expect(failure.status).toBe(500);
   expect(failure.message).toBe('HTTP 500');
   expect(failure.messageCode).toBeUndefined();
+});
+
+test('codes read as labels with the code secondary, and unlabeled codes say so', () => {
+  expect(taxCodeLabel('eu_service_expense', 'ru')).toBe('Услуги из ЕС (eu_service_expense)');
+  expect(taxCodeLabel('professional_withholding', 'en')).toBe(
+    'IRPF withholding: professional (professional_withholding)',
+  );
+  expect(taxCodeLabel('synthetic_future_code', 'ru')).toBe('Код synthetic_future_code');
+  expect(taxCodeLabel('synthetic_future_code', 'en')).toBe('Code synthetic_future_code');
+  for (const missing of ['', null, 'unknown'])
+    expect(taxCodeLabel(missing, 'ru')).toBe(t('taxCodeLabels.unknown', {}, 'ru'));
+  expect(aeatCodeLabel('invoiceType', 'F1', 'ru')).toBe('F1 · Полный счёт');
+  expect(aeatCodeLabel('qualification', 'S2', 'en')).toBe('S2 · Taxable, VAT reverse charge');
+  expect(aeatCodeLabel('exemption', 'E6', 'ru')).toBe('E6 · Другое освобождение');
+  for (const code of ['SF', 'DV', 'AJ'])
+    expect(aeatCodeLabel('invoiceType', code, 'ru')).toBe(`Тип AEAT ${code}`);
+  expect(aeatCodeLabel('invoiceType', 'Z9', 'en')).toBe('Value Z9');
+  expect(aeatCodeLabel('qualification', 'S9', 'ru')).toBe('Значение S9');
+  expect(aeatCodeLabel('exemption', 'E9', 'en')).toBe('Value E9');
 });

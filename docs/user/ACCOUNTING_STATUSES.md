@@ -1,9 +1,15 @@
 # Understanding accounting statuses
 
-Use **Understand status / Разобраться** beside a record to see its facts,
-reasons, related documents and next actions. Read the explanation as well as
-the badge: the same short status can have different causes. The **?** help
-buttons define terms; required actions do not depend on hovering over them.
+A status shows a badge and, when there is one, its reason in one line. When a
+record still needs work and the server offers its review, the line ends with
+**What to do / Что сделать**; when it has reasons, with **Why / Почему**.
+Either opens the explanation with the record's facts, reasons, related
+documents and next actions. A record with neither, such as a posted
+transaction, shows only its badge. On a ready or deferred record an offered
+review is listed under **Related actions / Связанные действия**, not as a next
+action. Read the explanation as well as the badge: the
+same short status can have different causes. The **?** help buttons define
+terms; required actions do not depend on hovering over them.
 
 This guide describes the source version, not proof of what is deployed on a
 particular server. The [design contract](../../DESIGN.md#accounting-status-explanations)
@@ -21,17 +27,27 @@ lifecycle remains `approved`.
 | State | English / Russian label | Meaning and next action |
 |---|---|---|
 | `needs_review` | Review required / Требуется проверка | Internal facts or accounting-treatment review is unfinished. Use **Open review / Открыть проверку** when offered. Identify the exact missing fact or decision, who will resolve it and the next action; an operator handles a required action unavailable in the interface. |
-| `approved` | Reviewed, not posted / Проверено, ещё не проведено | The review decision is saved. Check the current posting readiness before arranging an explicit posting action. Approval alone is not permission to post. |
-| `ready` | Ready to post / Готово к проведению | The current posting preview permits posting. Check the intended entries before confirming a separate posting action; viewing this status does not perform it. |
-| `deferred` | Waiting for posting date / Ожидает даты проведения | Read the displayed earliest posting date, then refresh readiness on or after that date. Do not change the recorded date to bypass the restriction. |
-| `blocked` | Posting blocked / Проведение заблокировано | Read every blocking reason and address the stated evidence, review or period requirement. A future date does not hide other blockers; waiting alone may not resolve them. |
-| `posted` | Posted in ledger / Проведено в учёте | The transaction is recorded as posted. Inspect its result and use the supported correction process if needed. This is not an AEAT submission receipt. |
+| `approved` | Reviewed, not posted yet / Проверено, ещё не проведено | The review decision is saved. Check the current posting readiness before arranging an explicit posting action. Approval alone is not permission to post. |
+| `ready` | Reviewed, ready to post / Проверено, можно провести | The current posting preview permits posting. Check the intended entries before confirming a separate posting action; viewing this status does not perform it. |
+| `deferred` | Reviewed, post later / Проверено, провести позже; with a date: Reviewed, post from *date* / Проверено, провести с *даты* | Read the displayed earliest posting date, then refresh readiness on or after that date. Do not change the recorded date to bypass the restriction. |
+| `blocked` | Reviewed, posting blocked / Проверено, проведение заблокировано | Read every blocking reason and address the stated evidence, review or period requirement. A future date does not hide other blockers; waiting alone may not resolve them. |
+| `posted` | Posted / Проведено | The transaction is recorded as posted. Inspect its result and use the supported correction process if needed. This is not an AEAT submission receipt. |
+
+In the review queue every row offers one next action: **Post / Провести** for
+a ready row (it opens the posting tab at that row; posting itself stays a
+separate, confirmed action) and **Why / Почему** for a deferred row. A row
+that still needs work (review required or blocked) offers **Open review /
+Открыть проверку** when the server offers its review, and otherwise **What
+blocks it / Что мешает**, which opens the explanation with the reasons and
+who takes the next step. The summary cards above the queue filter it by
+state; **All / Все** shows every row again.
 
 Receiving a document or extracting its data is not review approval. Excluded
 states such as `duplicate`, `rejected` and `void` require checking the recorded
 reason, not recreating the entry to bypass it. Likewise, a transaction marked
-`included_in_snapshot` belongs to a saved snapshot; that marker alone does not
-prove submission to AEAT.
+`included_in_snapshot` (**In a filed return / В поданной декларации**) belongs to
+the saved copy of a filed return; that marker alone does not prove submission
+to AEAT.
 
 An available review link means the record supports that review route. It does
 not guarantee that changes can be applied: the review screen checks current
@@ -54,10 +70,10 @@ also be named, with its owner and next action, rather than only "IVA review".
 
 | Obligation state | English / Russian label | Next action |
 |---|---|---|
-| `due` | Not yet filed / Ещё не подано | Check the obligation, deadline and remaining filing work with the responsible person. Posting entries does not submit it. |
+| `due` | File required / Нужно подать; with a deadline: File by *date* / Нужно подать до *даты* | Check the obligation, deadline and remaining filing work with the responsible person. Posting entries does not submit it. |
 | `not_due` | Filing not required / Подача не требуется | Read the saved determination. This describes whether filing is required, not simply whether its deadline is in the future. |
-| `filed` | Filing confirmed / Подача подтверждена | Inspect the saved filing information and evidence. This is separate from an individual entry being posted. |
-| `waived` | Filing waived by saved decision / Подача не требуется по сохранённому решению | Consult the saved decision and its applicability; do not infer a waiver from missing data. |
+| `filed` | Filed / Подано; with a date: Filed *date* / Подано *дата* | Inspect the saved filing information and evidence. This is separate from an individual entry being posted. |
+| `waived` | Waived by saved decision / Не подаётся по сохранённому решению | Consult the saved decision and its applicability; do not infer a waiver from missing data. |
 
 The explanation panel does not file returns, approve tax treatment or amend
 previously filed periods.
@@ -98,7 +114,7 @@ Source availability has three cases:
   storage and the document link with the operator; this does not prove that
   the document never existed or should be uploaded again.
 
-Available sources offer **Open file / Открыть файл**. Local and catalog copies
+Available sources offer **Open document / Открыть документ**. Local and catalog copies
 use the same action; the interface need not display the storage classification.
 If opening fails, retain the existing record and investigate access to its
 original rather than treating the badge as proof of availability forever.

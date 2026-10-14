@@ -5,5 +5,5 @@
   "parties.legalForms.unknown": "desconocido",
   "parties.roiStatus.not_registered": "no registrado",
   "parties.roiStatus.registered": "registrado",
-  "parties.roiStatus.unknown": "desconocido"
+  "parties.roiStatus.unknown": "Sin verificar"
 }

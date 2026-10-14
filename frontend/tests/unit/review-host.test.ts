@@ -5,6 +5,8 @@ import ReviewDetailView from '../../src/features/review/ReviewDetailView.vue';
 import type { ReviewDetailContext } from '../../src/features/review/guided-model.ts';
 import type { JsonOptions } from '../../src/core/http.ts';
 import { guidedFixture, nativeFixture, REVIEW_ID } from '../fixtures/review.ts';
+import { t } from '../../src/core/i18n.ts';
+import { formatDateText } from '../../src/core/format.ts';
 async function flush() {
   for (let count = 0; count < 8; count++) {
     await Promise.resolve();
@@ -250,5 +252,203 @@ test('guided issue edits follow backend IDs when the decision array is reordered
   host.dispose();
   root.remove();
   vi.unstubAllGlobals();
+  localStorage.clear();
+});
+
+test('guided issue cards name known codes in the interface language and fold server text', async () => {
+  localStorage.clear();
+  const fixture = guidedFixture();
+  fixture.packet.state.issues = [
+    {
+      validation_issue_id: 'synthetic-known',
+      issue_code: 'amount_mismatch',
+      message: 'Synthetic known diagnostic',
+    },
+    {
+      validation_issue_id: 'synthetic-new',
+      issue_code: 'synthetic_future_code',
+      message: 'Synthetic unknown diagnostic',
+    },
+  ];
+  const setup = context(async (url: string) =>
+    url.startsWith('/api/transactions/')
+      ? {
+          transaction: {
+            transaction_id: REVIEW_ID,
+            entry_type: 'income',
+            lifecycle_status: 'needs_review',
+          },
+          period: { period_key: '2026-Q3' },
+        }
+      : fixture,
+  );
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, ReviewDetailView, setup);
+  await flush();
+  const [known, unknown] = [...root.querySelectorAll('.review-issue-card')];
+  expect(known.querySelector('header strong')!.textContent).toBe(
+    t('issues.messages.amount_mismatch'),
+  );
+  expect(unknown.querySelector('header strong')!.textContent).toBe(t('issues.default'));
+  for (const [card, text] of [
+    [known, 'Synthetic known diagnostic'],
+    [unknown, 'Synthetic unknown diagnostic'],
+  ] as const) {
+    const original = card.querySelector('details')!;
+    expect(original.open).toBe(false);
+    expect(original.querySelector('summary')!.textContent).toBe(t('issues.serverMessage'));
+    expect(original.textContent).toContain(text);
+    expect(card.textContent!.replace(original.textContent!, '')).not.toContain(text);
+  }
+  host.dispose();
+  root.remove();
+  localStorage.clear();
+});
+
+test('an unsupported review or one without a posting projection still reads as in review', async () => {
+  const unsupported = guidedFixture();
+  unsupported.supported = false;
+  unsupported.review_allowed = false;
+  const unprojected = guidedFixture();
+  delete unprojected.posting_context;
+  for (const fixture of [unsupported, unprojected]) {
+    localStorage.clear();
+    const setup = context(async (url: string) =>
+      url.startsWith('/api/transactions/')
+        ? {
+            transaction: {
+              transaction_id: REVIEW_ID,
+              entry_type: 'income',
+              lifecycle_status: 'needs_review',
+            },
+            period: { period_key: '2026-Q3' },
+          }
+        : fixture,
+    );
+    const root = document.createElement('div');
+    document.body.append(root);
+    const host = mountView(root, ReviewDetailView, setup);
+    await flush();
+    // One status block: the server's status cell, its badge the only one on the page.
+    expect([...root.querySelectorAll('.badge')].map((badge) => badge.textContent)).toEqual([
+      t('statuses.labels.needs_review'),
+    ]);
+    expect(root.querySelector('.review-workspace-header .status-context')).not.toBeNull();
+    expect(root.textContent).not.toContain('Проверено');
+    expect(root.textContent!.split(t('review.unsupported'))).toHaveLength(2);
+    host.dispose();
+    root.remove();
+  }
+  localStorage.clear();
+});
+
+test('a missing rate waits in «Что осталось» until confirmation, and rejection folds below the main action', async () => {
+  localStorage.clear();
+  const fixture = guidedFixture();
+  fixture.packet.state.transaction = {
+    ...fixture.packet.state.transaction,
+    currency: 'USD',
+    original_currency: 'USD',
+    amount_original_minor: 9900,
+  };
+  fixture.fx_suggestion = {
+    status: 'unavailable',
+    currency: 'USD',
+    transaction_date: '2026-07-02',
+  };
+  const setup = context(async (url: string) =>
+    url.startsWith('/api/transactions/')
+      ? {
+          transaction: {
+            transaction_id: REVIEW_ID,
+            entry_type: 'income',
+            lifecycle_status: 'needs_review',
+          },
+          period: { period_key: '2026-Q3' },
+        }
+      : fixture,
+  );
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, ReviewDetailView, setup);
+  await flush();
+  expect(root.textContent).not.toContain(t('review.fxNeeded'));
+  const link = root.querySelector<HTMLAnchorElement>('.wf-remaining a')!;
+  expect([link.textContent, link.getAttribute('href')]).toEqual([
+    t('workflow.remaining.rate'),
+    '#review-fx-settlement-rate',
+  ]);
+  link.click();
+  expect(document.activeElement?.id).toBe('review-fx-settlement-rate');
+  root.querySelector<HTMLButtonElement>('#review-primary-button')!.click();
+  await flush();
+  expect(root.querySelector('.fx-card [role="alert"]')!.textContent!.trim()).toBe(
+    t('review.fxNeeded'),
+  );
+  const actions = root.querySelector('.review-actions')!;
+  const reject = root.querySelector<HTMLDetailsElement>('.review-reject-panel')!;
+  expect(actions.compareDocumentPosition(reject) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(reject.open).toBe(false);
+  host.dispose();
+  root.remove();
+  localStorage.clear();
+});
+
+test('a locked item asks for no rate and states its deferral date once, in the alert', async () => {
+  localStorage.clear();
+  const fixture = guidedFixture();
+  fixture.packet.state.transaction = {
+    ...fixture.packet.state.transaction,
+    currency: 'USD',
+    original_currency: 'USD',
+    amount_original_minor: 9900,
+  };
+  fixture.fx_suggestion = {
+    status: 'unavailable',
+    currency: 'USD',
+    transaction_date: '2026-07-02',
+  };
+  // Server-shaped: a deferral is one future_dated blocker, and posting_context is the status
+  // context's own posting block.
+  const posting = {
+    preview_bucket: 'deferred',
+    posting_deferred_until: '2026-10-01',
+    blockers: [{ code: 'future_dated', blocking: true }],
+  };
+  fixture.review_allowed = false;
+  fixture.posting_context = posting;
+  fixture.ui_context = { ...fixture.ui_context, state: 'deferred', posting };
+  const setup = context(async (url: string) =>
+    url.startsWith('/api/transactions/')
+      ? {
+          transaction: {
+            transaction_id: REVIEW_ID,
+            entry_type: 'income',
+            lifecycle_status: 'approved',
+          },
+          period: { period_key: '2026-Q3' },
+        }
+      : fixture,
+  );
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, ReviewDetailView, setup);
+  await flush();
+  expect(root.querySelector('.wf-remaining')).toBeNull();
+  // The status cell names the blocker; the alert alone gives the date, once and without «г..».
+  const date = formatDateText('2026-10-01', 'ru');
+  const alert = root.querySelector('.review-alert.warning')!;
+  expect([...alert.querySelectorAll('p')].map((line) => line.textContent!.trim())).toEqual([
+    t('review.future', { date }),
+    t('review.formDisabledHint'),
+  ]);
+  expect(alert.textContent).not.toContain('..');
+  expect(root.textContent!.split(date)).toHaveLength(2);
+  const status = root.querySelector('.review-workspace-header .status-context')!;
+  expect(status.textContent).toContain(t('help.reasons.future_dated.title'));
+  expect(status.textContent).not.toContain(date);
+  host.dispose();
+  root.remove();
   localStorage.clear();
 });

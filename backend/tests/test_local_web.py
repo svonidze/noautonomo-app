@@ -2,11 +2,12 @@ from __future__ import annotations
 from autonomo_test_support.local_web import _config
 
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 import errno
 import hashlib
 from http.client import HTTPConnection
 import json
+import sqlite3
 from pathlib import Path
 import re
 import shutil
@@ -146,6 +147,9 @@ def test_dashboard_and_transaction_views_use_sqlite_source_of_truth(
     bootstrap = app.bootstrap()
     dashboard = app.dashboard("2026-Q3")
     expenses = app.transactions("2026-Q3", entry_type="expense")
+    with sqlite3.connect(config.database) as connection:
+        queued_at = connection.execute("SELECT created_at FROM transactions WHERE external_key='web-expense'").fetchone()[0]
+    assert expenses[0]["created_at"] == queued_at
 
     assert bootstrap["default_period"] == "2026-Q3"
     assert dashboard["totals"]["actual"]["income_eur"] == "1250.00"
@@ -163,6 +167,250 @@ def test_dashboard_and_transaction_views_use_sqlite_source_of_truth(
     }
     assert expenses[0]["deductible_vat_eur"] == "21.00"
     assert expenses[0]["lifecycle_status"] == "approved"
+
+
+def test_dashboard_counts_every_open_question_and_this_quarters_queue_rows_without_a_rate(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    _database(config)
+    with LedgerDB.open(config.database) as db:
+        for index in range(7):
+            db.add_validation_issue(period_key="2026-Q3", issue_code=f"synthetic_question_{index}",
+                                    severity="warning", message="Synthetic open question", blocking=False)
+        db.add_validation_issue(period_key="2026-Q3", issue_code="synthetic_answered", severity="warning",
+                                message="Synthetic answered question", blocking=False, issue_status="resolved")
+        for key, period, day, entry, currency, status in (
+            ("usd-approved", "2026-Q3", "2026-08-10", "expense", "USD", "approved"),
+            ("usd-review", "2026-Q3", "2026-08-11", "expense", "USD", "needs_review"),
+            ("usd-received", "2026-Q3", "2026-08-12", "expense", "USD", "received"),
+            ("usd-posted", "2026-Q3", "2026-08-13", "expense", "USD", "posted"),
+            ("usd-next-quarter", "2026-Q4", "2026-10-05", "expense", "USD", "approved"),
+            # A EUR row needs no rate: its own amount is the EUR amount.
+            ("eur-without-copy", "2026-Q3", "2026-08-14", "expense", "EUR", "approved"),
+            ("usd-income", "2026-Q3", "2026-08-15", "income", "USD", "approved"),
+        ):
+            db.add_transaction(external_key=key, period_key=period, transaction_date=day, booking_date=day,
+                               entry_type=entry, description="Synthetic row without a EUR copy", amount_minor=9900,
+                               currency=currency, amount_eur_minor=None,
+                               direction="credit" if entry == "income" else "debit", lifecycle_status=status)
+        db.add_transaction(external_key="eur-income", period_key="2026-Q3", transaction_date="2026-08-16",
+                           booking_date="2026-08-16", entry_type="income", description="Synthetic approved income",
+                           amount_minor=50000, amount_eur_minor=50000, direction="credit", lifecycle_status="approved")
+        # Booked in EUR but originally in USD, without a converted amount: posting treats it as foreign
+        # (original_currency first), so it needs a rate like the USD rows.
+        db.add_transaction(external_key="usd-original", period_key="2026-Q3", transaction_date="2026-08-17",
+                           booking_date="2026-08-17", entry_type="expense", description="Synthetic USD original",
+                           amount_minor=9900, currency="EUR", original_currency="USD", amount_original_minor=9900,
+                           direction="debit", lifecycle_status="approved")
+        # The ledger copies a EUR amount into amount_eur_minor; legacy rows may lack that copy.
+        db.connection.execute(
+            "UPDATE transactions SET amount_eur_minor = NULL"
+            " WHERE external_key IN ('eur-without-copy', 'eur-income', 'usd-original')"
+        )
+        db.connection.commit()
+
+    dashboard = LocalAccountingApp(config, session_token="test-token").dashboard("2026-Q3")
+
+    assert len(dashboard["open_issues"]) == 6
+    assert dashboard["open_issue_count"] == 7
+    # This quarter's queue only, received rows included: not posted rows, other quarters or EUR rows;
+    # a row booked in EUR from a USD original counts, as posting.py treats it as foreign.
+    assert dashboard["missing_fx_count"] == 5
+    # Of those, the approved rows: a missing rate blocks their posting.
+    assert dashboard["missing_fx_blocked_count"] == 3
+    # Reviewed, unposted income: the known part beside the rows without a EUR amount.
+    forecast = dashboard["totals"]["forecast"]
+    assert forecast["income_transaction_count"] == 2
+    assert forecast["income_known_amount_minor"] == 50000
+    assert forecast["income_missing_amount_count"] == 1
+    assert dashboard["totals"]["actual"]["income_missing_amount_count"] == 0
+
+
+def test_bootstrap_says_whether_a_taxpayer_profile_exists(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    _database(config)
+    app = LocalAccountingApp(config, session_token="test-token")
+
+    # Without a profile the name falls back to the brand; the flag says so instead of the name.
+    assert app.bootstrap()["profile_configured"] is False
+    assert app.bootstrap()["profile_name"] == "Autónomo"
+    with LedgerDB.open(config.database) as db:
+        db.upsert_taxpayer_profile(tax_id="TEST-TAX-ID-001", full_name="Example Taxpayer")
+
+    assert app.bootstrap()["profile_configured"] is True
+    assert app.bootstrap()["profile_name"] == "Example Taxpayer"
+
+
+@pytest.mark.parametrize("posted_status", ["posted", "included_in_snapshot"])
+def test_dashboard_says_whether_any_quarter_has_a_posting(tmp_path: Path, posted_status: str) -> None:
+    config = _config(tmp_path)
+
+    def row(key: str, status: str) -> dict[str, object]:
+        return dict(external_key=key, period_key="2026-Q4", transaction_date="2026-10-02",
+                    booking_date="2026-10-02", entry_type="expense", description="Synthetic row",
+                    amount_minor=12100, amount_eur_minor=12100, direction="debit", lifecycle_status=status)
+
+    with LedgerDB.initialize(config.database) as db:
+        db.ensure_period("2026-Q3")
+        # Rows still in review, or rejected, are not postings.
+        for status in ("received", "needs_review", "approved", "rejected", "duplicate", "void"):
+            db.add_transaction(**row(f"q4-{status}", status))
+    app = LocalAccountingApp(config, session_token="test-token")
+
+    assert app.dashboard("2026-Q3")["ledger_has_postings"] is False
+    assert app.dashboard("2026-Q4")["ledger_has_postings"] is False
+    with LedgerDB.open(config.database) as db:
+        db.add_transaction(**row("q4-posted", posted_status))
+
+    # Ledger-wide: one posting in any quarter ends the first run in every quarter's overview.
+    assert app.dashboard("2026-Q3")["ledger_has_postings"] is True
+    assert app.dashboard("2026-Q4")["ledger_has_postings"] is True
+
+
+def _fresh_app(tmp_path: Path) -> LocalAccountingApp:
+    """A ledger straight from `db init`: no quarter, no profile, no records."""
+    config = _config(tmp_path)
+    with LedgerDB.initialize(config.database):
+        pass
+    return LocalAccountingApp(config, session_token="test-token")
+
+
+def test_bootstrap_offers_the_current_and_previous_quarters_of_a_ledger_without_quarters(
+    tmp_path: Path,
+) -> None:
+    app = _fresh_app(tmp_path)
+    today = date.today()
+
+    bootstrap = app.bootstrap()
+
+    # The first document may be dated in the quarter that just ended: both are offered.
+    [quarter, previous] = bootstrap["periods"]
+    assert bootstrap["default_period"] == quarter["period_key"] == local_web._quarter_key(today)
+    assert quarter["status"] == previous["status"] == "missing"
+    assert quarter["starts_on"] <= today.isoformat() <= quarter["ends_on"]
+    assert previous["ends_on"] == (date.fromisoformat(quarter["starts_on"]) - timedelta(days=1)).isoformat()
+    # Offered, not created: reading never writes a quarter.
+    with LedgerDB.open(app.config.database, read_only=True) as db:
+        assert db.connection.execute("SELECT COUNT(*) FROM periods").fetchone()[0] == 0
+
+
+def test_bootstrap_always_offers_the_current_quarter_beside_the_quarters_with_rows(
+    tmp_path: Path,
+) -> None:
+    app = _fresh_app(tmp_path)
+    current = local_web._quarter_key(date.today())
+    [_, previous] = [row["period_key"] for row in app.bootstrap()["periods"]]
+    with LedgerDB.open(app.config.database) as db:
+        db.ensure_period(previous)
+
+    bootstrap = app.bootstrap()
+
+    # Offered, not created: the quarter with a row stays the default.
+    assert [(row["period_key"], row["status"]) for row in bootstrap["periods"]] == [
+        (current, "missing"), (previous, "open")]
+    assert bootstrap["default_period"] == previous
+    with LedgerDB.open(app.config.database, read_only=True) as db:
+        assert db.connection.execute("SELECT COUNT(*) FROM periods").fetchone()[0] == 1
+    with LedgerDB.open(app.config.database) as db:
+        db.ensure_period(current)
+    bootstrap = app.bootstrap()
+    assert [row["status"] for row in bootstrap["periods"]] == ["open", "open"]
+    assert bootstrap["default_period"] == current
+
+
+def test_intake_names_both_quarters_when_the_document_date_is_in_another(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+    fields = {"period": "2026-Q4", "kind": "expense_invoice", "issued_on": "2026-09-30"}
+
+    for intake in (
+        lambda: app.ingest_upload(fields=fields, filename="synthetic.txt", content=b"Synthetic"),
+        lambda: app.ingest_google_drive_url(
+            fields=fields, drive_url=f"{DRIVE_URL}/file/d/abcDef_012-345678/view"),
+    ):
+        with pytest.raises(LocalWebApiError) as refused:
+            intake()
+        assert (refused.value.status, refused.value.code) == (400, "quarter_mismatch")
+        assert refused.value.message_code == "intake.quarterMismatch"
+        assert refused.value.params == {"documentQuarter": "2026-Q3", "selectedQuarter": "2026-Q4"}
+    assert not app.config.inbox_root.exists() or not any(app.config.inbox_root.rglob("*.txt"))
+
+
+def test_dashboard_reads_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    dashboard = _fresh_app(tmp_path).dashboard("2026-Q4")
+
+    assert dashboard["period"] == {"period_key": "2026-Q4", "status": "missing",
+                                   "starts_on": "2026-10-01", "ends_on": "2026-12-31"}
+    assert dashboard["totals"]["actual"]["income_transaction_count"] == 0
+    assert dashboard["expense_summary"]["purchase"]["posted"]["count"] == 0
+    assert dashboard["recent_transactions"] == dashboard["open_issues"] == dashboard["obligations"] == []
+    assert dashboard["posting_summary"] == {"needs_review": 0, "ready": 0, "later": 0, "blocked": 0}
+    assert (dashboard["open_issue_count"], dashboard["missing_fx_count"]) == (0, 0)
+    assert dashboard["ledger_has_postings"] is False
+
+
+def test_taxes_read_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    taxes = _fresh_app(tmp_path).taxes("2026-Q4", as_of=date(2026, 10, 9))
+
+    assert (taxes["period"], taxes["obligations"], taxes["forecast_as_of"]) == ("2026-Q4", [], None)
+    assert taxes["period_state"]["phase"] == "current"
+    assert taxes["period_state"]["accounting_status"] == "missing"
+    assert taxes["tax_summary"]["total_payable_minor"] is None
+
+
+def test_transaction_lists_read_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+
+    assert app.transactions("2026-Q4", entry_type="income") == []
+    assert app.transactions("2026-Q4", lifecycle_status="review") == []
+    with pytest.raises(LocalWebError, match="YYYY-QN"):
+        app.transactions("2026")
+
+
+def test_expense_page_reads_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    page = _fresh_app(tmp_path).expenses("2026-Q4")
+
+    assert (page["period"], page["rows"], page["matching_count"]) == ("2026-Q4", [], 0)
+    assert page["period_counts"] == {"purchase": 0, "amortization": 0}
+
+
+def test_issues_read_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    assert _fresh_app(tmp_path).issues("2026-Q4") == []
+
+
+def test_posting_preview_reads_a_quarter_without_a_row_as_empty(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+    preview = app.posting_preview("2026-Q4")
+
+    assert (preview["period"], preview["period_status"], preview["reason_code"]) == ("2026-Q4", "missing", None)
+    assert preview["ready"] == preview["deferred"] == preview["blocked"] == preview["items"] == []
+    assert preview["summary"]["ready_count"] == preview["summary"]["approved_count"] == 0
+    assert preview["summary"]["ready_total_eur"] == "0.00"
+    # The posting module builds it, timestamps included, so the tab never reads "no timestamp".
+    assert preview["as_of"] == date.today().isoformat() and preview["generated_at"]
+    assert preview["cleanup_roots"] == {"inbox_root": str(app.config.inbox_root),
+                                        "archive_root": str(app.config.archive_root)}
+    with pytest.raises(LocalWebError, match="YYYY-QN"):
+        app.posting_preview("2026")
+
+
+def test_assets_read_a_quarter_without_a_row(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+
+    assert app.assets("2026-Q4") == []
+    with pytest.raises(LocalWebError, match="YYYY-QN"):
+        app.assets("2026")
+
+
+def test_calculation_of_a_quarter_without_a_row_explains_instead_of_failing(tmp_path: Path) -> None:
+    app = _fresh_app(tmp_path)
+
+    with pytest.raises(LocalWebApiError) as refused:
+        app.refresh_dashboard("2026-Q4")
+
+    assert (refused.value.status, refused.value.code) == (409, "period_missing")
+    assert refused.value.message_code == "taxes.periodEmpty"
+    assert not (app.config.cache_root / "2026-Q4").exists()
 
 
 @pytest.mark.parametrize(
@@ -326,15 +574,21 @@ def test_google_picker_key_and_app_id_are_validated_together(
         local_web.load_config(tmp_path, config_path=config_file)
 
 
-def test_dashboard_rejects_unknown_or_malformed_quarter(tmp_path: Path) -> None:
+def test_dashboard_rejects_a_malformed_quarter_and_reads_an_absent_one_as_empty(
+    tmp_path: Path,
+) -> None:
     config = _config(tmp_path)
     _database(config)
     app = LocalAccountingApp(config)
 
     with pytest.raises(LocalWebError, match="YYYY-QN"):
         app.dashboard("2026")
-    with pytest.raises(LocalWebError, match="Unknown quarter"):
-        app.dashboard("2025-Q4")
+    # Another quarter's rows never leak into a quarter without a row.
+    absent = app.dashboard("2025-Q4")
+    assert absent["period"]["status"] == "missing"
+    assert absent["recent_transactions"] == [] and absent["posting_summary"]["ready"] == 0
+    assert absent["totals"]["actual"]["income_transaction_count"] == 0
+    assert absent["ledger_has_postings"] is True
 
 
 def test_posting_summary_keeps_review_ready_later_and_blocked_exclusive() -> None:

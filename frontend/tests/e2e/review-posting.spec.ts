@@ -161,3 +161,64 @@ test('closed or mismatched posting periods cannot open confirmation and tab keys
   await expect(page.locator('.review-shell [role="alert"]')).toBeVisible();
   await expect(page.locator('[data-posting-action="open-confirm"]')).toHaveCount(0);
 });
+test('a blocked approved row in the queue says what blocks it', async ({ page }) => {
+  // The shared fixture's USD expense is reviewed but has no EUR amount; the server offers no review.
+  await page.goto('/review?period=2026-Q3');
+  const rows = page.locator('#review-tabpanel tbody tr');
+  const blocked = rows.filter({ hasText: 'Example USD expense' });
+  await expect(blocked).toContainText('Проверено, проведение заблокировано');
+  // Its one action opens the explanation, so its status cell does not repeat that link.
+  await expect(blocked.locator('.status-context small')).toHaveText('Не хватает суммы в евро');
+  await expect(blocked.locator('[data-status-help]')).toHaveCount(1);
+  const ready = rows.filter({ hasText: 'Example expense' });
+  await expect(ready.locator('.badge')).toHaveText('Проверено, можно провести');
+  await expect(ready.locator('.status-context small')).toHaveCount(0);
+  const action = blocked.locator('td.table-actions > *');
+  await expect(action).toHaveCount(1);
+  await expect(action).toHaveText('Что мешает');
+  await action.click();
+  const help = page.locator('#status-help-dialog');
+  await expect(help).toBeVisible();
+  await expect(help).toContainText('Не хватает суммы в евро');
+  await page.locator('#status-help-close').click();
+  await expect(help).not.toBeVisible();
+  await expect(action).toBeFocused();
+  // Every other row has its one action too.
+  for (const row of await rows.all())
+    await expect(row.locator('td.table-actions > *')).toHaveCount(1);
+});
+test('the queue opens posting at its ready row; ready rows come first and a missing EUR amount stays missing', async ({
+  page,
+}) => {
+  const preview = page.waitForResponse((response) =>
+    response.url().includes('/api/review/posting-preview?'),
+  );
+  await page.goto('/review?period=2026-Q3');
+  // The server sends no amount for the USD row, not a zero.
+  const blockedItem = ((await (await preview).json()).blocked as Record<string, unknown>[]).find(
+    (row) => row.description === 'Example USD expense',
+  );
+  expect(blockedItem).toMatchObject({ amount_eur: null, effective_amount_eur_minor: null });
+  const ready = page.locator('#review-tabpanel tbody tr').filter({ hasText: 'Example expense' });
+  await ready.locator('td.table-actions > a').click();
+  await expect(page).toHaveURL(/\/review\?period=2026-Q3&tab=posting#posting-row-[0-9a-f-]{36}$/);
+  const target = page.locator(new URL(page.url()).hash);
+  await expect(target).toHaveClass('posting-row-target');
+  await expect(target).toContainText('Example expense');
+  await expect(target).toBeInViewport();
+  // Ready to post as it is: nothing to explain, so no link beside its badge.
+  await expect(target.locator('[data-status-help]')).toHaveCount(0);
+  // Ready rows are listed before anything is posted, then the blocked ones.
+  await expect(page.locator('.posting-section-label')).toHaveText([
+    'Проверено, можно провести',
+    'Проверено, проведение заблокировано',
+  ]);
+  const usd = page.locator('#review-tabpanel tbody tr').filter({ hasText: 'Example USD expense' });
+  await expect(usd.locator('td.amount')).toHaveText('—нет суммы в EUR');
+  // The server offers no review of it, so its status explains why instead of inventing one.
+  await expect(usd.locator('[data-status-help]')).toHaveText('Почему');
+  await expect(page.locator('details.posting-technical > summary')).toHaveText(
+    'Технические детали',
+  );
+  await expect(page.locator('.primary-button:visible')).toHaveText(['Провести']);
+});
