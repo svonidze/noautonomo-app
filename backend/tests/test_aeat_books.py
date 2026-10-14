@@ -727,7 +727,26 @@ def test_projection_blocks_net_withholding_mixed_with_non_taxable_residual() -> 
         assert "explicit reviewed gross allocation" in projection["blockers"][0]["message"]
 
 
-def test_asset_book_row_reconciles_annual_evidence_to_amortizable_base() -> None:
+def _historical_asset_charge(db, asset, day, amount, *, status="posted", tax_code="historical_g03", vat=0):
+    original = db.connection.execute("SELECT * FROM documents WHERE document_id=?", (asset["document_id"],)).fetchone()
+    period = day[:4] + "-Q" + str((int(day[5:7])-1)//3+1)
+    doc = db.upsert_document(external_key="synthetic-charge:"+day, document_type="gastos_book",
+        document_number="SYNTH-DEPR-"+day, issued_on=original["issued_on"], period_key=period,
+        total_minor=amount, lifecycle_status="approved", source_hash="synthetic-charge:"+day,
+        counterparty_id=original["counterparty_id"])
+    tx = db.add_transaction(period_key=period, transaction_date=day, booking_date=day,
+        entry_type="expense", description="Synthetic posted asset charge", amount_minor=amount,
+        direction="debit", lifecycle_status=status, document_id=doc["document_id"],
+        counterparty_id=original["counterparty_id"])
+    db.add_detailed_tax_treatment(transaction_id=tx["transaction_id"], treatment_type="expense",
+        tax_code=tax_code, taxable_base_minor=0, vat_minor=vat, deductible_vat_minor=0,
+        deductible_irpf_minor=amount, withholding_minor=0, include_modelo130=True,
+        include_modelo303=False, aeat_invoice_type="F1", aeat_expense_concept="G03",
+        aeat_operation_key="01", aeat_reverse_charge=False, rate_basis_points=0)
+    return tx
+
+
+def test_asset_book_row_reconciles_posted_charges_through_cutoff() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         with initialize(Path(tmp) / "ledger.sqlite") as db:
             activity = _profile_and_activity(db)
@@ -812,8 +831,18 @@ def test_asset_book_row_reconciles_annual_evidence_to_amortizable_base() -> None
                 include_in_books=False,
                 source_hash="asset-2026-evidence",
             )
+            for day in ("2026-03-31", "2026-06-30", "2026-09-30", "2026-12-31"):
+                _historical_asset_charge(db, asset, day, 8944)
 
             projection = build_aeat_book_projection(db, period_key="2026-Q3")
+            from autonomo_taxes.books import write_accounting_books
+            import csv
+            exported = write_accounting_books(db, Path(tmp)/"books", period_key="2026-Q3")
+            with exported.files["assets"].open() as handle:
+                book_row = next(csv.DictReader(handle))
+            assert book_row["accumulated_start_minor"] == "38725"
+            assert book_row["accumulated_end_minor"] == "47669"
+            assert book_row["recomputed_period_amortization_minor"] == "8944"
 
         assert projection["data_projection_ready"] is True
         assert projection["counts"]["assets"] == 1
@@ -821,9 +850,9 @@ def test_asset_book_row_reconciles_annual_evidence_to_amortizable_base() -> None
         assert row["tipo_bien"] == "23"
         assert row["autoliquidacion_periodo"] == "0A"
         assert row["amortizacion_acumulada_inicio_eur"] == "208.37"
-        assert row["amortizacion_cuota_resultante_eur"] == "357.76"
-        assert row["amortizacion_acumulada_final_eur"] == "566.13"
-        assert row["amortizacion_pendiente_eur"] == "809.90"
+        assert row["amortizacion_cuota_resultante_eur"] == "268.32"
+        assert row["amortizacion_acumulada_final_eur"] == "476.69"
+        assert row["amortizacion_pendiente_eur"] == "899.34"
         assert row["inicio_tipo_iva_percent"] == "21.00"
         assert row["inicio_prorrata_definitiva_percent"] == "100.00"
         assert row["inicio_cuota_deducible_eur"] == "288.97"
@@ -856,6 +885,7 @@ def test_imported_asset_exports_allocated_basis_and_reviewed_cost(tmp_path, dedu
                 "SELECT counterparty_id FROM documents WHERE document_id=?", (asset["document_id"],)).fetchone()[0],
             issued_on="2024-01-02", total_minor=10000, lifecycle_status="approved", source_hash="synthetic:annual-book")
         db.connection.execute("UPDATE assets SET document_id=? WHERE asset_id=?", (annual_document["document_id"],asset_id))
+        _historical_asset_charge(db, {**asset, "document_id": annual_document["document_id"]}, "2025-03-31", 2600)
         before = "\n".join(db.connection.iterdump())
         projection = build_aeat_book_projection(db, period_key="2025-Q1")
         assert projection["data_projection_ready"], projection["blockers"]

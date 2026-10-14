@@ -156,6 +156,17 @@ the allocation of a multi-item purchase to one asset. Compare the effective basi
 a mismatch. That importer-derived ratio alone does not establish personal versus
 business use. Preserve the original invoice and the source-book allocation.
 
+For inherited assets, prior annual controls establish the opening balance; the
+current period uses uniquely linked, posted G03 charges through its end date.
+This includes a reviewed acquisition carrying a G03 charge alongside invoice VAT.
+Unposted derived schedules and the full-year source control are not additional
+recognized expenses. Both the CSV and AEAT preview use this same calculation.
+Missing opening years, ambiguous links, conflicting treatments and unhandled
+IRPF date attributions remain pending. At year end, posted charges must reconcile
+with the annual source control. A future continuation plan does not reclassify
+the earlier historical book. For periods covered by a native plan, the AEAT
+method must agree with that reviewed plan before its asset row can be exported.
+
 The normalized AEAT asset export uses this effective basis for inherited assets
 as well as native plans. Acquisition value remains the explicitly stored cost;
 the exporter does not reconstruct it from a rounded VAT rate. An incorrect legacy

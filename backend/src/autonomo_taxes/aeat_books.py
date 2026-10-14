@@ -827,11 +827,14 @@ def _asset_row(
         """,
         (asset["asset_id"], year, str(year)),
     ).fetchall()
-    from .depreciation import native_year_summary
-    native = native_year_summary(database.connection, asset["asset_id"], year, through_date=through_date.isoformat() if through_date else None)
+    from .depreciation import book_year_summary
+    native = book_year_summary(database.connection, asset["asset_id"], year, through_date=through_date.isoformat() if through_date else None)
     if native is not None:
         if native["pending"]:
             raise AeatBookProjectionError("Asset has pending depreciation recognition")
+        plan = database.connection.execute("SELECT method FROM asset_depreciation_plans WHERE asset_id=?", (asset["asset_id"],)).fetchone()
+        if plan and native["source_kind"] == "native_posted_journals" and asset["aeat_amortization_method"] != {"linear": "01", "immediate": "06"}[plan["method"]]:
+            raise AeatBookProjectionError("Asset book method disagrees with the reviewed depreciation plan")
         annual = {"amount_minor": native["current_minor"], "source_book_line_id": None,
                   "source_hash": native["source_hash"]}
     else:

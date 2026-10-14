@@ -399,7 +399,7 @@ def _build_asset_rows(connection: sqlite3.Connection, period: sqlite3.Row) -> li
     export_rows: list[dict[str, str]] = []
     for row in rows:
         base_minor = row["amortizable_base_minor"] if row["amortizable_base_minor"] is not None else row["cost_minor"]
-        from .depreciation import accumulated_at, native_year_summary
+        from .depreciation import accumulated_at, book_year_summary
         accumulated_start = accumulated_at(connection, row["asset_id"],
             (date.fromisoformat(period["starts_on"]) - timedelta(days=1)).isoformat())
         accumulated_end = accumulated_at(connection, row["asset_id"], period["ends_on"])
@@ -417,10 +417,12 @@ def _build_asset_rows(connection: sqlite3.Connection, period: sqlite3.Row) -> li
             business_use_ratio=row["business_use_ratio"],
             annual_rate_basis_points=row["annual_rate_basis_points"],
         )
-        native = native_year_summary(connection, row["asset_id"], int(period["ends_on"][:4]), through_date=period["ends_on"])
+        native = book_year_summary(connection, row["asset_id"], int(period["ends_on"][:4]), through_date=period["ends_on"])
         if native is not None:
             planned = connection.execute("""SELECT COALESCE(SUM(ae.amount_minor),0) FROM amortization_entries ae JOIN transactions t ON t.transaction_id=ae.recognition_transaction_id WHERE ae.asset_id=? AND t.transaction_date BETWEEN ? AND ? AND ae.include_in_books=1 AND t.lifecycle_status IN ('posted','included_in_snapshot')""", (row["asset_id"], period["starts_on"], period["ends_on"])).fetchone()[0]
             recomputed_minor = int(planned)
+            if native["source_kind"] == "historical_posted_g03":
+                recomputed_minor = accumulated_end - accumulated_start
             if period["starts_on"] == period["ends_on"][:4] + "-01-01":
                 recomputed_minor = native["current_minor"]
                 accumulated_start = native["prior_minor"]
