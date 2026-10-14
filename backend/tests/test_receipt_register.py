@@ -187,3 +187,42 @@ def test_unreported_invoice_still_runs_iva_validation(tmp_path):
         projection = json.loads(export.files["tax_registers"].read_text())
         assert projection["registers"]["iva"]["blocked"] is True
         assert json.loads(export.files["register_content_check"].read_text())["checked_fields_ready"] is False
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_depreciation_is_an_irpf_charge_not_a_new_received_invoice(tmp_path, native):
+    from dataclasses import replace
+    from datetime import date
+    from decimal import Decimal
+    from autonomo_taxes.register_content_check import check_register_content
+    from autonomo_taxes.tax_attribution import register_projection
+
+    with initialize(tmp_path / "ledger.sqlite") as db:
+        aid = activity(db); expense(db, "ORIGINAL-PURCHASE", aid)
+        original = load_tax_rows(db, 2024)[0]
+        charge = replace(original, document_type="gastos_book", asset_id="reviewed-asset",
+                         amortization_entry_id="recognized-entry" if native else "",
+                         tax_code="amortization" if native else "historical_g03",
+                         vat_eur=Decimal(0), deductible_vat_eur=Decimal(0),
+                         include_modelo303=False)
+        projection = register_projection([charge], year=2024, through=date(2024, 3, 31), for_books=True)
+        assert len(projection["registers"]["irpf"]["rows"]) == 1
+        assert projection["registers"]["iva"]["rows"] == []
+        assert projection["registers"]["iva"]["blocked"] is False
+        assert check_register_content(projection)["checked_fields_ready"] is True
+
+        # An asset purchase still belongs in IVA and needs a receipt number.
+        purchase = register_projection([replace(original, asset_id="reviewed-asset", include_modelo303=False)],
+                                      year=2024, through=date(2024, 3, 31), for_books=True)
+        assert len(purchase["registers"]["iva"]["rows"]) == 1
+        assert any("receipt_registration" in b["missing_fields"]
+                   for b in check_register_content(purchase)["blockers"])
+        # The imported tax code alone cannot exempt an unlinked source row.
+        unlinked = register_projection([replace(charge, asset_id="", amortization_entry_id="")],
+                                      year=2024, through=date(2024, 3, 31), for_books=True)
+        assert unlinked["registers"]["iva"]["blocked"] is True
+        for vat_field in ("vat_eur", "deductible_vat_eur"):
+            contradictory = register_projection([replace(charge, **{vat_field: Decimal(21)})],
+                                                year=2024, through=date(2024, 3, 31), for_books=True)
+            assert contradictory["registers"]["iva"]["blocked"] is True
+            assert check_register_content(contradictory)["checked_fields_ready"] is False

@@ -24,7 +24,11 @@ def check_register_content(projection: dict[str, Any]) -> dict[str, Any]:
             if row["component"].startswith("fx_"):
                 if not row["fx_evidence_ref"]:
                     missing.append("fx_evidence_ref")
-            elif row.get("amortization_entry_id") or row["document_type"] in {"social_security_evidence", "bank_fee_evidence"}:
+            elif (((row.get("amortization_entry_id") or
+                    (row.get("asset_id") and row["tax_code"] == "historical_g03"
+                     and row["document_type"] == "gastos_book"))
+                   and row["vat_eur"] == 0 and row["deductible_vat_eur"] == 0) or
+                  row["document_type"] in {"social_security_evidence", "bank_fee_evidence"}):
                 missing.extend(field for field in ("document_number", "document_source_hash") if not row[field])
             elif row["document_type"] in {"invoice", "income_invoice", "expense_invoice", "ingresos_book", "gastos_book"}:
                 missing.extend(field for field in ("document_number", "issued_on", "counterparty_name") if not row[field])
