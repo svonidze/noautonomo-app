@@ -1,4 +1,5 @@
 from __future__ import annotations
+from autonomo_taxes.services import invoices, queries
 from autonomo_test_support.paths import REPO_ROOT
 
 import hashlib
@@ -149,10 +150,10 @@ def test_transaction_detail_returns_closed_posted_snapshot_without_side_effects(
     def forbidden(*_args, **_kwargs):
         raise AssertionError("transaction detail must not invoke workflow helpers")
 
-    monkeypatch.setattr(local_web, "prepare_review_packet", forbidden)
-    monkeypatch.setattr(local_web, "prepare_review_work_item", forbidden)
-    monkeypatch.setattr(local_web, "build_posting_preview", forbidden)
-    monkeypatch.setattr(local_web, "fetch_eur_rate", forbidden)
+    monkeypatch.setattr(invoices, "prepare_review_packet", forbidden)
+    monkeypatch.setattr(invoices, "prepare_review_work_item", forbidden)
+    monkeypatch.setattr(queries, "build_posting_preview", forbidden)
+    monkeypatch.setattr(invoices, "fetch_eur_rate", forbidden)
 
     detail = app.transaction_detail(fixture["transaction_id"])
 

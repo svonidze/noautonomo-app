@@ -1,4 +1,5 @@
 from __future__ import annotations
+from autonomo_taxes.services import posting_operations
 
 from hashlib import sha256
 import json
@@ -158,7 +159,7 @@ def test_source_change_after_preflight_is_detected_before_unlink(
         return real_cleanup(candidate)
 
     monkeypatch.setattr(
-        operational_cli,
+        posting_operations,
         "cleanup_expense_inbox_source",
         change_then_cleanup,
     )

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from autonomo_taxes.services import posting_operations
 
 from hashlib import sha256
 import io
@@ -386,7 +387,7 @@ def test_post_batch_cleanup_runtime_error_keeps_commit_and_reports_partial(
     def fail_cleanup(_candidate) -> None:
         raise RuntimeError("simulated unexpected cleanup failure")
 
-    monkeypatch.setattr(operational_cli, "cleanup_expense_inbox_source", fail_cleanup)
+    monkeypatch.setattr(posting_operations, "cleanup_expense_inbox_source", fail_cleanup)
     monkeypatch.setattr(operational_cli.sys, "stdin", io.StringIO(json.dumps(request)))
 
     assert main(_batch_args(seeded)) == 0
@@ -428,7 +429,7 @@ def test_post_batch_unexpected_error_before_first_commit_is_structured_failure(
     def fail_before_commit(*_args, **_kwargs):
         raise RuntimeError("simulated infrastructure failure")
 
-    monkeypatch.setattr(operational_cli, "_post_transaction_review", fail_before_commit)
+    monkeypatch.setattr(posting_operations, "_post_transaction_review", fail_before_commit)
     monkeypatch.setattr(operational_cli.sys, "stdin", io.StringIO(json.dumps(request)))
 
     assert main(_batch_args(seeded)) == 2

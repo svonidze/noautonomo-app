@@ -1,6 +1,7 @@
 """Reusable synthetic fixtures shared by backend test suites."""
 
 from __future__ import annotations
+from autonomo_taxes.services import invoices
 import hashlib
 import json
 from datetime import date
@@ -71,7 +72,7 @@ class _Server:
         self.port = self.server.server_address[1]
         self.connection = HTTPConnection("127.0.0.1", self.port, timeout=5)
         if ecb is not None:
-            monkeypatch.setattr(local_web, "fetch_eur_rate", ecb)
+            monkeypatch.setattr(invoices, "fetch_eur_rate", ecb)
 
     def close(self) -> None:
         self.connection.close()
