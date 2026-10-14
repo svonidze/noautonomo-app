@@ -7,7 +7,7 @@ import statuses from '../../src/locales/ru/statuses.json' with { type: 'json' };
 import help from '../../src/locales/ru/help.json' with { type: 'json' };
 import common from '../../src/locales/ru/common.json' with { type: 'json' };
 
-// Synthetic queue rows only; 9 October 2026 is "today".
+// Synthetic queue rows only; the server's accounting date is 9 October 2026.
 const id = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 function row(index: number, state: string | undefined, extra: Partial<ReviewRow> = {}): ReviewRow {
   return {
@@ -15,6 +15,7 @@ function row(index: number, state: string | undefined, extra: Partial<ReviewRow>
     entry_type: 'expense',
     lifecycle_status: state === 'needs_review' ? 'needs_review' : 'approved',
     transaction_date: `2026-09-${String(10 + index).padStart(2, '0')}`,
+    created_at: `2026-09-${String(10 + index).padStart(2, '0')}T12:00:00Z`,
     period_key: '2026-Q3',
     description: `Synthetic row ${index}`,
     amount_eur: '10.00',
@@ -73,6 +74,7 @@ afterEach(() => {
 function show(
   items: ReviewRow[],
   documents: 'noDocuments' | 'documentsWaiting' | 'allReviewed' = 'allReviewed',
+  asOf: string | null = '2026-10-09',
 ) {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-09T12:00:00'));
@@ -103,7 +105,7 @@ function show(
   const root = document.createElement('div');
   document.body.append(root);
   const app = createApp({
-    render: () => h(ReviewQueue, { rows: items, context, documents }),
+    render: () => h(ReviewQueue, { rows: items, context, documents, asOf }),
   });
   app.mount(root);
   mounted.push(() => {
@@ -257,11 +259,21 @@ test('the document link reads apart from the document number', () => {
 test('fewer than ten queued rows name the oldest one instead of drawing the aging chart', () => {
   const { root, request } = show(rows);
   expect(root.querySelector('#chart-review-aging')).toBeNull();
-  // The oldest row is dated 11 September: 28 days before 9 October.
+  // The oldest row was created 11 September: 28 calendar days before the server's 9 October.
   expect(root.querySelector('.review-queue-age')!.textContent).toBe(
     'Самая старая операция в очереди: 28 дней',
   );
   expect(request).not.toHaveBeenCalled();
+});
+
+test('queue age is omitted when the server date or any creation timestamp is unavailable', () => {
+  for (const asOf of [null, '', 'invalid', '2026-02-30']) {
+    expect(show(rows, 'allReviewed', asOf).root.querySelector('.review-queue-age')).toBeNull();
+  }
+  for (const created_at of [undefined, null, '', 'invalid', '2026-02-30T12:00:00Z']) {
+    const items = [row(1, 'needs_review'), row(2, 'needs_review', { created_at })];
+    expect(show(items).root.querySelector('.review-queue-age')).toBeNull();
+  }
 });
 
 test('ten queued rows draw the aging chart; an empty queue says nothing about age', () => {

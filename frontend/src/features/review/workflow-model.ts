@@ -66,7 +66,11 @@ export interface WorkflowDraft {
   source: {
     assets: unknown[];
     transaction?: { lifecycle_status?: string };
-    document: { document_id: string; mime_type?: string | null };
+    document: {
+      document_id: string;
+      mime_type?: string | null;
+      evidence_filename?: string | null;
+    };
     period: { period_key: string };
     issues: { issue_code: string }[];
   };

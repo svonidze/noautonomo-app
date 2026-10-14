@@ -35,6 +35,7 @@ export interface PostingPreview {
   period: string;
   periodStatus: string;
   generatedAt: string | null;
+  /** Server accounting date, including the frozen date of the read-only demo. */
   asOf: string | null;
   summary: PostingSummary;
   ready: PostingItem[];

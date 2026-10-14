@@ -458,3 +458,10 @@ test('the overview shows the start list until the first posting, then the regula
   expect(regular.root.querySelector('.task-list h2')!.textContent).toBe(ru['dashboard.tasksTitle']);
   expect(lines(regular.root, '.task-row strong')).toEqual([ru['dashboard.task.calculate.title']]);
 });
+
+test('open issues retain their visible status badge after the clarity port', async () => {
+  const { root } = await show(dashboard({ open_issues: [issue] }));
+  expect(root.querySelector('.issues-list .status-context .badge')?.textContent).toBe(
+    statuses['statuses.labels.warning'],
+  );
+});

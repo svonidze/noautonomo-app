@@ -332,6 +332,7 @@ const reload = () => (forbidden() ? window.location.reload() : void load());
         <ReviewQueue
           v-if="selected === 'queue'"
           :rows="data.rows"
+          :as-of="data.preview.asOf"
           :context="context"
           :documents="quarterDocuments"
         />

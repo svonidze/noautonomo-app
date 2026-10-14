@@ -7,6 +7,7 @@ export interface TransactionRow {
   lifecycle_status: string;
   document_status?: string;
   transaction_date: string;
+  created_at?: string | null;
   period_key: string;
   description?: string;
   counterparty_name?: string;

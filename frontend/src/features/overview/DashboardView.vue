@@ -9,6 +9,7 @@ import ChartHost from '../../charts/ChartHost.vue';
 import type { Analytics } from '../../charts/types.ts';
 import type { ChartKind } from '../../charts/builders.ts';
 import { viewHref } from '../../vue/services.ts';
+import StatusCell from '../../components/StatusCell.vue';
 import RecentTransactions from './RecentTransactions.vue';
 import TaskList from './TaskList.vue';
 import { buildStartTasks, buildTasks, firstRun, type DashboardTask } from './tasks.ts';

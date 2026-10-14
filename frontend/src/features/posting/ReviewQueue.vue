@@ -12,6 +12,7 @@ import type { ReviewRow, ReviewOverviewContext } from './model.ts';
 // the documents tab (intake could not draft a transaction), or every document is reviewed.
 const props = defineProps<{
   rows: ReviewRow[];
+  asOf?: string | null;
   context: ReviewOverviewContext;
   documents: 'noDocuments' | 'documentsWaiting' | 'allReviewed';
 }>();
@@ -81,18 +82,24 @@ const reviewUrl = (row: ReviewRow) => {
 };
 const period = () => encodeURIComponent(props.context.period);
 // Below ten queued rows the aging chart has too little to show; one line names the oldest row.
+const calendarDay = (value?: string | null) => {
+  const date = value?.slice(0, 10);
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const timestamp = Date.parse(`${date}T00:00:00Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === date
+    ? timestamp
+    : null;
+};
 const oldestDays = computed(() => {
-  const oldest = props.rows
-    .map((row) => row.transaction_date)
-    .filter(Boolean)
-    .sort()[0];
-  if (!oldest) return null;
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  return Math.max(
-    0,
-    Math.round((today.getTime() - new Date(`${oldest}T12:00:00`).getTime()) / 86_400_000),
-  );
+  const asOf = calendarDay(props.asOf);
+  if (asOf === null || !props.rows.length) return null;
+  let oldest = asOf;
+  for (const row of props.rows) {
+    const created = calendarDay(row.created_at);
+    if (created === null) return null;
+    oldest = Math.min(oldest, created);
+  }
+  return Math.floor((asOf - oldest) / 86_400_000);
 });
 </script>
 <template>

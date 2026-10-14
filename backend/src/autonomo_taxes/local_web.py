@@ -2070,6 +2070,7 @@ class LocalAccountingApp:
                 t.transaction_id,
                 t.counterparty_id,
                 t.transaction_date,
+                t.created_at,
                 t.entry_type,
                 t.description,
                 t.amount_minor,

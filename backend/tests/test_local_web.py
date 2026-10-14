@@ -7,6 +7,7 @@ import errno
 import hashlib
 from http.client import HTTPConnection
 import json
+import sqlite3
 from pathlib import Path
 import re
 import shutil
@@ -146,6 +147,9 @@ def test_dashboard_and_transaction_views_use_sqlite_source_of_truth(
     bootstrap = app.bootstrap()
     dashboard = app.dashboard("2026-Q3")
     expenses = app.transactions("2026-Q3", entry_type="expense")
+    with sqlite3.connect(config.database) as connection:
+        queued_at = connection.execute("SELECT created_at FROM transactions WHERE external_key='web-expense'").fetchone()[0]
+    assert expenses[0]["created_at"] == queued_at
 
     assert bootstrap["default_period"] == "2026-Q3"
     assert dashboard["totals"]["actual"]["income_eur"] == "1250.00"

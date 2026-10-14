@@ -175,11 +175,12 @@ const manual = computed(() =>
   draft.value?.source.issues.some((issue) => MANUAL_ISSUES.includes(issue.issue_code)),
 );
 // The server previews verified PDF, JPEG and PNG originals only; anything else is a link.
-const previewable = computed(() =>
-  ['application/pdf', 'image/jpeg', 'image/png'].includes(
-    draft.value?.source.document.mime_type || '',
-  ),
-);
+const previewable = computed(() => {
+  const document = draft.value?.source.document;
+  return document?.mime_type
+    ? ['application/pdf', 'image/jpeg', 'image/png'].includes(document.mime_type)
+    : /\.(pdf|jpe?g|png)$/i.test(document?.evidence_filename || '');
+});
 const matchedSupplier = computed(() =>
   payload.value?.facts.counterparty_id && !payload.value.supplier
     ? suppliers.value.find(
