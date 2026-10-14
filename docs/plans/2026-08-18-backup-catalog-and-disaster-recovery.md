@@ -7,10 +7,19 @@
 Сохранить существующее клиентское шифрование `rclone crypt`: имена и содержимое объектов в Yandex Object Storage остаются нечитаемыми без crypt-конфигурации. Вместо раскрытия структуры в S3 добавить:
 
 - единый формат backup + manifest;
-- CLI для просмотра, получения, проверки и restore drill;
-- read-only экран «Резервные копии» в веб-интерфейсе;
-- подробный runbook восстановления локальной БД, private root и полностью потерянного сервера;
-- обязательное внешнее хранение crypt-конфигурации.
+- CLI для просмотра, получения, проверки и restore drill конкретного backup;
+- read-only экран «Резервные копии» в веб-интерфейсе.
+
+## Статус на 2026-10-14
+
+Уже сделано и в этом плане не повторяется:
+
+- Runbook [`ops/docs/DISASTER_RECOVERY.md`](../../ops/docs/DISASTER_RECOVERY.md): состав backup, скачивание и проверка пары, изолированный web smoke, пять сценариев восстановления (SQLite, private root, сервер, Google Drive, crypt-конфигурация), production cutover и ежемесячный drill. Там же описано внешнее хранение `rclone.conf` с crypt password/salt.
+- Проверка готовности backup при деплое: `ops/backup_readiness.py`.
+- Удалённая проверка с изолированным восстановлением и SQLite-проверками для monthly и daily (#126): `ops/verify-backup.sh`, состояние проверки в `ops/backup_state.py`.
+- Настройки показывают последний успешный daily/monthly и результат monthly-проверки: `GET /api/settings/backups`, `BackupStatus.vue`.
+
+Не сделано: manifest с идентификатором, классом, release SHA и schema; каталог удалённых пар; команды `backup list/inspect/fetch/verify/drill` по идентификатору; список backups в вебе. Проверка работает только для последней пары класса, а выбор backup при восстановлении остаётся ручным.
 
 ## Backup format and catalog
 
@@ -24,7 +33,7 @@
   - `archive.name`, `archive.size_bytes`, `archive.sha256`;
   - список файлов с путём, размером и SHA-256;
   - версия backup-инструмента.
-- Restore-код обязан продолжать читать format 1; существующие backups не переписываются и не удаляются.
+- Restore-код обязан продолжать читать format 1; существующие backups не переписываются и не удаляются. Сейчас `ops/backup_state.py` отклоняет любой manifest, кроме format 1, поэтому чтение format 2 добавить там до того, как `ops/backup/backup_private_root.py` начнёт его выпускать.
 - Добавить модуль каталога, который:
   - получает расшифрованный список через `yandex-daily-crypt:` и `yandex-monthly-crypt:`;
   - объединяет archive и manifest по timestamp;
@@ -36,21 +45,21 @@
 
 ## CLI and web interfaces
 
-- Расширить `autonomo-tax backup` командами:
+- Расширить `autonomo-tax backup` (сейчас только SQLite snapshot) командами:
   - `list [--class daily|monthly] [--json]`;
   - `inspect <backup_id>`;
   - `fetch <backup_id> --out <empty-directory>`;
   - `verify <backup_id>` — скачать пару, проверить archive SHA-256 и manifest;
   - `drill <backup_id> --target-root <empty-directory>` — fetch, verify, extract, SQLite integrity/FK/schema checks.
-- `drill` не меняет production private root и не останавливает production service. После успешной проверки он атомарно записывает приватный marker последнего drill с backup ID, временем и результатом.
+- `verify` и `drill` используют ту же проверку, что `ops/verify-backup.sh`, и то же состояние в `ops/backup_state.py`, а не вторую реализацию. `drill` не меняет production private root и не останавливает production service.
 - Production cutover оставить только в `ops/restore.sh` с явным флагом подтверждения. Веб-интерфейс не получает операцию замены production БД.
-- Добавить `GET /api/backups`:
+- Добавить `GET /api/backups` (существующий `GET /api/settings/backups` остаётся для настроек):
   - `generated_at`, `timezone`, состояние crypt remote;
   - latest daily/monthly;
   - последний restore drill;
   - массив backup entries с ID, типом, UTC/local временем, возрастом, размерами, schema/release и статусом пары.
 - Добавить read-only раздел «Резервные копии»:
-  - карточки «Последний daily», «Последний monthly», «Последний restore drill», «Шифрование»;
+  - карточки «Последний daily», «Последний monthly», «Последняя проверка» (daily и monthly), «Шифрование»; настройки сейчас показывают только monthly-проверку;
   - таблица: дата, тип, возраст, размер, schema, release, расположение, состояние;
   - фильтры daily/monthly и ready/problematic;
   - кнопки «Обновить» и «Показать команды восстановления»;
@@ -61,40 +70,7 @@
 
 ## Disaster recovery documentation
 
-- Добавить `docs/backup-format.md`:
-  - почему в Yandex Console видны случайные имена;
-  - что именно находится в archive и manifest;
-  - как timestamp связывает пару;
-  - разница daily/monthly/evidence;
-  - manifest format 1 и 2;
-  - что проверяет каждая команда.
-- Добавить `docs/disaster-recovery.md` с точными сценариями:
-  1. Повреждена только SQLite на живом сервере.
-  2. Потерян весь private root.
-  3. Полностью потерян сервер.
-  4. Недоступен основной Google Drive.
-  5. Утрачен `rclone.conf`.
-- Для полного восстановления описать последовательность:
-  1. Развернуть чистый host и release по immutable SHA.
-  2. Восстановить crypt-конфигурацию из password manager.
-  3. Выпустить новый Yandex static key при необходимости.
-  4. Проверить права и crypt remotes.
-  5. Выполнить `backup list`, выбрать backup по локальной дате и статусу.
-  6. Выполнить `backup drill`.
-  7. Проверить web service на альтернативном private root/порту.
-  8. Создать safety snapshot текущего состояния, если оно существует.
-  9. Выполнить production restore.
-  10. Проверить health endpoint, schema, attachments и обе storage replicas.
-- Явно зафиксировать: S3 static key можно перевыпустить, но crypt password/salt невосстановимы. Потеря единственной копии crypt-конфигурации означает потерю всех S3 backups.
-- Обязать хранить актуальный `rclone.conf` как защищённое вложение в password manager или как `age`-зашифрованный recovery kit вне сервера, bucket и Git.
-- Добавить безопасную команду readiness-check, которая проверяет:
-  - режим файла `0600`;
-  - наличие daily/monthly/evidence crypt remotes;
-  - возможность расшифрованного list/read;
-  - наличие готовой archive/manifest пары;
-  - свежесть daily/monthly;
-  - не выводит конфигурацию и секреты.
-- Обновить `ops/README.md` короткой ссылкой на оба документа и ежемесячный drill checklist.
+- Runbook уже есть. После выпуска manifest v2 обновить в нём описание manifest (сейчас там нет release SHA и schema), убрать фразу об отсутствии `backup list/verify/drill` и заменить ручной выбор пары на `backup list` и `backup drill`.
 
 ## Tests and acceptance
 
@@ -135,38 +111,3 @@
 - Production restore остаётся CLI-only.
 - Полная проверка archive выполняется только явно; обычный web list читает список и manifest, но не скачивает каждый 60+ MB archive.
 - Если remote временно недоступен, экран показывает последнее известное локальное состояние как stale, не объявляя backup повреждённым.
-
-## From chat
-Это `rclone crypt`: в Yandex видны не реальные имена, а зашифрованные object keys. Поэтому строки вида `8oln2…` — нормальны: в них лежат зашифрованные пары:
-
-- архив `private-root-…tar.gz` — примерно 66 MB;
-- manifest `private-root-….manifest.json` — примерно 400 KB.
-
-Когда обращаться к тому же bucket через настроенный `yandex-daily-crypt:` remote, rclone расшифровывает имена и содержимое обратно. В консоли Yandex читать эти объекты невозможно и не нужно.
-
-Описание есть, но сейчас оно недостаточно практичное:
-
-- На `master` его ещё нет; оно находится в draft PR/ветке storage.
-- В связанном проекте `spain-autonomo-taxes-storage` файл `ops/README.md` объясняет состав backup и приводит команды restore.
-- Скрипт `ops/restore.sh` в том же проекте проверяет manifest, SHA-256 архива и файлы внутри него, затем восстанавливает в пустую директорию.
-
-Главный недочёт runbook: нет явной инструкции «катастрофа с потерей сервера». Для неё нужны не только S3-объекты, но и сохранённый вне сервера `rclone.conf` с crypt-паролями/солью. Без него данные в bucket останутся криптографически нечитабельными. Текущая документация говорит хранить encryption identities в password manager, но не описывает конкретный export/recovery этого конфига.
-
-Нормальный end-to-end процесс должен выглядеть так:
-
-```bash
-# 1. На новом хосте восстановить rclone.conf из password manager
-# 2. Скачать и расшифровать выбранный backup
-rclone --config /secure/rclone.conf copy \
-  yandex-daily-crypt: /secure/recovery/backup
-
-# 3. Проверенно распаковать private root
-ops/restore.sh --yes-restore-archive \
-  /secure/recovery/backup/private-root-....tar.gz \
-  /secure/recovery/backup/private-root-....manifest.json \
-  /secure/recovery/restored-private-root
-```
-
-После этого проверяется SQLite и сервис запускается на альтернативном порту до замены production root.
-
-Я бы обязательно добавил `docs/DISASTER_RECOVERY.md`: таблицу «что где хранится», экспорт/хранение rclone crypt identity, точные команды download → verify → restore → cutover и drill checklist. Это важнее веб-настройки: иначе backup существует, но восстановление не вполне операционно воспроизводимо.
