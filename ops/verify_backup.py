@@ -28,24 +28,24 @@ def _state(private_root: Path, name: str, payload: dict) -> None:
     })
 
 
-def verify(*, private_root: Path, backup_dir: Path, remote: str, config: Path, restore_script: Path, max_age_hours: float) -> None:
-    attempt_name = "last-backup-verification-attempt-monthly.json"
-    success_name = "last-backup-verified-monthly.json"
-    identity = {"class": "monthly", "status": "running"}
+def verify(*, private_root: Path, backup_dir: Path, remote: str, config: Path, restore_script: Path, max_age_hours: float, backup_class: str = "monthly") -> None:
+    attempt_name = f"last-backup-verification-attempt-{backup_class}.json"
+    success_name = f"last-backup-verified-{backup_class}.json"
+    identity = {"class": backup_class, "status": "running"}
     _state(private_root, attempt_name, identity)
     try:
-        marker_path = private_root / "backups" / "last-backup-monthly.json"
+        marker_path = private_root / "backups" / f"last-backup-{backup_class}.json"
         _secure_regular(marker_path)
         marker = read_json(marker_path)
-        if marker.get("format") != 2 or marker.get("class") != "monthly" or marker.get("local_status") != "verified":
-            raise VerificationError("invalid_monthly_marker")
+        if marker.get("format") != 2 or marker.get("class") != backup_class or marker.get("local_status") != "verified":
+            raise VerificationError(f"invalid_{backup_class}_marker")
         created = datetime.strptime(str(marker["backup_created_at"]), "%Y%m%dT%H%M%S.%fZ").replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         age = (now - created).total_seconds() / 3600
-        if age < 0 or age > max_age_hours or (created.year, created.month) != (now.year, now.month):
-            raise VerificationError("monthly_marker_not_current")
+        if age < 0 or age > max_age_hours or (backup_class == "monthly" and (created.year, created.month) != (now.year, now.month)):
+            raise VerificationError(f"{backup_class}_marker_not_current")
         if marker.get("offsite_status") != "acknowledged" or marker.get("offsite") != "yes":
-            raise VerificationError("monthly_upload_not_acknowledged")
+            raise VerificationError(f"{backup_class}_upload_not_acknowledged")
         archive_name = _safe_basename(marker["archive"], ".tar.gz")
         manifest_name = _safe_basename(marker["manifest"], ".manifest.json")
         if manifest_name != f"{archive_name.removesuffix('.tar.gz')}.manifest.json":
@@ -86,22 +86,24 @@ def verify(*, private_root: Path, backup_dir: Path, remote: str, config: Path, r
         _state(private_root, attempt_name, verified)
     except VerificationError as exc:
         _state(private_root, attempt_name, {**identity, "status": "failed", "failure_code": exc.code})
-        raise SystemExit(f"monthly backup verification failed: {exc.code}") from exc
+        raise SystemExit(f"{backup_class} backup verification failed: {exc.code}") from exc
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         _state(private_root, attempt_name, {**identity, "status": "failed", "failure_code": "internal_error"})
-        raise SystemExit("monthly backup verification failed: internal_error") from exc
+        raise SystemExit(f"{backup_class} backup verification failed: internal_error") from exc
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Verify a monthly backup through isolated remote recovery")
+    parser = argparse.ArgumentParser(description="Verify a daily or monthly backup through isolated remote recovery")
+    parser.add_argument("--class", dest="backup_class", choices=("daily", "monthly"), default="monthly")
     parser.add_argument("--private-root", type=Path, required=True)
     parser.add_argument("--backup-dir", type=Path, required=True)
     parser.add_argument("--remote", required=True)
     parser.add_argument("--rclone-config", type=Path, required=True)
     parser.add_argument("--restore-script", type=Path, required=True)
-    parser.add_argument("--max-age-hours", type=float, default=72)
+    parser.add_argument("--max-age-hours", type=float)
     args = parser.parse_args()
-    verify(private_root=args.private_root.resolve(), backup_dir=args.backup_dir.resolve(), remote=args.remote, config=args.rclone_config.resolve(), restore_script=args.restore_script.resolve(), max_age_hours=args.max_age_hours)
+    max_age_hours = args.max_age_hours if args.max_age_hours is not None else (48 if args.backup_class == "daily" else 72)
+    verify(private_root=args.private_root.resolve(), backup_dir=args.backup_dir.resolve(), remote=args.remote, config=args.rclone_config.resolve(), restore_script=args.restore_script.resolve(), max_age_hours=max_age_hours, backup_class=args.backup_class)
     return 0
 
 

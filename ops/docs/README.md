@@ -493,6 +493,14 @@ Its failure is recorded and alerted independently and never blocks deployment.
 Run `verify-backup.sh monthly` for a deliberate manual retry. `AUTONOMO_ALERT_WEBHOOK`
 is optional; no external alert delivery exists unless configured and tested.
 
+Run `verify-backup.sh daily` to apply the same remote checksum and isolated restore
+checks to the latest acknowledged daily pair. Daily verification accepts a backup
+up to 48 hours old, including across a calendar-month boundary, and uses the
+existing daily crypt remote. It records `last-backup-verification-attempt-daily.json`
+and `last-backup-verified-daily.json` separately from monthly state. A failed
+verification retains the last successful verification and the local readiness
+marker; upload acknowledgment alone does not mean remote verification succeeded.
+
 For the monthly exercise, follow the [isolated recovery drill](DISASTER_RECOVERY.md#download-and-verify-a-backup).
 It downloads through crypt, validates the pair, extracts to an empty directory,
 and checks SQLite. **Do not run `restore.sh --yes-restore` for a drill.** That
