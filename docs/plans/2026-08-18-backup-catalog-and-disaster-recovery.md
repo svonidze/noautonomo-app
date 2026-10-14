@@ -2,7 +2,7 @@
 
 ## Summary
 
-Целевой файл плана: `docs/plans/backup-catalog-and-disaster-recovery.md`.
+Целевой файл плана: `docs/plans/2026-08-18-backup-catalog-and-disaster-recovery.md`.
 
 Сохранить существующее клиентское шифрование `rclone crypt`: имена и содержимое объектов в Yandex Object Storage остаются нечитаемыми без crypt-конфигурации. Вместо раскрытия структуры в S3 добавить:
 
