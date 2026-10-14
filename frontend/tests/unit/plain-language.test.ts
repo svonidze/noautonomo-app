@@ -21,7 +21,7 @@ export const ALLOWED_TERMS = [
 ];
 const allowed = new Set(ALLOWED_TERMS.map((term) => term.toLowerCase()));
 
-// Burn-down list of stage 1 of docs/plans/ui-clarity-redesign.md, emptied by that stage: keep it empty.
+// Burn-down list of stage 1 of docs/plans/2026-10-05-ui-clarity-redesign.md, emptied by that stage: keep it empty.
 export const BASELINE: string[] = [];
 
 /** Latin words in plain text that are not allowed; `settlement-` counts as the stem `settlement`. */

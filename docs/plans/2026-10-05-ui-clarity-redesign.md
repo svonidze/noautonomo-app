@@ -12,8 +12,8 @@
 - Исходники: `frontend/src/shell`, 34 Vue-компонента в `frontend/src/features`,
   `frontend/src/help`, `frontend/src/styles/styles.css` (2759 строк),
   35 RU-каталогов в `frontend/src/locales/ru`.
-- Документы: `DESIGN.md` (Active, обновлен 2026-09-04), `docs/plans/expense-clarity.md`,
-  `docs/plans/status-explanations.md`, `docs/plans/ui-modularization.md`,
+- Документы: `DESIGN.md` (Active, обновлен 2026-09-04), `docs/plans/2026-08-31-expense-clarity.md`,
+  `docs/plans/2026-08-31-status-explanations.md`, `docs/plans/2026-09-05-ui-modularization.md`,
   `docs/user/ACCOUNTING_WORKFLOW.md`, `docs/user/ACCOUNTING_STATUSES.md`,
   новый `README.md` на `origin/master` (коммит c154ca0 «Help new users understand
   the app before installation details»).
