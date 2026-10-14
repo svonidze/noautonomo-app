@@ -1,4 +1,5 @@
 from __future__ import annotations
+from autonomo_taxes.services import queries
 from autonomo_test_support.paths import FIXTURE_ROOT
 from autonomo_test_support.local_web_guided import _config, _fake_ecb_result, _Server
 
@@ -194,7 +195,7 @@ def test_review_deep_link_packet_keeps_its_period_when_bootstrap_defaults_to_q3(
     fixture = _usd_invoice_fixture(config, transaction_date=date(2026, 5, 15))
     with LedgerDB.open(config.database) as db:
         db.ensure_period("2026-Q3")
-    monkeypatch.setattr(local_web, "_current_or_latest_period", lambda periods: "2026-Q3")
+    monkeypatch.setattr(queries, "_current_or_latest_period", lambda periods: "2026-Q3")
 
     def offline_fx(currency: str, as_of: date) -> ECBRateResult:
         raise FXRateUnavailableError("Synthetic fixture: no external FX lookup")

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from autonomo_taxes.services import review_operations
 from autonomo_test_support.paths import REPO_ROOT
 
 import csv
@@ -797,7 +798,7 @@ def test_transaction_apply_fx_converts_original_minor_atomically(
     # Official-source rates are checked against the ECB reference; inject one
     # so the test stays offline (1.1383 units per EUR is 0.8785 EUR per unit).
     monkeypatch.setattr(
-        operational_cli, "fetch_eur_rate", lambda *_: synthetic_reference("1.1383")
+        review_operations, "fetch_eur_rate", lambda *_: synthetic_reference("1.1383")
     )
     database = tmp_path / "ledger.sqlite"
     with initialize(database) as db:
@@ -852,7 +853,7 @@ def test_review_apply_fx_records_source_and_updates_transaction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        operational_cli, "fetch_eur_rate", lambda *_: synthetic_reference("1.1765")
+        review_operations, "fetch_eur_rate", lambda *_: synthetic_reference("1.1765")
     )
     database = tmp_path / "ledger.sqlite"
     payload_path = tmp_path / "fx-review.json"
@@ -932,7 +933,7 @@ def test_expense_intake_persists_parsed_total_and_number(
         notes="Business-use allocation requires review",
     )
     monkeypatch.setattr(
-        "autonomo_taxes.operational_cli.inspect_document",
+        "autonomo_taxes.services.intake_operations.inspect_document",
         lambda *args, **kwargs: IntakeResult(
             source_path=str(invoice),
             sha256=digest,
@@ -945,7 +946,7 @@ def test_expense_intake_persists_parsed_total_and_number(
         ),
     )
     monkeypatch.setattr(
-        "autonomo_taxes.operational_cli._document_suggestion",
+        "autonomo_taxes.services.intake_operations._document_suggestion",
         lambda *args, **kwargs: suggestion,
     )
     with initialize(database):

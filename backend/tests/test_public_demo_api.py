@@ -1,3 +1,4 @@
+from autonomo_taxes.services import invoices
 """The public runtime serves the real SQL projections without accepting writes."""
 from contextlib import contextmanager
 from datetime import date
@@ -107,7 +108,7 @@ def test_writes_are_denied_before_body_dispatch_including_unknown_verbs(prepared
 
 def test_real_get_models_read_only_no_cache_or_provider_fallback(prepared, monkeypatch):
     before = tree(prepared)
-    monkeypatch.setattr(local_web, "fetch_eur_rate", lambda *a, **kw: pytest.fail("ECB fallback"))
+    monkeypatch.setattr(invoices, "fetch_eur_rate", lambda *a, **kw: pytest.fail("ECB fallback"))
     monkeypatch.setattr(local_web, "resolve_verified_replica", lambda *a, **kw: pytest.fail("remote storage fallback"))
     monkeypatch.setattr(local_web.LocalAccountingApp, "_run_cli", lambda *a, **kw: pytest.fail("CLI subprocess"))
     with server_for(prepared) as (server, app):

@@ -598,9 +598,9 @@ def test_intake_category_seeds_rule_and_only_a_partial_business_share(tmp_path,m
     suggestion=LedgerEntry(kind='expense',date=date.today(),document=str(invoice),counterparty='Synthetic Utility',description='SYNTH-UTILITY-1',
         amount_original=Decimal('60.50'),currency='EUR',amount_eur=Decimal('60.50'),deductible_eur=None,category='home_utility_review',
         confidence='high',review_required=True,notes='Business-use allocation requires review')
-    monkeypatch.setattr('autonomo_taxes.operational_cli.inspect_document',lambda *args,**kwargs:IntakeResult(source_path=str(invoice),sha256=digest,
+    monkeypatch.setattr('autonomo_taxes.services.intake_operations.inspect_document',lambda *args,**kwargs:IntakeResult(source_path=str(invoice),sha256=digest,
         kind='expense_invoice',mime_type='application/pdf',extraction_method='pdf_text',extracted_text='parsed fixture',status='extracted',structural_errors=()))
-    monkeypatch.setattr('autonomo_taxes.operational_cli._document_suggestion',lambda *args,**kwargs:suggestion)
+    monkeypatch.setattr('autonomo_taxes.services.intake_operations._document_suggestion',lambda *args,**kwargs:suggestion)
     with initialize(database):pass
     assert main(['ingest','--db',str(database),str(invoice),'--kind','expense_invoice'])==0
     capsys.readouterr()

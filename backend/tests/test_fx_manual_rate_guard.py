@@ -1,6 +1,7 @@
 """Manual official FX rates are EUR per unit and must stay close to the ECB reference."""
 
 from __future__ import annotations
+from autonomo_taxes.services import review_operations
 from autonomo_test_support.fx_manual_rate_guard import RATE_DATE, UNITS_PER_EUR, synthetic_reference
 
 import hashlib
@@ -37,7 +38,7 @@ def reference_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, date]]:
         calls.append((currency, as_of))
         return synthetic_reference(currency=currency, rate_date=as_of)
 
-    monkeypatch.setattr(operational_cli, "fetch_eur_rate", lookup)
+    monkeypatch.setattr(review_operations, "fetch_eur_rate", lookup)
     return calls
 
 
@@ -161,7 +162,7 @@ def test_unavailable_reference_warns_but_does_not_block(
     def offline(currency: str, as_of: date) -> ECBRateResult:
         raise FXRateUnavailableError("ECB reference service is unreachable")
 
-    monkeypatch.setattr(operational_cli, "fetch_eur_rate", offline)
+    monkeypatch.setattr(review_operations, "fetch_eur_rate", offline)
     database, transaction = _ledger(tmp_path)
 
     assert _review_apply_fx(tmp_path, database, transaction, UNITS_PER_EUR) == 0
@@ -293,7 +294,7 @@ def test_stored_unavailable_reference_preserves_outcome_and_deduplicates_audit(
     def offline(*_args):
         raise FXRateUnavailableError("Synthetic network outage")
 
-    monkeypatch.setattr(operational_cli, "fetch_eur_rate", offline)
+    monkeypatch.setattr(review_operations, "fetch_eur_rate", offline)
     database, transaction = _ledger(tmp_path)
     rate = _stored_rate(database, "0.8000")
 
@@ -316,7 +317,7 @@ def test_unavailable_check_does_not_write_audit_when_transaction_is_stale(
     def offline(*_args):
         raise FXRateUnavailableError("Synthetic network outage")
 
-    monkeypatch.setattr(operational_cli, "fetch_eur_rate", offline)
+    monkeypatch.setattr(review_operations, "fetch_eur_rate", offline)
     database, transaction = _ledger(tmp_path)
     rate = _stored_rate(database, "0.8000")
     with pytest.raises(StaleRowVersionError, match="Expected row_version"):
@@ -333,7 +334,7 @@ def test_warning_cannot_replace_a_missing_source_reference(
     def offline(*_args):
         raise FXRateUnavailableError("Synthetic network outage")
 
-    monkeypatch.setattr(operational_cli, "fetch_eur_rate", offline)
+    monkeypatch.setattr(review_operations, "fetch_eur_rate", offline)
     database, transaction = _ledger(tmp_path)
     payload = tmp_path / "missing-reference.json"
     payload.write_text(json.dumps({
