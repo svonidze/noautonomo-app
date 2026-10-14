@@ -1443,7 +1443,7 @@ td .text-button:not(.inline-button),
   .contact-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .contact-operations .panel-header { align-items: flex-start; }
 }
-@media (max-width: 760px) {
+@media (max-width: 1008px) {
   .table-wrap .counterparty-row { position: relative; }
   .table-wrap .counterparty-row .cell-primary { padding-right: 52px; }
   .table-wrap .counterparty-row .counterparty-action-cell {
@@ -2566,7 +2566,9 @@ textarea {
 }
 
 /* Keep record identity, status and its action together instead of clipping
-   either edge of the table. On narrow screens each native row becomes a card. */
+   either edge of the table. Each native row becomes a card whenever the content
+   column is at most 736 px: a phone (max-width: 760px) or the sidebar beside a
+   window up to 1008 px. Wider, the tables keep their columns. */
 .table-wrap th, .table-wrap td { white-space: normal; overflow-wrap: anywhere; }
 .table-wrap .cell-primary, .table-wrap .cell-primary small { overflow: visible; text-overflow: clip; white-space: normal; }
 .table-wrap .status-context { min-width: 145px; }
@@ -2574,9 +2576,7 @@ textarea {
 .asset-explanations-table th:first-child { width: 22%; }
 .asset-explanations-table th:last-child { width: 23%; }
 .asset-explanations-table td { vertical-align: top; }
-@media (max-width: 760px) {
-  .status-help-dialog { width: 100vw; border: 0; }
-  .status-help-dialog > header, #status-help-body { padding-left: 16px; padding-right: 16px; }
+@media (max-width: 1008px) {
   .table-wrap { overflow: visible; }
   .table-wrap table, .table-wrap tbody, .table-wrap tr, .table-wrap td { display: block; width: 100%; }
   .table-wrap thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -2585,6 +2585,10 @@ textarea {
   .table-wrap td[data-label]:not([data-label=""])::before { content: attr(data-label); display: block; margin-bottom: 4px; color: var(--muted); font-size: .75rem; }
   .table-wrap .cell-primary { max-width: none; }
   .status-context small { max-width: none; }
+}
+@media (max-width: 760px) {
+  .status-help-dialog { width: 100vw; border: 0; }
+  .status-help-dialog > header, #status-help-body { padding-left: 16px; padding-right: 16px; }
   .status-details-button, .term-help { min-height: 44px; }
   .term-help { width: 44px; }
 }
