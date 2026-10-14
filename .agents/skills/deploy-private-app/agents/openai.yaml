@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deploy private app"
+  short_description: "Deploy or roll back the private accounting service"
+  default_prompt: "Use $deploy-private-app to deploy the reviewed application release to my configured private service."
