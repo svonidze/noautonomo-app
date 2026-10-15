@@ -4,12 +4,80 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from autonomo_taxes.filing_package import verify_filing_package, write_filing_package
+from autonomo_taxes.filing_package import verify_filing_package, verify_filing_package_integrity, write_filing_package
 from autonomo_taxes.ledger_db import LedgerDB, initialize
 
 
 class FilingPackageTests(unittest.TestCase):
+    def test_existing_version_is_never_overwritten(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self._database(root / "ledger.sqlite3") as db:
+                db.ensure_period("2026-Q2")
+                manifest = write_filing_package(db, root / "package", period_key="2026-Q2")
+                original = {p.name: p.read_bytes() for p in manifest.parent.iterdir()}
+                with self.assertRaises(FileExistsError):
+                    write_filing_package(db, manifest.parent, period_key="2026-Q2")
+                self.assertEqual(original, {p.name: p.read_bytes() for p in manifest.parent.iterdir()})
+
+    def test_failed_export_does_not_leave_a_partial_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self._database(root / "ledger.sqlite3") as db:
+                db.ensure_period("2026-Q2")
+                with patch("autonomo_taxes.filing_package._build_manifest", side_effect=ValueError("failed")):
+                    with self.assertRaisesRegex(ValueError, "failed"):
+                        write_filing_package(db, root / "package", period_key="2026-Q2")
+                self.assertFalse((root / "package").exists())
+
+    def test_later_database_changes_do_not_mean_archive_corruption(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self._database(root / "ledger.sqlite3") as db:
+                db.ensure_period("2026-Q2")
+                manifest = write_filing_package(db, root / "package", period_key="2026-Q2")
+                original_hash = verify_filing_package_integrity(manifest)["manifest_sha256"]
+                db.connection.execute("UPDATE periods SET source_hash='later-review' WHERE period_key='2026-Q2'")
+                result = verify_filing_package(db, manifest)
+                self.assertTrue(result["integrity_ok"])
+                self.assertFalse(result["currentness_ok"])
+                self.assertFalse(result["ok"])
+                self.assertFalse(result["completeness_verified"])
+                self.assertTrue(verify_filing_package_integrity(manifest, expected_manifest_sha256=original_hash)["integrity_ok"])
+                self.assertFalse(verify_filing_package_integrity(manifest, expected_manifest_sha256="wrong")["integrity_ok"])
+
+    def test_integrity_rejects_tampering_unsafe_paths_and_duplicate_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self._database(root / "ledger.sqlite3") as db:
+                db.ensure_period("2026-Q2")
+                manifest = write_filing_package(db, root / "package", period_key="2026-Q2")
+            original = json.loads(manifest.read_text())
+            artifact = original["artifacts"][0]
+            path = manifest.parent / artifact["filename"]
+            content = path.read_bytes()
+            path.write_bytes(content + b"tampered")
+            self.assertEqual(verify_filing_package_integrity(manifest)["mismatched_artifacts"], [path.name])
+            path.unlink()
+            self.assertEqual(verify_filing_package_integrity(manifest)["missing_artifacts"], [path.name])
+            outside = root / "outside.csv"
+            outside.write_bytes(content)
+            path.symlink_to(outside)
+            self.assertEqual(verify_filing_package_integrity(manifest)["invalid_artifacts"], [path.name])
+            path.unlink()
+            path.write_bytes(content)
+            for unsafe in ("../outside.csv", str(outside), "", ".", ".."):
+                with self.subTest(filename=unsafe):
+                    artifact["filename"] = unsafe
+                    manifest.write_text(json.dumps(original))
+                    self.assertFalse(verify_filing_package_integrity(manifest)["integrity_ok"])
+            artifact["filename"] = path.name
+            original["artifacts"].append(artifact)
+            manifest.write_text(json.dumps(original))
+            self.assertFalse(verify_filing_package_integrity(manifest)["integrity_ok"])
+
     def test_writes_manifest_with_artifact_hashes_rule_versions_and_snapshot_refs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -19,13 +87,19 @@ class FilingPackageTests(unittest.TestCase):
 
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["manifest_version"], 2)
+        self.assertEqual(manifest["manifest_version"], 3)
         self.assertEqual(manifest["package_type"], "ledgerdb_export_only")
-        self.assertEqual(manifest["package_stage"], "submission_ready")
-        self.assertTrue(manifest["submission_ready"])
-        self.assertEqual(manifest["readiness_blockers"], [])
+        self.assertEqual(manifest["package_stage"], "draft_review")
+        self.assertFalse(manifest["submission_ready"])
+        self.assertFalse(manifest["mandatory_books_ready"])
+        self.assertEqual(manifest["readiness_blockers"], [
+            "provisiones_suplidos_confirmation_missing", "register_required_fields_missing",
+            "mandatory_book_content_validation_pending", "tax_attribution_pending"])
         self.assertEqual(manifest["period"]["period_key"], "2026-Q2")
-        self.assertEqual([artifact["filename"] for artifact in manifest["artifacts"]], ["assets.csv", "expense.csv", "income.csv", "payments.csv"])
+        self.assertEqual({artifact["filename"] for artifact in manifest["artifacts"]}, {
+            "assets.csv", "expense.csv", "income.csv", "payments.csv", "supplemental-book-status.json",
+            "irpf-register.csv", "iva-register.csv", "register-content-check.json", "tax-registers.json",
+            "tax-registers-review.xlsx"})
         self.assertEqual(len(manifest["rule_versions"]), 2)
         self.assertEqual([row["rule_name"] for row in manifest["rule_versions"]], ["modelo130-expense", "modelo130-income"])
         self.assertEqual(len(manifest["snapshot_refs"]), 1)
@@ -64,7 +138,8 @@ class FilingPackageTests(unittest.TestCase):
         self.assertFalse(manifest["submission_ready"])
         self.assertEqual(
             manifest["readiness_blockers"],
-            ["period_not_closed", "final_filing_snapshot_missing"],
+            ["period_not_closed", "final_filing_snapshot_missing",
+             "provisiones_suplidos_confirmation_missing", "mandatory_book_content_validation_pending"],
         )
 
     def _database(self, path: Path) -> LedgerDB:

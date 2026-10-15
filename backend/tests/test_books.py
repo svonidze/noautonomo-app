@@ -23,7 +23,9 @@ class BookExportTests(unittest.TestCase):
             asset_rows = self._read_rows(export.files["assets"])
             payment_rows = self._read_rows(export.files["payments"])
 
-        self.assertEqual(export.row_counts, {"income": 1, "expense": 1, "assets": 1, "payments": 1})
+        self.assertEqual({key: export.row_counts[key] for key in ("income", "expense", "assets", "payments")},
+                         {"income": 1, "expense": 1, "assets": 1, "payments": 1})
+        self.assertEqual(export.row_counts["irpf"], 2)
         self.assertEqual(income_rows[0]["filed_taxable_base_minor"], "95000")
         self.assertEqual(income_rows[0]["recomputed_taxable_base_minor"], "100000")
         self.assertEqual(expense_rows[0]["filed_deductible_irpf_minor"], "3000")

@@ -8,9 +8,63 @@ import zipfile
 
 from autonomo_taxes.cli import main
 from autonomo_taxes.source_book_content_check import build_source_book_content_check
+from autonomo_taxes.source_book_import import build_source_book_import
 
 
 class SourceBookContentCheckTests(unittest.TestCase):
+    def test_combined_book_cannot_replace_missing_assets_or_suplidos_with_empty_books(self):
+        for check in ("bienes_inversion_book", "provisiones_suplidos_book"):
+            with self.subTest(check=check), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = root / "Libros_contables_SYNTHETIC_2031.xlsx"
+                _write_minimal_xlsx(
+                    source,
+                    ["Date", "Counterparty", "Concept", "Amount"],
+                    ["2031-02-03", "SYNTHETIC CUSTOMER", "Services", "240.00"],
+                )
+                checked, imported = _check_and_import_stale_report(root, source, check)
+                self.assertEqual(checked[0]["status"], "content_incomplete")
+                self.assertEqual(checked[-1]["status"], "content_attention")
+                self.assertEqual(len(imported), 1)
+                self.assertEqual(imported[0]["import_status"], "skipped_empty_source_file")
+                self.assertTrue(imported[0]["missing_required_groups"])
+                self.assertNotIn("empty-not-applicable", imported[0]["source_file_format"])
+
+    def test_combined_asset_book_with_renamed_required_column_blocks_check_and_import(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "Libros_contables_SYNTHETIC_2031.xlsx"
+            _write_minimal_xlsx(
+                source,
+                ["Descripcion del bien", "Supplier", "Acquisition Date", "Unexpected Cost",
+                 "Amortization Method", "Annual Amortization", "Accumulated Amortization"],
+                ["SYNTHETIC ASSET", "SYNTHETIC VENDOR", "2031-02-03", "240.00", "linear", "24.00", "24.00"],
+            )
+            checked, imported = _check_and_import_stale_report(root, source, "bienes_inversion_book")
+            self.assertEqual(checked[0]["status"], "content_incomplete")
+            self.assertIn("acquisition_or_amortizable_value", checked[0]["missing_required_groups"])
+            self.assertTrue(imported)
+            self.assertTrue(all(row["import_status"] != "imported" for row in imported))
+            self.assertTrue(all("acquisition_or_amortizable_value" in row["missing_required_groups"] for row in imported))
+
+    def test_explicit_empty_asset_and_suplidos_tables_are_not_missing_tables(self):
+        cases = {
+            "bienes_inversion_book": ["Descripcion del bien", "Supplier", "Acquisition Date",
+                "Acquisition Value", "Amortization Method", "Annual Amortization", "Accumulated Amortization"],
+            "provisiones_suplidos_book": ["Date", "Counterparty", "Suplidos Type", "Amount"],
+        }
+        for check, headers in cases.items():
+            with self.subTest(check=check), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = root / "Libros_contables_SYNTHETIC_2031.xlsx"
+                _write_minimal_xlsx(source, headers, [])
+                checked, imported = _check_and_import_stale_report(root, source, check)
+                self.assertEqual(checked[0]["status"], "content_ready")
+                self.assertEqual(checked[-1]["status"], "ready_for_import")
+                self.assertIn("rows=0", checked[0]["evidence"])
+                self.assertNotIn("not-applicable", checked[0]["evidence"])
+                self.assertEqual(imported, [])
+
     def test_missing_response_files_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -264,6 +318,21 @@ class SourceBookContentCheckTests(unittest.TestCase):
             markdown = out_md.read_text(encoding="utf-8")
             self.assertIn("Xolo Source-Book Content Check", markdown)
             self.assertIn("content_attention", markdown)
+
+
+def _check_and_import_stale_report(root: Path, source: Path, check: str):
+    response = root / "response.csv"
+    _write_response_check(response, rows=[{
+        "check": check, "scope": "2031", "status": "found",
+        "matched_count": "1", "matched_files": source.name, "required_for": "2031-Q1",
+    }])
+    checked = build_source_book_content_check(response_root=root, source_book_response_check_csv=response)
+    stale = root / "stale-content.csv"
+    _write_dicts(stale, ["check", "scope", "status", "content_ready_files"], [{
+        "check": check, "scope": "2031", "status": "content_ready", "content_ready_files": source.name,
+    }])
+    imported = build_source_book_import(response_root=root, source_book_content_check_csv=stale)
+    return checked, imported
 
 
 def _write_response_check(path: Path, matched_files: str = "", rows: list[dict[str, str]] | None = None) -> None:

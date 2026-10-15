@@ -698,6 +698,11 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
     assets_list = assets_sub.add_parser("list", help="List assets and book-profile fields")
     _db_arg(assets_list)
     assets_list.set_defaults(_operational_handler=_cmd_assets_list)
+    for action in ("continue", "dispose"):
+        command = assets_sub.add_parser(action, help="Record reviewed asset lifecycle evidence")
+        _db_arg(command)
+        command.add_argument("--payload", type=Path, required=True)
+        command.set_defaults(_operational_handler=_cmd_asset_lifecycle)
     asset_profile = assets_sub.add_parser(
         "book-profile",
         help="Apply a source-backed AEAT asset book profile",
@@ -1216,6 +1221,18 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
         help="Optional audit manifest with template, payload, and workbook hashes",
     )
     books_write.set_defaults(_operational_handler=_cmd_books_aeat_write)
+    separate = books_sub.add_parser('aeat-separate-write', help='Write cumulative separate IVA or IRPF books with retained numbering evidence')
+    _db_arg(separate)
+    separate.add_argument('--period', required=True)
+    separate.add_argument('--tax', choices=['iva','irpf'], required=True)
+    separate.add_argument('--template', type=Path, required=True)
+    separate.add_argument('--registrations', type=Path)
+    separate.add_argument('--registrations-sha256')
+    separate.add_argument('--operation-dates', type=Path)
+    separate.add_argument('--operation-dates-sha256')
+    separate.add_argument('--allow-authoritative-history', action='store_true')
+    separate.add_argument('--out-dir', type=Path, required=True)
+    separate.set_defaults(_operational_handler=_cmd_books_aeat_separate_write)
     books_validate = books_sub.add_parser(
         "aeat-validate",
         help="Upload an XLSX to the official AEAT validator and preserve its response",
@@ -1239,11 +1256,40 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
     _db_arg(filing_build)
     filing_build.add_argument("--period", required=True)
     filing_build.add_argument("--out-dir", type=Path, required=True)
+    filing_build.add_argument("--supplemental-evidence", type=Path,
+                              help="JSON period confirmation for the provisions/disbursements book")
     filing_build.set_defaults(_operational_handler=_cmd_filing_package_build)
     filing_verify = filing_sub.add_parser("verify")
     _db_arg(filing_verify)
     filing_verify.add_argument("--manifest", type=Path, required=True)
     filing_verify.set_defaults(_operational_handler=_cmd_filing_package_verify)
+    filing_integrity = filing_sub.add_parser("integrity", help="Verify archived bytes without the live database")
+    filing_integrity.add_argument("--manifest", type=Path, required=True)
+    filing_integrity.add_argument("--expected-manifest-sha256", required=True,
+                                  help="Manifest hash retained separately in the archive record")
+    filing_integrity.set_defaults(_operational_handler=_cmd_filing_package_integrity)
+    archive = filing_sub.add_parser("archive", help="Retain a frozen ledger, books, originals, program and wheels")
+    _db_arg(archive)
+    archive.add_argument("--period", required=True)
+    archive.add_argument("--out-dir", type=Path, required=True)
+    archive.add_argument("--dependency-dir", type=Path, required=True)
+    archive.add_argument("--source-file", type=Path, action="append", default=[])
+    archive.add_argument("--legacy-path-map", type=Path)
+    archive.add_argument("--supplemental-evidence", type=Path)
+    archive.set_defaults(_operational_handler=_cmd_filing_archive)
+    archive_verify = filing_sub.add_parser("archive-verify", help="Verify every retained archive file")
+    archive_verify.add_argument("--manifest", type=Path, required=True)
+    archive_verify.add_argument("--expected-manifest-sha256", required=True)
+    archive_verify.set_defaults(_operational_handler=_cmd_filing_archive_verify)
+
+    receipts = subparsers.add_parser("receipt-register", help="Preserve received-invoice registration numbers")
+    receipts_sub = receipts.add_subparsers(dest="receipt_register_command", required=True)
+    for command in ("create-series", "assign", "list"):
+        parser = receipts_sub.add_parser(command)
+        _db_arg(parser)
+        if command != "list":
+            parser.add_argument("--payload", type=Path, required=True)
+        parser.set_defaults(_operational_handler=_cmd_receipt_register)
 
     filings = subparsers.add_parser("filings", help="Persist immutable calculation or filing snapshots")
     filings_sub = filings.add_subparsers(dest="filings_command", required=True)
@@ -2534,6 +2580,15 @@ def _cmd_assets_list(args: argparse.Namespace) -> int:
             ).fetchall()
         ]
     _emit(rows)
+    return 0
+
+
+def _cmd_asset_lifecycle(args: argparse.Namespace) -> int:
+    from .asset_lifecycle import continue_asset, record_disposal
+    operation = continue_asset if args.assets_command == "continue" else record_disposal
+    with open_ledger_db(args.db) as db:
+        result = operation(db, **_load_json_object(args.payload))
+    _emit(result)
     return 0
 
 
@@ -4066,6 +4121,63 @@ def _cmd_books_aeat_payload(args: argparse.Namespace) -> int:
     return 0 if payload["xlsx_write_ready"] else 2
 
 
+def _cmd_books_aeat_separate_write(args: argparse.Namespace) -> int:
+    from .aeat_separate import build_separate_projection, read_registration_act, write_separate_xlsx
+    registrations = None
+    if bool(args.registrations) != bool(args.registrations_sha256):
+        raise ValueError('Registration act path and expected hash must be supplied together')
+    if args.registrations:
+        registrations = read_registration_act(args.registrations, expected_sha256=args.registrations_sha256)
+    dates = None
+    if bool(args.operation_dates) != bool(args.operation_dates_sha256):
+        raise ValueError('Operation-date evidence path and expected hash must be supplied together')
+    if args.operation_dates:
+        raw = args.operation_dates.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != args.operation_dates_sha256:
+            raise ValueError('Operation-date evidence hash mismatch')
+        dates = json.loads(raw)
+    with open_ledger_db(args.db, read_only=True) as db:
+        db.connection.execute('BEGIN')
+        projection = build_separate_projection(db, period_key=args.period, tax=args.tax,
+            registrations=registrations, operation_dates=dates,
+            allow_authoritative_history=args.allow_authoritative_history)
+        database_hash = hashlib.sha256('\n'.join(db.connection.iterdump()).encode()).hexdigest()
+        db.connection.rollback()
+    tax_id = projection['taxpayer']['tax_id']
+    if not re.fullmatch(r'[A-Z0-9]{8,12}', tax_id):
+        raise ValueError('Taxpayer identifier cannot be used in an AEAT filename')
+    name = re.sub(r'[^A-Za-z0-9]+', '_', projection['taxpayer']['full_name']).strip('_')
+    filename = f'{args.period[:4]}{tax_id}{"C" if args.tax=="iva" else "D"}{name}.xlsx'
+    args.out_dir.mkdir(parents=True, exist_ok=False)
+    (args.out_dir/'projection.json').write_text(json.dumps(projection, default=str, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    workbook = None
+    write_error = None
+    if projection['ready']:
+        try:
+            workbook = write_separate_xlsx(args.template, projection, args.out_dir/filename)
+        except (ValueError, OSError) as exc:
+            write_error = str(exc)
+    try:
+        manifest = {'status':'content_projected' if workbook else 'blocked', 'tax':args.tax,
+            'period':args.period, 'scope':{'starts_on':projection['starts_on'],'through':projection['through']},
+            'projection_sha256':projection.get('projection_sha256'),
+            'database_snapshot_sha256':database_hash,
+            'template_sha256':hashlib.sha256(args.template.read_bytes()).hexdigest(),
+            'registration_act_sha256':args.registrations_sha256,
+            'operation_dates_sha256':args.operation_dates_sha256,
+            'workbook_sha256':hashlib.sha256(workbook.read_bytes()).hexdigest() if workbook else None,
+            'source_completeness_verified':False, 'aeat_validator_acceptance':False,
+            'filed_returns_changed':False, 'blockers':projection['blockers'], 'write_error':write_error}
+        (args.out_dir/'manifest.json').write_text(json.dumps(manifest, default=str, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    except OSError:
+        if workbook:
+            workbook.unlink()
+        raise
+    _emit({'tax':args.tax,'period':args.period,'status':manifest['status'],'blocker_count':len(projection['blockers']),
+           'out_dir':str(args.out_dir)})
+    return 0 if workbook else 2
+
+
 def _cmd_books_aeat_write(args: argparse.Namespace) -> int:
     from .aeat_books import (
         AeatBookProjectionError,
@@ -4207,7 +4319,10 @@ def _cmd_filing_package_build(args: argparse.Namespace) -> int:
     from .filing_package import write_filing_package
 
     with open_ledger_db(args.db, read_only=True) as db:
-        manifest = write_filing_package(db, args.out_dir, period_key=args.period)
+        evidence = (json.loads(args.supplemental_evidence.read_text(encoding="utf-8"))
+                    if args.supplemental_evidence else None)
+        manifest = write_filing_package(db, args.out_dir, period_key=args.period,
+                                        supplemental_evidence=evidence)
     manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
     _emit(
         {
@@ -4228,6 +4343,47 @@ def _cmd_filing_package_verify(args: argparse.Namespace) -> int:
         result = verify_filing_package(db, args.manifest)
     _emit(result)
     return 0 if result["ok"] else 2
+
+
+def _cmd_filing_package_integrity(args: argparse.Namespace) -> int:
+    from .filing_package import verify_filing_package_integrity
+
+    result = verify_filing_package_integrity(args.manifest,
+        expected_manifest_sha256=args.expected_manifest_sha256)
+    _emit(result)
+    return 0 if result["integrity_ok"] else 2
+
+
+def _cmd_receipt_register(args: argparse.Namespace) -> int:
+    from .receipt_register import create_series, register_receipt, list_receipts
+
+    with open_ledger_db(args.db, read_only=args.receipt_register_command == "list") as db:
+        if args.receipt_register_command == "list":
+            result = list_receipts(db)
+        else:
+            payload = _load_json_object(args.payload)
+            operation = create_series if args.receipt_register_command == "create-series" else register_receipt
+            result = operation(db, **payload)
+    _emit(result)
+    return 0
+
+
+def _cmd_filing_archive(args: argparse.Namespace) -> int:
+    from .filing_archive import write_filing_archive
+    evidence = _load_json_object(args.supplemental_evidence) if args.supplemental_evidence else None
+    with open_ledger_db(args.db, read_only=True) as db:
+        manifest = write_filing_archive(db, args.out_dir, period_key=args.period, dependency_dir=args.dependency_dir,
+            source_files=args.source_file, legacy_path_map=args.legacy_path_map, supplemental_evidence=evidence)
+    _emit({"manifest":str(manifest.resolve()),"manifest_sha256":hashlib.sha256(manifest.read_bytes()).hexdigest(),
+           "mandatory_books_ready":False,"runtime_replay_verified":False})
+    return 0
+
+
+def _cmd_filing_archive_verify(args: argparse.Namespace) -> int:
+    from .filing_archive import verify_filing_archive
+    result = verify_filing_archive(args.manifest, expected_manifest_sha256=args.expected_manifest_sha256)
+    _emit(result)
+    return 0 if result["integrity_ok"] else 2
 
 
 def _cmd_filing_snapshot(args: argparse.Namespace) -> int:

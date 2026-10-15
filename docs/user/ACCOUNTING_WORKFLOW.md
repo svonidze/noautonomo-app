@@ -437,8 +437,10 @@ reported through withholding returns.
 ## Issuing your own invoices and the Verifactu timeline
 
 Outgoing invoice drafts in this toolkit are a numbering and review aid. They are
-not a certified invoicing system (SIF) under the Verifactu regulation, and the
-toolkit does not send invoice records to the AEAT.
+not accompanied by a manufacturer's declaration of RRSIF conformity, and the
+toolkit does not send invoice records to the AEAT. The draft workflow calculates
+amounts and can link an externally issued PDF to an accounting transaction;
+calling it a draft does not establish that it falls outside the SIF rules.
 
 A draft and `invoice show` list `invoice_mentions` to add in the external channel;
 they never change totals. `eu_service_income` for an EU customer with a VAT id
@@ -476,7 +478,14 @@ the AEAT notice on the extension:
 https://sede.agenciatributaria.gob.es/Sede/iva/sistemas-informaticos-facturacion-verifactu/nota-informativa-ampliacion-plazo-adaptacion-facturacion.html
 
 Whether a spreadsheet or template used to produce invoices counts as a SIF is a
-question for the AEAT FAQ and your adviser; plan the answer well before July 2027.
+question about its actual workflow, including subsequent processing of invoice
+data. The [AEAT scope FAQ](https://sede.agenciatributaria.gob.es/Sede/iva/sistemas-informaticos-facturacion-verifactu/preguntas-frecuentes/cuestiones-generales-ambitos-aplicacion.html)
+distinguishes basic spreadsheet invoicing from systems that also build accounting
+books. Assess the distributed toolkit separately from a user's external template.
+Resolve any uncertain producer classification before releasing affected invoicing
+functionality; the later taxpayer deadlines do not defer a producer's obligation.
+Do not describe a release as RRSIF compliant without the required implementation,
+verification and manufacturer's declaration under [RD 1007/2023, article 13](https://www.boe.es/buscar/act.php?id=BOE-A-2023-24840).
 Suppliers already issuing Verifactu invoices print a "QR tributario" and the text
 "Factura verificable en la sede electronica de la AEAT" on them — such invoices
 still import like any other document.

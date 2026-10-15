@@ -7,8 +7,12 @@ from pathlib import Path
 import re
 import unicodedata
 
-from .source_book_content_check import required_group_header_map, required_groups_for_check
-from .source_book_xlsx import read_xlsx_tables
+from .source_book_content_check import (
+    EMPTY_OK_BOOK_TYPES,
+    required_group_header_map,
+    required_groups_for_check,
+    select_source_book_xlsx_table,
+)
 
 
 SOURCE_BOOK_IMPORT_FIELDS = [
@@ -125,9 +129,6 @@ OPTIONAL_ALIASES = {
     "casilla07": ["casilla 07", "casilla07", "payment due before reductions"],
     "casilla19": ["casilla 19", "casilla19", "payable", "amount due", "resultado"],
 }
-
-EMPTY_OK_BOOK_TYPES = {"bienes_inversion_book", "provisiones_suplidos_book"}
-
 
 def build_source_book_import(
     *,
@@ -549,36 +550,8 @@ def _read_text(path: Path) -> str:
 
 
 def _best_xlsx_table(path: Path, check: str) -> _Table:
-    tables = [
-        _Table(table.file_format, table.headers, table.rows)
-        for table in read_xlsx_tables(path)
-    ]
-    if not tables:
-        return _Table("xlsx", [], [])
-    if _canonical_check(check) in EMPTY_OK_BOOK_TYPES and _is_xolo_combined_accounting_book(path):
-        has_matching_table = any(
-            _table_type_rank(check, table.headers) == 0 and not _missing_required(check, table.headers)
-            for table in tables
-        )
-        if not has_matching_table:
-            return _Table(f"xlsx:{_canonical_check(check)}:empty-not-applicable", _synthetic_required_headers(check), [])
-    best = min(
-        tables,
-        key=lambda table: (
-            _table_type_rank(check, table.headers),
-            _table_data_penalty(table.rows),
-            len(_missing_required(check, table.headers)),
-            -len(table.rows),
-        ),
-    )
-    if _missing_required(check, best.headers) and _canonical_check(check) in EMPTY_OK_BOOK_TYPES and _is_xolo_combined_accounting_book(path):
-        return _Table(f"xlsx:{_canonical_check(check)}:empty-not-applicable", _synthetic_required_headers(check), [])
-    return best
-
-
-def _missing_required(check: str, headers: list[str]) -> list[str]:
-    mapping = required_group_header_map(check, headers)
-    return [group for group in required_groups_for_check(check) if group not in mapping]
+    table = select_source_book_xlsx_table(path, check)
+    return _Table(table.file_format, table.headers, table.rows)
 
 
 def _content_ready_files(response_root: Path, raw: str) -> list[Path]:
@@ -621,54 +594,6 @@ def _normalize(value: str) -> str:
 
 def _compact(value: str) -> str:
     return re.sub(r"[^a-z0-9%]+", "", value.lower())
-
-
-def _synthetic_required_headers(check: str) -> list[str]:
-    return [aliases[0] for aliases in required_groups_for_check(check).values()]
-
-
-def _is_xolo_combined_accounting_book(path: Path) -> bool:
-    name = _normalize(path.name)
-    return "libros contables" in name or "libro contable" in name
-
-
-def _table_type_rank(check: str, headers: list[str]) -> int:
-    kind = _canonical_check(check)
-    joined = " ".join(_normalize(header) for header in headers)
-    if kind == "ingresos_book":
-        if _contains_any(joined, ["ingreso computable", "concepto de ingreso", "nombre destinatario"]):
-            return 0
-        if _contains_any(joined, ["gasto deducible", "concepto de gasto", "nombre expedidor", "valor amortizable"]):
-            return 3
-    elif kind == "gastos_book":
-        if _contains_any(joined, ["gasto deducible", "concepto de gasto", "nombre expedidor", "irpf deductible"]):
-            return 0
-        if _contains_any(joined, ["ingreso computable", "concepto de ingreso", "nombre destinatario", "valor amortizable"]):
-            return 3
-    elif kind == "bienes_inversion_book":
-        if _contains_any(joined, ["descripcion del bien", "valor amortizable", "amortizacion cuota resultante", "acquisition value"]):
-            return 0
-        if _contains_any(joined, ["ingreso computable", "gasto deducible"]):
-            return 3
-    elif kind == "provisiones_suplidos_book":
-        if _contains_any(joined, ["provisiones", "suplidos", "disbursements", "advances"]):
-            return 0
-        if _contains_any(joined, ["ingreso computable", "gasto deducible", "valor amortizable"]):
-            return 3
-    return 1
-
-
-def _contains_any(value: str, needles: list[str]) -> bool:
-    return any(needle in value for needle in needles)
-
-
-def _table_data_penalty(rows: list[list[str]]) -> int:
-    if not rows:
-        return 0
-    first = " ".join(_normalize(cell) for cell in rows[0])
-    if _contains_any(first, ["ejercicio periodo", "periodo grupo", "serie numero", "codigo pais identificacion"]):
-        return 5
-    return 0
 
 
 def _cell(value: str) -> str:

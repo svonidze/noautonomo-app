@@ -1,56 +1,112 @@
 from __future__ import annotations
 
 import hashlib
+import csv
 import json
 from pathlib import Path
+import shutil
 import tempfile
 from typing import Any
 
 from .books import BookExportResult, write_accounting_books
 from .ledger_db import LedgerDB
+from .supplemental_books import write_supplemental_books
 
 
 MANIFEST_FILENAME = "filing-package-manifest.json"
 FINAL_SNAPSHOT_STATUSES = {"filed", "submitted", "final"}
 
 
-def write_filing_package(database: LedgerDB, output_dir: str | Path, *, period_key: str) -> Path:
+def write_filing_package(
+    database: LedgerDB, output_dir: str | Path, *, period_key: str,
+    supplemental_evidence: dict[str, Any] | None = None,
+) -> Path:
     root = Path(output_dir)
-    root.mkdir(parents=True, exist_ok=True)
-    export = write_accounting_books(database, root, period_key=period_key)
-    manifest = _build_manifest(database, export)
-    manifest_path = root / MANIFEST_FILENAME
-    manifest_path.write_text(_serialize_json(manifest), encoding="utf-8")
+    # Each destination is a new version, including when another export is in progress.
+    root.mkdir(parents=True, exist_ok=False)
+    try:
+        export = write_accounting_books(database, root, period_key=period_key)
+        period = database.connection.execute(
+            "SELECT starts_on, ends_on FROM periods WHERE period_key=?", (period_key,),
+        ).fetchone()
+        files, _ = write_supplemental_books(root, period_key=period_key,
+            starts_on=period["starts_on"], ends_on=period["ends_on"], evidence=supplemental_evidence)
+        export.files.update(files)
+        export.row_counts.update({key: 0 for key in files})
+        manifest = _build_manifest(database, export)
+        manifest_path = root / MANIFEST_FILENAME
+        manifest_path.write_text(_serialize_json(manifest), encoding="utf-8")
+    except BaseException:
+        shutil.rmtree(root)
+        raise
     return manifest_path
+
+
+def verify_filing_package_integrity(
+    manifest_path: str | Path, *, expected_manifest_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Check retained bytes independently of the current database or export rules."""
+    manifest_file = Path(manifest_path)
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    missing_artifacts: list[str] = []
+    mismatched_artifacts: list[str] = []
+    invalid_artifacts: list[str] = []
+    seen: set[str] = set()
+    for artifact in manifest.get("artifacts", []):
+        name = artifact["filename"]
+        if not name or Path(name).name != name or name in {".", "..", MANIFEST_FILENAME} or name in seen:
+            invalid_artifacts.append(name)
+            continue
+        seen.add(name)
+        artifact_path = manifest_file.parent / name
+        if artifact_path.is_symlink():
+            invalid_artifacts.append(name)
+            continue
+        if not artifact_path.is_file():
+            missing_artifacts.append(name)
+            continue
+        actual_hash = _sha256_file(artifact_path)
+        if actual_hash != artifact["sha256"] or artifact_path.stat().st_size != artifact["size_bytes"]:
+            mismatched_artifacts.append(name)
+    manifest_sha256 = _sha256_file(manifest_file)
+    trusted_manifest_matches = (None if expected_manifest_sha256 is None
+                                else manifest_sha256 == expected_manifest_sha256)
+    return {
+        "integrity_ok": bool(seen) and not (missing_artifacts or mismatched_artifacts or invalid_artifacts)
+                        and trusted_manifest_matches is not False and not manifest_file.is_symlink(),
+        "manifest_sha256": manifest_sha256,
+        "trusted_manifest_matches": trusted_manifest_matches,
+        "missing_artifacts": missing_artifacts,
+        "mismatched_artifacts": mismatched_artifacts,
+        "invalid_artifacts": invalid_artifacts,
+    }
 
 
 def verify_filing_package(database: LedgerDB, manifest_path: str | Path) -> dict[str, Any]:
     manifest_file = Path(manifest_path)
     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
-    missing_artifacts: list[str] = []
-    mismatched_artifacts: list[str] = []
-    for artifact in manifest.get("artifacts", []):
-        artifact_path = manifest_file.parent / artifact["filename"]
-        if not artifact_path.is_file():
-            missing_artifacts.append(artifact["filename"])
-            continue
-        actual_hash = _sha256_file(artifact_path)
-        if actual_hash != artifact["sha256"]:
-            mismatched_artifacts.append(artifact["filename"])
+    integrity = verify_filing_package_integrity(manifest_file)
+    evidence_file = manifest_file.parent / "supplemental-book-evidence.json"
+    evidence = (json.loads(evidence_file.read_text(encoding="utf-8"))
+                if integrity["integrity_ok"] and any(
+                    item.get("filename") == evidence_file.name for item in manifest.get("artifacts", [])
+                ) else None)
 
     with tempfile.TemporaryDirectory() as tmp:
-        regenerated_path = write_filing_package(database, Path(tmp), period_key=manifest["period"]["period_key"])
+        regenerated_path = write_filing_package(database, Path(tmp) / "package",
+            period_key=manifest["period"]["period_key"], supplemental_evidence=evidence)
         regenerated = json.loads(regenerated_path.read_text(encoding="utf-8"))
 
     manifest_matches = regenerated == manifest
-    ok = manifest_matches and not missing_artifacts and not mismatched_artifacts
+    ok = manifest_matches and integrity["integrity_ok"]
     return {
         "ok": ok,
         "submission_ready": bool(regenerated.get("submission_ready")),
         "readiness_blockers": regenerated.get("readiness_blockers", []),
         "manifest_matches": manifest_matches,
-        "missing_artifacts": missing_artifacts,
-        "mismatched_artifacts": mismatched_artifacts,
+        "currentness_ok": manifest_matches,
+        "completeness_verified": False,
+        **integrity,
         "expected_manifest": regenerated,
     }
 
@@ -157,6 +213,20 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
         """, (year_start, end, year_start, end, period['starts_on'], end, year_start, end)).fetchone()
         if attribution_history:
             readiness_reasons.append('tax_attribution_snapshot_review_required')
+    supplemental = json.loads(export.files["supplemental_book_status"].read_text(encoding="utf-8"))
+    readiness_reasons.extend(supplemental["blockers"])
+    disposal = connection.execute("SELECT 1 FROM asset_disposals WHERE disposed_on BETWEEN ? AND ? LIMIT 1",
+                                  (period["starts_on"][:4] + "-01-01", period["ends_on"])).fetchone()
+    if disposal:
+        readiness_reasons.append("asset_disposal_settlement_review_required")
+    with export.files["assets"].open(newline="", encoding="utf-8") as handle:
+        if any(row.get("calculation_status") != "calculated" for row in csv.DictReader(handle)):
+            readiness_reasons.append("asset_recomputation_unavailable")
+    content_check = json.loads(export.files["register_content_check"].read_text(encoding="utf-8"))
+    if not content_check["checked_fields_ready"]:
+        readiness_reasons.append("register_required_fields_missing")
+    # Hashes and filed snapshots cannot certify the legal content of every book.
+    readiness_reasons.append("mandatory_book_content_validation_pending")
     attribution_basis = {}
     if "tax_registers" in export.files:
         registers = json.loads(export.files["tax_registers"].read_text(encoding="utf-8"))
@@ -177,11 +247,13 @@ def _build_manifest(database: LedgerDB, export: BookExportResult) -> dict[str, A
         }}
 
     return {
-        "manifest_version": 2,
+        "manifest_version": 3,
         "package_type": "ledgerdb_export_only",
         "package_stage": "submission_ready" if not readiness_reasons else "draft_review",
         "submission_ready": not readiness_reasons,
         "readiness_blockers": readiness_reasons,
+        "mandatory_books_ready": False,
+        "supplemental_book_status": supplemental,
         "period": {
             "period_key": period["period_key"],
             "starts_on": period["starts_on"],

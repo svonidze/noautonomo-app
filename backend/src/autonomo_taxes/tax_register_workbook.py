@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 import tempfile
+import os
 from typing import Any, Mapping
 import xml.etree.ElementTree as ET
 import zipfile
@@ -16,7 +17,19 @@ REGISTER_COLUMNS = (
     ('vat_eur', 'VAT (EUR)'), ('deductible_vat_eur', 'Deductible VAT (EUR)'),
     ('withholding_eur', 'Withholding (EUR)'), ('amount_eur', 'Amount (EUR)'),
     ('document_number', 'Document number'), ('issued_on', 'Issue date'),
+    ('receipt_number', 'Receipt registration number'), ('registered_on', 'Registration date'),
+    ('receipt_series', 'Receipt series'), ('receipt_year', 'Receipt year'),
+    ('operation_date', 'Operation date'), ('document_type', 'Document type'),
+    ('correction_of_transaction_id', 'Corrected transaction ID'), ('correction_kind', 'Correction kind'),
+    ('vat_rate_percent', 'VAT rate (%)'), ('invoice_type', 'Invoice type'),
+    ('operation_key', 'Operation key'), ('operation_qualification', 'Operation qualification'),
+    ('exempt_operation', 'Exemption'), ('reverse_charge', 'Reverse charge'),
+    ('include_modelo130', 'Included in Modelo 130'), ('include_modelo303', 'Included in Modelo 303'),
     ('counterparty_name', 'Counterparty'), ('transaction_id', 'Row ID'),
+    ('counterparty_tax_id', 'Counterparty tax ID'), ('vat_id', 'Counterparty VAT ID'),
+    ('counterparty_identifier', 'Confirmed identifier'), ('counterparty_id_type', 'Identifier type'),
+    ('counterparty_identity_country', 'Identifier country'), ('amortization_entry_id', 'Depreciation entry'),
+    ('country_code', 'Counterparty country'),
     ('source_transaction_id', 'Source transaction ID'), ('attribution_id', 'Attribution ID'),
     ('document_id', 'Document ID'), ('document_source_hash', 'Document SHA-256'),
     ('attribution_evidence_ref', 'Attribution evidence'), ('fx_evidence_ref', 'FX evidence'),
@@ -27,6 +40,7 @@ SOURCE_COLUMNS = (
     ('amount_eur', 'Source amount (EUR)'), ('taxable_base_eur', 'Source tax base (EUR)'),
     ('vat_eur', 'Source VAT (EUR)'), ('document_number', 'Document number'),
     ('issued_on', 'Issue date'), ('counterparty_name', 'Counterparty'),
+    ('counterparty_tax_id', 'Counterparty tax ID'), ('vat_id', 'Counterparty VAT ID'),
     ('document_id', 'Document ID'), ('document_source_hash', 'Document SHA-256'),
 )
 MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
@@ -41,11 +55,15 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
     if target.suffix.lower() != '.xlsx':
         raise ValueError('Tax register review output must use the .xlsx suffix')
     registers = projection['registers']
+    from .register_content_check import AMOUNTS, check_register_content
+    content_check = check_register_content(projection)
     review = [['Tax registers for review', 'AEAT import unsupported'],
               ['Scope', 'IRPF year to date; IVA selected period'],
               ['Amounts', 'EUR; source and attribution sheets are traceability only'],
-              ['Calculations', 'Registers precede difficult-expense relief and form-specific adjustments']]
+              ['Calculations', 'Book entries may be excluded from returns; use inclusion flags when reconciling']]
     blockers = []
+    review.extend([['Required fields', 'Checked fields ready' if content_check['checked_fields_ready'] else 'Review required'],
+                   ['Source completeness', 'Not verified by this export']])
     visible_ids = set(projection['selected_row_ids'])
     parent_ids = {row['transaction_id'] for row in projection['source_rows']}
     sheets = []
@@ -53,7 +71,7 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
         register = registers[basis]
         review.extend([[basis.upper() + ' from', register['starts_on']],
                        [basis.upper() + ' through', register['through']],
-                       [basis.upper() + ' status', 'Blocked' if register['blocked'] else 'Complete'],
+                       [basis.upper() + ' status', 'Blocked' if register['blocked'] else 'Amounts ready'],
                        [basis.upper() + ' rows', len(register['rows']) if not register['blocked'] else None]])
         for row in register.get('blocked_rows', []):
             blockers.append([basis.upper(), row['tax_date'], row['period'],
@@ -92,7 +110,27 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
             row['fx_evidence_ref'], row['reason'], irpf.get('evidence_ref'), iva.get('evidence_ref')])
     sheets.extend([('ATTRIBUTIONS', bridge), ('BLOCKERS',
         [['Tax', 'Tax date', 'Affected period', 'Row ID', 'Source transaction ID', 'Reason'], *blockers])])
+    sheets.append(('REQUIRED_FIELDS', [['Register', 'Row ID', 'Missing fields'],
+        *[[item['register'], item['transaction_id'], ', '.join(item['missing_fields'])]
+          for item in content_check['blockers']]]))
+    total_rows = [['Register', 'Scope', 'Kind', *AMOUNTS]]
+    for basis, totals in content_check['totals'].items():
+        for quarter, kinds in sorted(totals['quarters'].items()):
+            for kind, amounts in sorted(kinds.items()):
+                total_rows.append([basis, quarter, kind, *[amounts[key] for key in AMOUNTS]])
+        for kind, amounts in sorted(totals['scope_total'].items()):
+            total_rows.append([basis, 'Selected scope', kind, *[amounts[key] for key in AMOUNTS]])
+    sheets.append(('TOTALS', total_rows))
     sheets.insert(0, ('REVIEW', review))
+    return write_table_workbook(target, sheets)
+
+
+def write_table_workbook(path: str | Path, sheets: list[tuple[str, list[list[Any]]]], *,
+                         exclusive: bool = False, max_bytes: int | None = None) -> Path:
+    """Write typed value-only sheets; exclusive outputs never replace an earlier book."""
+    target = Path(path)
+    if target.suffix.lower() != '.xlsx':
+        raise ValueError('Workbook output must use the .xlsx suffix')
     parts = _package(sheets)
     target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=target.parent, suffix='.xlsx.tmp', delete=False) as handle:
@@ -103,7 +141,12 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
                 info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 archive.writestr(info, content)
-        temporary.replace(target)
+        if max_bytes is not None and temporary.stat().st_size > max_bytes:
+            raise ValueError('Workbook exceeds its size limit')
+        if exclusive:
+            os.link(temporary, target)
+        else:
+            temporary.replace(target)
     finally:
         temporary.unlink(missing_ok=True)
     return target

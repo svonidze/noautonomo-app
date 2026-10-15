@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import unicodedata
 
-from .source_book_xlsx import read_xlsx_tables
+from .source_book_xlsx import XlsxTable, read_xlsx_tables
 
 
 SOURCE_BOOK_CONTENT_CHECK_FIELDS = [
@@ -313,7 +313,7 @@ def _inspection(path: Path, check: str, file_format: str, headers: list[str], ro
     missing = _missing_groups(check, headers)
     if not headers:
         status = "empty_or_no_header"
-    elif row_count <= 0 and (check != "provisiones_suplidos_book" or missing):
+    elif row_count <= 0 and (_canonical_check(check) not in EMPTY_OK_BOOK_TYPES or missing):
         status = "empty_or_no_data_rows"
     elif missing:
         status = "content_incomplete"
@@ -403,24 +403,19 @@ def _read_text(path: Path) -> str:
 
 
 def _best_xlsx_inspection(path: Path, check: str) -> _Inspection:
+    table = select_source_book_xlsx_table(path, check)
+    return _inspection(path, check, table.file_format, table.headers, len(table.rows))
+
+
+def select_source_book_xlsx_table(path: Path, check: str) -> XlsxTable:
+    """Use the same source evidence for content checks and direct imports."""
     tables = read_xlsx_tables(path)
-    if not tables:
-        return _inspection(path, check, "xlsx", [], 0)
     if _canonical_check(check) in EMPTY_OK_BOOK_TYPES and _is_xolo_combined_accounting_book(path):
-        has_matching_table = any(
-            _table_type_rank(check, table.headers) == 0 and not _missing_groups(check, table.headers)
-            for table in tables
-        )
-        if not has_matching_table:
-            return _Inspection(
-                str(path),
-                "content_ready",
-                f"xlsx:{_canonical_check(check)}:empty-not-applicable",
-                0,
-                _synthetic_required_headers(check),
-                [],
-            )
-    best_table = min(
+        # Another book's generic date/amount columns do not prove this book exists.
+        tables = [table for table in tables if _table_type_rank(check, table.headers) == 0]
+    if not tables:
+        return XlsxTable(f"xlsx:{_canonical_check(check)}:missing-or-unrecognized", [], [])
+    return min(
         tables,
         key=lambda table: (
             _table_type_rank(check, table.headers),
@@ -429,7 +424,6 @@ def _best_xlsx_inspection(path: Path, check: str) -> _Inspection:
             -len(table.rows),
         ),
     )
-    return _inspection(path, check, best_table.file_format, best_table.headers, len(best_table.rows))
 
 
 def _inspection_rank(item: _Inspection) -> tuple[int, int, int]:
@@ -503,10 +497,6 @@ def _required_groups(check: str) -> dict[str, list[str]]:
 
 def _canonical_check(check: str) -> str:
     return LEGACY_REQUIRED_GROUP_ALIASES.get(check, check)
-
-
-def _synthetic_required_headers(check: str) -> list[str]:
-    return [aliases[0] for aliases in _required_groups(check).values()]
 
 
 def _is_xolo_combined_accounting_book(path: Path) -> bool:

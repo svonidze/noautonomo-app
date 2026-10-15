@@ -17,7 +17,7 @@ import zipfile
 
 
 OFFICIAL_TEMPLATE_SHA256 = (
-    "0dd42d6b40d9388365624ae2ed7f301d8479ec92271b4eac06d2440096f49ebc"
+    "1011b811d71e5074dea08b946d2be2189343e419bcb668441d6e74fd1f639008"
 )
 AEAT_VALIDATOR_POST_URL = (
     "https://www2.agenciatributaria.gob.es/wlpl/PACM-SERV/ServletValidarLLRSI"
@@ -460,6 +460,15 @@ def build_aeat_workbook_payload(
     template_check: Mapping[str, Any],
 ) -> dict[str, Any]:
     blockers = [dict(row) for row in projection.get("blockers", [])]
+    for book, rows in (("expense", projection.get("expense_rows", [])),
+                       ("asset", projection.get("asset_rows", []))):
+        for row in rows:
+            if book == "expense" and row.get("tipo_factura") in {"SF", "AJ"}:
+                continue
+            if not str(row.get("numero_recepcion") or "").strip():
+                blockers.append({"code": "receipt_registration_missing",
+                    "subject": str(row.get("transaction_id") or row.get("asset_id") or book),
+                    "message": "An evidenced receipt registration number is required for this book row."})
     if not template_check.get("valid"):
         blockers.append(
             {
