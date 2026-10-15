@@ -11,6 +11,7 @@ from .financials import FinancialsService
 from .invoices import InvoiceService
 from .intake_service import IntakeService
 from .settings import SettingsService
+from .annual import AnnualService
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class RuntimeConfig:
 
 
 class AccountingService(
+    AnnualService,
     QueryService,
     ContactsService,
     FinancialsService,

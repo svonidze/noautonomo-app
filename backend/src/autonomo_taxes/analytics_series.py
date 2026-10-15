@@ -631,21 +631,27 @@ def _renta_totals(
     if through is None:
         return empty
     try:
+        from .annual_adjustments import adjustment_rows, list_adjustments
+        db = LedgerDB(connection)
         rows = load_tax_rows(
-            LedgerDB(connection), year, allow_authoritative_history=True, through=through
+            db, year, allow_authoritative_history=True, through=through
         )
         rows = project_tax_rows(rows, "irpf", date(year, 1, 1), through)
+        annual_rows = adjustment_rows(db, year, through=through, include_provisional=True)
+        provisional = any(not row["voided"] and row["evidence_status"] == "provisional"
+            and row["recognized_on"] <= through.isoformat() for row in list_adjustments(db, year))
     except CalculationBlocked:
         return {**empty, "renta_status": "blocked"}
-    if not rows:
+    if not rows and not annual_rows:
         return empty
     rule = difficult_expense_rule_for_year(year)
     values = calculate_modelo100_business_support(
         rows, year=year, difficult_expenses_rate=rule.rate,
         difficult_expenses_cap=rule.annual_cap_eur,
+        annual_adjustment_rows=annual_rows,
     ).values
     return {
-        "renta_status": "ok",
+        "renta_status": "provisional" if provisional else "ok",
         "renta_income_minor": _decimal_to_minor(values["business_income"]),
         "difficult_expense_minor": _decimal_to_minor(values["difficult_expenses"]),
         "renta_expense_minor": _decimal_to_minor(

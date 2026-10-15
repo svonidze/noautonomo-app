@@ -34,7 +34,7 @@ from .tax_rules import ALL_FORM_CODES, ANNUAL_FORM_CODES, FORM_RULES, QUARTERLY_
 from .vat_classification import is_vat_investment_good
 
 
-LATEST_SCHEMA_VERSION = 30
+LATEST_SCHEMA_VERSION = 31
 
 # Migrations that rebuild a table referenced by a foreign key. They must
 # run with foreign-key enforcement temporarily disabled, and that pragma
@@ -6390,6 +6390,8 @@ class LedgerDB:
             "amortization_entries",
             "payments",
             "fx_rates",
+            "annual_adjustments",
+            "annual_adjustment_voids",
             "obligations",
             "tax_calendar_entries",
             "reta_rate_tables",
@@ -8420,6 +8422,30 @@ def _migration_30(connection: sqlite3.Connection) -> None:
                            "BEGIN SELECT RAISE(ABORT, 'Asset disposals are immutable'); END")
 
 
+def _migration_31(connection: sqlite3.Connection) -> None:
+    connection.execute("ALTER TABLE annual_adjustments ADD COLUMN source_transaction_id TEXT REFERENCES transactions(transaction_id)")
+    connection.execute("ALTER TABLE annual_adjustments ADD COLUMN recognized_on TEXT")
+    connection.execute("ALTER TABLE annual_adjustments ADD COLUMN adjustment_kind TEXT CHECK (adjustment_kind IN ('income', 'expense'))")
+    connection.execute("ALTER TABLE annual_adjustments ADD COLUMN evidence_status TEXT CHECK (evidence_status IN ('verified', 'provisional'))")
+    connection.execute("ALTER TABLE annual_adjustments ADD COLUMN source_snapshot_hash TEXT")
+    connection.execute("ALTER TABLE annual_adjustments ADD COLUMN actor TEXT")
+    connection.execute("""
+        CREATE TABLE annual_adjustment_voids (
+            annual_adjustment_id TEXT PRIMARY KEY REFERENCES annual_adjustments(annual_adjustment_id),
+            reason TEXT NOT NULL CHECK (length(trim(reason)) > 0),
+            actor TEXT NOT NULL CHECK (length(trim(actor)) > 0),
+            created_at TEXT NOT NULL
+        )
+    """)
+    connection.execute("CREATE INDEX annual_adjustments_source_idx ON annual_adjustments(source_transaction_id, tax_year)")
+    for table in ("annual_adjustments", "annual_adjustment_voids"):
+        for action in ("UPDATE", "DELETE"):
+            connection.execute(
+                f"CREATE TRIGGER {table}_no_{action.lower()} BEFORE {action} ON {table} "
+                "BEGIN SELECT RAISE(ABORT, 'Annual adjustments are append-only'); END"
+            )
+
+
 _MIGRATIONS = {
     1: _migration_1,
     2: _migration_2,
@@ -8451,4 +8477,5 @@ _MIGRATIONS = {
     28: _migration_28,
     29: _migration_29,
     30: _migration_30,
+    31: _migration_31,
 }

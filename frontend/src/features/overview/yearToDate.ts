@@ -8,12 +8,13 @@ export interface YearToDate {
   fullYear: boolean;
   asOf: string | null;
   unavailable: boolean;
+  provisional: boolean;
 }
 
 const euros = (minor: ChartValue) => (minor === null || minor === undefined ? null : minor / 100);
 
 // Income, expenses and net of the selected period's year under the Renta rules:
-// expenses include the difficult-to-justify allowance, so the figures match Modelo 130.
+// Annual adjustments belong to Renta; they do not change quarterly Modelo 130.
 export function yearToDate(analytics: Analytics | undefined): YearToDate | undefined {
   const current = analytics?.datasets.ytd_comparison?.current_year;
   if (!current) return undefined;
@@ -27,5 +28,6 @@ export function yearToDate(analytics: Analytics | undefined): YearToDate | undef
     fullYear: asOf !== null && Number(asOf.slice(0, 4)) > current.year,
     asOf,
     unavailable,
+    provisional: current.renta_status === 'provisional',
   };
 }

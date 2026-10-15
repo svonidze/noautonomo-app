@@ -768,6 +768,7 @@ def calculate_modelo100_business_support(
     difficult_expenses_cap: Decimal = DIFFICULT_EXPENSE_CAP_EUR,
     unsupported_categories: Iterable[str] = (),
     business_activities: Iterable[Mapping[str, Any]] = (),
+    annual_adjustment_rows: Iterable[TaxRow] = (),
     new_activity_prior_activity: str | None = None,
     new_activity_former_employer_over_half: bool | None = None,
     new_activity_first_positive_year: int | None = None,
@@ -777,6 +778,8 @@ def calculate_modelo100_business_support(
         raise CalculationBlocked(f"Renta WEB review required for unsupported categories: {', '.join(unsupported)}")
     rows = list(rows)
     selected = project_tax_rows(rows, "irpf", date(year, 1, 1), date(year, 12, 31))
+    annual_selected = project_tax_rows(annual_adjustment_rows, "irpf", date(year, 1, 1), date(year, 12, 31))
+    selected.extend(annual_selected)
     incomes = [row for row in selected if row.kind == "income"]
     expenses = [row for row in selected if row.kind in {"expense", "adjustment"}]
     income = cents(
@@ -798,6 +801,8 @@ def calculate_modelo100_business_support(
         "difficult_expenses": difficult,
         "business_net_income": net_income,
         "status": "decision_support_requires_renta_web",
+        "annual_income_adjustments": _sum([row for row in annual_selected if row.kind == "income"], "amount_eur"),
+        "annual_expense_adjustments": _sum([row for row in annual_selected if row.kind == "expense"], "deductible_irpf_eur"),
     }
     values.update(
         _new_activity_reduction(

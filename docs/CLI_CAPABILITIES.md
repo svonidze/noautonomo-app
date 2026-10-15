@@ -112,3 +112,31 @@ Taxes/analytics optionally accept `--as-of YYYY-MM-DD`; reads do not refresh cac
 post transactions or submit returns. `period dashboard` remains the explicit
 calculation/cache-writing action. The service's existing field meanings, including
 unknown/missing amounts and unconfirmed payment evidence, remain authoritative.
+
+## Annual Renta adjustments
+
+`annual-adjustments list --year YYYY` and `preview --year YYYY --as-of YYYY-MM-DD`
+read annual preparation. The preview includes annual income/expense adjustments
+before the annual difficult-expenses allowance. It is never filing-ready by
+itself. These adjustments also appear in the dashboard's year-to-date Renta
+figures and annual-adjustment panel; quarterly calculations and filed snapshots
+continue to use their existing journals.
+
+`annual-adjustments record --input PRIVATE_JSON --actor OPERATOR` accepts exactly
+`{request_id, year, source_transaction_id, expected_row_version, recognized_on,
+kind, amount_eur_minor, evidence_status, evidence_ref, rationale}`. Use a durable
+UUID request ID, integer positive EUR cents, an annual source record with archived
+original and explicit EUR valuation, and an income/expense kind matching that
+source. Review the recognition date and evidence basis in the rationale.
+`verified` requires resolving the source's specific blocking issues; it means
+the operator reviewed this entry's supporting evidence, not that the whole
+annual return is ready. `provisional` is visible only in preparation previews
+and blocks the final annual calculation. Do not invent withholding credits.
+
+Recording checks the current source version, original's hash and linked FX,
+and prevents duplicate active recognition. Reuse the identical request after an
+uncertain response. Records are append-only: `annual-adjustments void ID --reason
+REASON --actor OPERATOR` withdraws a mistaken entry before a reviewed replacement.
+The annual period must remain open. The corresponding authenticated API is
+`GET/POST /api/annual-adjustments` and `POST /api/annual-adjustments/ID/void`;
+web mutations retain the same session, Origin and JSON protections as other writes.

@@ -101,6 +101,7 @@ PUBLIC_DEMO_GET_PATHS = {
     "/api/documents", "/api/issues", "/api/assets", "/api/taxes", "/api/aeat-documents",
     "/api/analytics", "/api/reta-check", "/api/review/posting-preview", "/api/counterparties",
     "/api/review/work-item",
+    "/api/annual-adjustments",
 }
 PUBLIC_DEMO_GET_DETAIL = re.compile(
     r"/api/(?:transactions/[0-9a-fA-F-]{32,36}|expense-workflows/[0-9a-fA-F-]{32,36}"
@@ -691,6 +692,8 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             if parsed.path == "/api/bootstrap":
                 self._send_json(self.server.app.bootstrap())
+            elif parsed.path == "/api/annual-adjustments":
+                self._send_json(self.server.app.annual_adjustments(_single_query(query, "year")))
             elif parsed.path == "/api/settings":
                 self._send_json(self.server.app.settings())
             elif parsed.path == "/api/google-picker/config":
@@ -876,6 +879,16 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
                         "as_of": result.get("as_of"),
                     }
                 )
+            elif parsed.path == "/api/annual-adjustments":
+                self._require_same_origin()
+                self._require_json_content_type()
+                self._send_json(self.server.app.record_annual_adjustment(
+                    self._read_json(max_bytes=MAX_REVIEW_PACKET_BYTES), actor=principal), status=HTTPStatus.CREATED)
+            elif match := re.fullmatch(r"/api/annual-adjustments/([^/]+)/void", parsed.path):
+                self._require_same_origin()
+                self._require_json_content_type()
+                self._send_json(self.server.app.void_annual_adjustment(
+                    match.group(1), self._read_json(max_bytes=MAX_REVIEW_PACKET_BYTES), actor=principal))
             elif match := re.fullmatch(r"/api/counterparties/([^/]+)/rename", parsed.path):
                 self._require_same_origin()
                 self._require_json_content_type()
