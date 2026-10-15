@@ -1197,7 +1197,8 @@ class LocalAccountingApp:
             periods = [item["period_key"] for item in connection.execute(
                 """SELECT DISTINCT p.period_key FROM transactions t
                    JOIN periods p ON p.period_id=t.period_id
-                   WHERE t.counterparty_id = ? ORDER BY p.period_key DESC""", (counterparty_id,),
+                   WHERE t.counterparty_id = ? AND p.period_type = 'quarter'
+                   ORDER BY p.period_key DESC""", (counterparty_id,),
             )]
             return {"counterparty": row | {"ui_context": context}, "periods": periods}
 
@@ -1933,6 +1934,7 @@ class LocalAccountingApp:
             SELECT
                 t.transaction_id,
                 t.counterparty_id,
+                t.period_id,
                 t.transaction_date,
                 t.entry_type,
                 t.description,
@@ -2015,10 +2017,10 @@ class LocalAccountingApp:
             return enrich_expense_context(
                 connection, result, period_id=period_id, today=effective_today,
             )
-        for period_key in dict.fromkeys(row["period_key"] for row in result):
+        for row_period_id in dict.fromkeys(row["period_id"] for row in result):
             enrich_expense_context(
-                connection, [row for row in result if row["period_key"] == period_key],
-                period_id=self._period_row(connection, period_key)["period_id"], today=effective_today,
+                connection, [row for row in result if row["period_id"] == row_period_id],
+                period_id=row_period_id, today=effective_today,
             )
         return result
 
