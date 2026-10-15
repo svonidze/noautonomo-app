@@ -67,7 +67,8 @@ class ContactsService:
             periods = [item["period_key"] for item in connection.execute(
                 """SELECT DISTINCT p.period_key FROM transactions t
                    JOIN periods p ON p.period_id=t.period_id
-                   WHERE t.counterparty_id = ? ORDER BY p.period_key DESC""", (counterparty_id,),
+                   WHERE t.counterparty_id = ? AND p.period_type = 'quarter'
+                   ORDER BY p.period_key DESC""", (counterparty_id,),
             )]
             return {"counterparty": row | {"ui_context": context}, "periods": periods}
 

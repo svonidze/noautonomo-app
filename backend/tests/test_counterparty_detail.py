@@ -4,6 +4,7 @@ import pytest
 
 from autonomo_taxes.ledger_db import LedgerDB
 from autonomo_taxes.local_web import LocalAccountingApp, LocalWebApiError, LocalWebError
+from autonomo_taxes.services.application import AccountingService
 from autonomo_test_support.local_web import _config
 from autonomo_test_support.counterparty_names_web import name_server
 
@@ -65,6 +66,38 @@ def test_empty_counterparty_keeps_missing_facts_and_empty_records(tmp_path):
     page = app.counterparty_transactions(party["counterparty_id"])
     assert page["rows"] == [] and page["matching_count"] == 0
     assert page["has_more"] is False
+
+
+def test_all_periods_includes_annual_income_drafts_without_changing_quarters(tmp_path):
+    config = _config(tmp_path)
+    with LedgerDB.initialize(config.database) as db:
+        party = db.upsert_counterparty(display_name="Synthetic Annual Contributor")
+        annual = db.add_transaction(
+            period_key="2026", transaction_date="2026-06-10", booking_date="2026-10-15",
+            entry_type="income", description="Synthetic annual preparation draft",
+            amount_minor=1234, currency="USD", counterparty_id=party["counterparty_id"],
+        )
+        quarterly = db.add_transaction(
+            period_key="2026-Q3", transaction_date="2026-07-10", booking_date="2026-07-10",
+            entry_type="income", description="Synthetic quarterly income", amount_minor=5000,
+            counterparty_id=party["counterparty_id"],
+        )
+    before = config.database.read_bytes()
+    app = AccountingService(config)
+    page = app.counterparty_transactions(party["counterparty_id"])
+    assert page["matching_count"] == 2
+    by_id = {row["transaction_id"]: row for row in page["rows"]}
+    draft = by_id[annual["transaction_id"]]
+    assert draft["period_key"] == "2026"
+    assert draft["lifecycle_status"] == "received"
+    assert (draft["amount_original"], draft["currency"], draft["amount_eur"]) == (
+        "12.34", "USD", None,
+    )
+    # The contact picker offers quarters; annual drafts remain in its all-periods view.
+    assert app.counterparty_detail(party["counterparty_id"])["periods"] == ["2026-Q3"]
+    scoped = app.counterparty_transactions(party["counterparty_id"], period_key="2026-Q3")
+    assert [row["transaction_id"] for row in scoped["rows"]] == [quarterly["transaction_id"]]
+    assert config.database.read_bytes() == before
 
 
 def test_operations_keep_source_document_availability_and_zero_amount(tmp_path):
