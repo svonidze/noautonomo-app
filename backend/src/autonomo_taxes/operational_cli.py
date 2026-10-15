@@ -1221,6 +1221,18 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
         help="Optional audit manifest with template, payload, and workbook hashes",
     )
     books_write.set_defaults(_operational_handler=_cmd_books_aeat_write)
+    separate = books_sub.add_parser('aeat-separate-write', help='Write cumulative separate IVA or IRPF books with retained numbering evidence')
+    _db_arg(separate)
+    separate.add_argument('--period', required=True)
+    separate.add_argument('--tax', choices=['iva','irpf'], required=True)
+    separate.add_argument('--template', type=Path, required=True)
+    separate.add_argument('--registrations', type=Path)
+    separate.add_argument('--registrations-sha256')
+    separate.add_argument('--operation-dates', type=Path)
+    separate.add_argument('--operation-dates-sha256')
+    separate.add_argument('--allow-authoritative-history', action='store_true')
+    separate.add_argument('--out-dir', type=Path, required=True)
+    separate.set_defaults(_operational_handler=_cmd_books_aeat_separate_write)
     books_validate = books_sub.add_parser(
         "aeat-validate",
         help="Upload an XLSX to the official AEAT validator and preserve its response",
@@ -4107,6 +4119,63 @@ def _cmd_books_aeat_payload(args: argparse.Namespace) -> int:
         }
     )
     return 0 if payload["xlsx_write_ready"] else 2
+
+
+def _cmd_books_aeat_separate_write(args: argparse.Namespace) -> int:
+    from .aeat_separate import build_separate_projection, read_registration_act, write_separate_xlsx
+    registrations = None
+    if bool(args.registrations) != bool(args.registrations_sha256):
+        raise ValueError('Registration act path and expected hash must be supplied together')
+    if args.registrations:
+        registrations = read_registration_act(args.registrations, expected_sha256=args.registrations_sha256)
+    dates = None
+    if bool(args.operation_dates) != bool(args.operation_dates_sha256):
+        raise ValueError('Operation-date evidence path and expected hash must be supplied together')
+    if args.operation_dates:
+        raw = args.operation_dates.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != args.operation_dates_sha256:
+            raise ValueError('Operation-date evidence hash mismatch')
+        dates = json.loads(raw)
+    with open_ledger_db(args.db, read_only=True) as db:
+        db.connection.execute('BEGIN')
+        projection = build_separate_projection(db, period_key=args.period, tax=args.tax,
+            registrations=registrations, operation_dates=dates,
+            allow_authoritative_history=args.allow_authoritative_history)
+        database_hash = hashlib.sha256('\n'.join(db.connection.iterdump()).encode()).hexdigest()
+        db.connection.rollback()
+    tax_id = projection['taxpayer']['tax_id']
+    if not re.fullmatch(r'[A-Z0-9]{8,12}', tax_id):
+        raise ValueError('Taxpayer identifier cannot be used in an AEAT filename')
+    name = re.sub(r'[^A-Za-z0-9]+', '_', projection['taxpayer']['full_name']).strip('_')
+    filename = f'{args.period[:4]}{tax_id}{"C" if args.tax=="iva" else "D"}{name}.xlsx'
+    args.out_dir.mkdir(parents=True, exist_ok=False)
+    (args.out_dir/'projection.json').write_text(json.dumps(projection, default=str, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    workbook = None
+    write_error = None
+    if projection['ready']:
+        try:
+            workbook = write_separate_xlsx(args.template, projection, args.out_dir/filename)
+        except (ValueError, OSError) as exc:
+            write_error = str(exc)
+    try:
+        manifest = {'status':'content_projected' if workbook else 'blocked', 'tax':args.tax,
+            'period':args.period, 'scope':{'starts_on':projection['starts_on'],'through':projection['through']},
+            'projection_sha256':projection.get('projection_sha256'),
+            'database_snapshot_sha256':database_hash,
+            'template_sha256':hashlib.sha256(args.template.read_bytes()).hexdigest(),
+            'registration_act_sha256':args.registrations_sha256,
+            'operation_dates_sha256':args.operation_dates_sha256,
+            'workbook_sha256':hashlib.sha256(workbook.read_bytes()).hexdigest() if workbook else None,
+            'source_completeness_verified':False, 'aeat_validator_acceptance':False,
+            'filed_returns_changed':False, 'blockers':projection['blockers'], 'write_error':write_error}
+        (args.out_dir/'manifest.json').write_text(json.dumps(manifest, default=str, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    except OSError:
+        if workbook:
+            workbook.unlink()
+        raise
+    _emit({'tax':args.tax,'period':args.period,'status':manifest['status'],'blocker_count':len(projection['blockers']),
+           'out_dir':str(args.out_dir)})
+    return 0 if workbook else 2
 
 
 def _cmd_books_aeat_write(args: argparse.Namespace) -> int:

@@ -159,9 +159,8 @@ autonomo-tax books build --db /private-accounting/ledger.sqlite --period 2025-Q4
 
 The [AEAT 2026 specification](https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/IVA/Fact_registro/Libros_registro/Formato_Electronico_Comun_Libros_Registro_IVA_IRPF.pdf)
 permits separate official books. Their normalized columns and legal recognition
-rules differ from this native review workbook. Mapping all reviewed dates and FX
-to those columns has not been validated. Do not upload the review workbook as
-an AEAT import file.
+rules differ from the native review workbook. The separate exporter below writes
+those columns; the native review workbook remains unsuitable for AEAT import.
 
 The unified template downloaded from AEAT on 14 October 2026 is pinned to SHA-256
 `1011b811d71e5074dea08b946d2be2189343e419bcb668441d6e74fd1f639008`.
@@ -179,8 +178,56 @@ still required before validation; the writer itself does not evaluate formulas.
 The unified AEAT workbook has one operation date and amount set. Its projection
 is blocked with `separate_tax_registers_required` for attributed views; it never
 exports stale rows as corrected figures or invents duplicate invoices. Separate
-registers and calculated form values remain available. They are review exports,
-not a claim of an AEAT-importable workbook or permission to file.
+registers and calculated form values remain available. The unified export remains
+a review artifact; the separate exporter has its own content and format checks.
+
+### Separate IVA and IRPF XLSX
+
+`books aeat-separate-write` produces cumulative January-through-quarter books:
+`C` files contain `EXPEDIDAS`/`RECIBIDAS`; `D` files contain `INGRESOS`/`GASTOS`
+and the applicable IRPF asset sheet. It reads one consistent database snapshot
+and writes values with explicit date, number and text types, without formulas.
+It never overwrites an existing output directory or changes filed snapshots.
+
+```sh
+autonomo-tax books aeat-separate-write \
+  --db /private-accounting/ledger.sqlite --period 2025-Q3 --tax irpf \
+  --template /private-accounting/official-template.xlsx \
+  --registrations /private-accounting/approved-registration-act.json \
+  --registrations-sha256 EXPECTED_ACT_SHA256 \
+  --out-dir /private-accounting/separate-irpf
+```
+
+Use `--tax iva` and another output directory for IVA. Existing immutable receipt
+registrations can supply invoice numbers without an external act. The optional
+act must carry explicit approval, origin, assignment date, consecutive independent
+yearly series and source hashes. SF income and expense entries need their own
+numbers. The act cannot replace a stale or conflicting retained receipt number.
+Reconstructed numbers do not prove the original receipt order or timely historical
+bookkeeping. They leave supplier invoice numbers unchanged.
+
+When the operation date differs from the source date, provide reviewed decisions
+with `--operation-dates` and `--operation-dates-sha256`. Each decision is keyed by
+source transaction and tax, with `operation_on`, `source_hash` and `evidence_ref`.
+Unsupported attributed expenses are blocked until their invoice components have
+an explicit mapping. Annual IVA investment-good regularization needs a separate
+review; IRPF asset ownership does not establish its IVA treatment.
+
+The exporter preserves return-excluded invoices. A non-deductible IVA amount
+already recognized as an IRPF expense is represented as a G25 component of the
+same invoice, preserving its receipt number, total and deductible expense.
+SF financial expenses, RETA and depreciation carry their reviewed amount as the
+non-IVA base. Per-source IRPF sums must match the reviewed register after splitting.
+See the [AEAT validation rules](https://sede.agenciatributaria.gob.es/static_files/AEAT/LSI.xlsx)
+and [received-invoice FAQ](https://sede.agenciatributaria.gob.es/Sede/iva/facturacion-registro/preguntas-frecuentes/libro-registro-facturas-recibidas-iva-irpf.html).
+
+Wholly synthetic C/D files covering cumulative periods, attributed income, FX and
+non-deductible IVA passed the official validator. Additional synthetic probes
+covered RETA and depreciation. These responses do not establish source
+completeness or independently validate asset accounting. The retained manifest
+therefore keeps `source_completeness_verified` and `aeat_validator_acceptance`
+false; real data is never uploaded by this command. Export and tax-return
+amendment are separate operations.
 
 349, 347 and withholding forms retain source-date semantics and say so in their
 warnings when attributions are present. Their timing is not silently changed by

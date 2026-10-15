@@ -408,12 +408,13 @@ def _expense_rows(
     activity: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
     _require_document_and_counterparty(transaction)
-    concept = _required_text(treatment, "aeat_expense_concept")
     amount_minor = _eur_amount_minor(transaction)
     taxable_base_minor = _optional_minor(treatment, "taxable_base_minor")
     vat_minor = _optional_minor(treatment, "vat_minor")
     deductible_vat_minor = _optional_minor(treatment, "deductible_vat_minor")
     deductible_irpf_minor = _required_minor(treatment, "deductible_irpf_minor")
+    concept = ("" if transaction.get("native_asset_acquisition") and deductible_irpf_minor == 0
+               else _required_text(treatment, "aeat_expense_concept"))
     withholding_minor = _optional_minor(treatment, "withholding_minor")
     id_type, country_code, counterparty_id = _counterparty_identity(transaction)
     invoice_type = _required_text(treatment, "aeat_invoice_type")

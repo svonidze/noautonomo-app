@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 import tempfile
+import os
 from typing import Any, Mapping
 import xml.etree.ElementTree as ET
 import zipfile
@@ -121,6 +122,15 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
             total_rows.append([basis, 'Selected scope', kind, *[amounts[key] for key in AMOUNTS]])
     sheets.append(('TOTALS', total_rows))
     sheets.insert(0, ('REVIEW', review))
+    return write_table_workbook(target, sheets)
+
+
+def write_table_workbook(path: str | Path, sheets: list[tuple[str, list[list[Any]]]], *,
+                         exclusive: bool = False, max_bytes: int | None = None) -> Path:
+    """Write typed value-only sheets; exclusive outputs never replace an earlier book."""
+    target = Path(path)
+    if target.suffix.lower() != '.xlsx':
+        raise ValueError('Workbook output must use the .xlsx suffix')
     parts = _package(sheets)
     target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=target.parent, suffix='.xlsx.tmp', delete=False) as handle:
@@ -131,7 +141,12 @@ def write_tax_register_review_xlsx(path: str | Path, projection: Mapping[str, An
                 info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 archive.writestr(info, content)
-        temporary.replace(target)
+        if max_bytes is not None and temporary.stat().st_size > max_bytes:
+            raise ValueError('Workbook exceeds its size limit')
+        if exclusive:
+            os.link(temporary, target)
+        else:
+            temporary.replace(target)
     finally:
         temporary.unlink(missing_ok=True)
     return target
