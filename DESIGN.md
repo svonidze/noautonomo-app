@@ -36,7 +36,7 @@
 - Surfaces: Expenses, dashboard expense metrics, recent operations, and the analytics charts documented below.
 - Evidence: `local_web.py`, the Vue frontend under `frontend/src` (`features/`,
   `shell/`, `charts/`, `help/`), `web_ui/styles.css`, the accepted
-  expense-clarity plan in `docs/plans/expense-clarity.md`, the user-supplied
+  expense-clarity plan in `docs/plans/2026-08-31-expense-clarity.md`, the user-supplied
   expense-chart screenshot dated 2026-09-04, and AEAT's 2026 `LSI.xlsx`
   registry-book design.
 

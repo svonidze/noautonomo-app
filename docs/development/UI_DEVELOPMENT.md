@@ -117,7 +117,7 @@ records in `tests/contracts/ui-test-map.json` and `tests/contracts/ui-python-tes
 API, storage and security tests remain in Python. A path-existence check alone is
 not evidence of behavioral coverage; review the named module/browser cases too.
 
-See [the twelve-stage execution record](../plans/ui-modularization.md),
+See [the twelve-stage execution record](../plans/2026-09-05-ui-modularization.md),
 [adding interface languages](UI_LOCALIZATION.md), and
 [release build/install compatibility](../../ops/docs/FRONTEND_BUILD.md). The twelve-stage record is historical. Current changes follow the repository
 review and release process; production rollout still requires separate authorization.
