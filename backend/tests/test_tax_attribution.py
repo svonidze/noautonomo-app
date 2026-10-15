@@ -4,6 +4,7 @@ from decimal import Decimal
 import hashlib
 import json
 import sqlite3
+from unittest.mock import patch
 
 import pytest
 
@@ -200,7 +201,7 @@ def test_registers_have_effective_amounts_and_original_bridge(tmp_path):
 
 def test_additive_migration_keeps_all_existing_financial_rows(tmp_path):
     path = tmp_path / 'db.sqlite'
-    with initialize(path) as db:
+    with patch("autonomo_taxes.ledger_db.LATEST_SCHEMA_VERSION", 30), initialize(path) as db:
         identifier = source(db, tmp_path)
         before = {table: [tuple(r) for r in db.connection.execute('SELECT * FROM ' + table)]
                   for table in ('transactions', 'documents', 'tax_treatments', 'payments', 'filing_snapshots')}

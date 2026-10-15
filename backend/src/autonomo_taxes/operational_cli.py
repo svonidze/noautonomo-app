@@ -194,6 +194,25 @@ TAX_CALENDAR_SHEET_FIELDS = [
 
 
 def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    annual = subparsers.add_parser("annual-adjustments", help="Annual Renta adjustments, separate from quarterly journals")
+    annual_sub = annual.add_subparsers(dest="annual_adjustments_command", required=True)
+    for action in ("list", "preview"):
+        command = annual_sub.add_parser(action)
+        _db_arg(command)
+        command.add_argument("--year", type=int, required=True)
+        command.add_argument("--as-of", type=date.fromisoformat)
+        command.set_defaults(_operational_handler=_cmd_annual_adjustments)
+    record = annual_sub.add_parser("record")
+    _db_arg(record)
+    record.add_argument("--input", type=Path, required=True)
+    record.add_argument("--actor", required=True)
+    record.set_defaults(_operational_handler=_cmd_annual_adjustments)
+    withdraw = annual_sub.add_parser("void")
+    _db_arg(withdraw)
+    withdraw.add_argument("adjustment_id")
+    withdraw.add_argument("--reason", required=True)
+    withdraw.add_argument("--actor", required=True)
+    withdraw.set_defaults(_operational_handler=_cmd_annual_adjustments)
     attribution = subparsers.add_parser("tax-attribution", help="Review independent IRPF/IVA dates and amounts")
     attribution_sub = attribution.add_subparsers(dest="attribution_command", required=True)
     prepare = attribution_sub.add_parser("prepare", help="Write a private attribution review packet")
@@ -4757,7 +4776,25 @@ def _final_filing_for_form(
     return None
 
 
+def _cmd_annual_adjustments(args: argparse.Namespace) -> int:
+    from .annual_adjustments import annual_preview, list_adjustments, record_adjustment, void_adjustment
+    action = args.annual_adjustments_command
+    with open_ledger_db(args.db, read_only=action in {"list", "preview"}) as db:
+        if action == "record":
+            result = record_adjustment(db, _load_json_object(args.input), actor=args.actor)
+        elif action == "void":
+            void_adjustment(db, args.adjustment_id, reason=args.reason, actor=args.actor)
+            result = {"voided": True, "annual_adjustment_id": args.adjustment_id}
+        elif action == "preview":
+            result = annual_preview(db, args.year, through=args.as_of)
+        else:
+            result = {"year": args.year, "annual_adjustments": list_adjustments(db, args.year)}
+    _emit(result)
+    return 0
+
+
 def _cmd_calculate(args: argparse.Namespace) -> int:
+    from .annual_adjustments import adjustment_rows
     if args.form in QUARTERLY_FORM_CODES and args.quarter is None:
         raise ValueError(f"Modelo {args.form} requires --quarter")
     if args.form != "100" and any(
@@ -4910,6 +4947,10 @@ def _cmd_calculate(args: argparse.Namespace) -> int:
             modelo303_periods=modelo303_periods,
             modelo303_opening_compensation=modelo303_opening_compensation,
             business_activities=db.list_business_activities() if args.form == "100" else (),
+            annual_adjustment_rows=(
+                adjustment_rows(db, args.year)
+                if args.form == "100" else ()
+            ),
         )
         payload = _calculation_payload(result)
         baseline = _filed_baseline(db, result.period, args.form)
@@ -5019,6 +5060,7 @@ def _calculate(
     modelo303_periods: tuple[str, ...] = (),
     modelo303_opening_compensation: Decimal = Decimal("0.00"),
     business_activities: Iterable[dict[str, Any]] = (),
+    annual_adjustment_rows: Iterable[TaxRow] = (),
 ) -> CalculationResult:
     rule = difficult_expense_rule_for_year(args.year)
     if args.form == "130":
@@ -5105,6 +5147,7 @@ def _calculate(
         difficult_expenses_cap=rule.annual_cap_eur,
         unsupported_categories=args.unsupported_annual_category,
         business_activities=business_activities,
+        annual_adjustment_rows=annual_adjustment_rows,
         new_activity_prior_activity=args.new_activity_prior_activity,
         new_activity_former_employer_over_half=(
             None

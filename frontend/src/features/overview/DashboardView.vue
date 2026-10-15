@@ -10,6 +10,7 @@ import type { Analytics } from '../../charts/types.ts';
 import type { ChartKind } from '../../charts/builders.ts';
 import { viewHref } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
+import AnnualAdjustments from './AnnualAdjustments.vue';
 import RecentTransactions from './RecentTransactions.vue';
 import TaskList from './TaskList.vue';
 import { buildStartTasks, buildTasks, firstRun, type DashboardTask } from './tasks.ts';
@@ -304,12 +305,17 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
             </div>
           </dl>
           <small v-if="ytd.unavailable" role="status">{{ t('dashboard.ytdUnavailable') }}</small>
+          <small v-if="ytd.provisional" role="status">{{ t('dashboard.annualProvisional') }}</small>
           <small>{{
             ytd.fullYear
               ? t('dashboard.ytdFullYear')
               : t('dashboard.ytdAsOf', { date: formatDateText(ytd.asOf, locale) })
           }}</small>
         </div>
+        <AnnualAdjustments
+          :year="Number(context.period.slice(0, 4))"
+          :services="context.services"
+        />
         <div class="metric">
           <span>{{ t('dashboard.expensesPosted') }}</span>
           <dl>

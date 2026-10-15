@@ -521,6 +521,7 @@ class QueryService:
             SELECT
                 t.transaction_id,
                 t.counterparty_id,
+                t.period_id,
                 t.transaction_date,
                 t.created_at,
                 t.entry_type,
@@ -604,10 +605,10 @@ class QueryService:
             return enrich_expense_context(
                 connection, result, period_id=period_id, today=effective_today,
             )
-        for period_key in dict.fromkeys(row["period_key"] for row in result):
+        for row_period_id in dict.fromkeys(row["period_id"] for row in result):
             enrich_expense_context(
-                connection, [row for row in result if row["period_key"] == period_key],
-                period_id=self._period_row(connection, period_key)["period_id"], today=effective_today,
+                connection, [row for row in result if row["period_id"] == row_period_id],
+                period_id=row_period_id, today=effective_today,
             )
         return result
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sqlite3
+from unittest.mock import patch
 
 import pytest
 
@@ -62,7 +63,7 @@ def _record(db: LedgerDB, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 def test_migrates_schema_24_to_25(tmp_path: Path) -> None:
     database = tmp_path / "ledger.sqlite"
-    with LedgerDB.initialize(database) as db:
+    with patch("autonomo_taxes.ledger_db.LATEST_SCHEMA_VERSION", 30), LedgerDB.initialize(database) as db:
         for name in (
             "aeat_source_documents_no_update",
             "aeat_source_documents_no_delete",

@@ -34,6 +34,7 @@ test('the current year shows Renta-rule expenses and net as of today', () => {
     fullYear: false,
     asOf: '2026-10-04',
     unavailable: false,
+    provisional: false,
   });
 });
 
@@ -63,6 +64,16 @@ test('blocked tax data cannot appear as ordinary yearly totals', () => {
     expenses: null,
     net: null,
     unavailable: true,
+  });
+});
+
+test('provisional annual income stays visible but is explicitly marked', () => {
+  const prepared = analytics(2026, '2026-10-04');
+  prepared.datasets.ytd_comparison.current_year.renta_status = 'provisional';
+  expect(yearToDate(prepared)).toMatchObject({
+    income: 10000,
+    provisional: true,
+    unavailable: false,
   });
 });
 

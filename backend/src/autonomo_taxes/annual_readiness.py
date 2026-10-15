@@ -92,6 +92,20 @@ def assess_annual_readiness(
             annual_key,
             allow_authoritative_history=allow_authoritative_history,
         )
+        if form_code in {None, "100"}:
+            from .annual_adjustments import adjustment_rows
+            try:
+                annual_rows = adjustment_rows(database, year)
+            except CalculationBlocked as exc:
+                blockers.append({"kind": "annual_adjustment_unresolved", "period": annual_key,
+                    "reason": str(exc)})
+            else:
+                source_ids = {row.source_transaction_id for row in annual_rows}
+                document_ids = {row.document_id for row in annual_rows}
+                annual_validation["review_transactions"] = [row for row in annual_validation["review_transactions"]
+                    if row["transaction_id"] not in source_ids]
+                annual_validation["review_documents"] = [row for row in annual_validation["review_documents"]
+                    if row["document_id"] not in document_ids]
         categories = _validation_categories(annual_validation, include_obligations=False)
         if categories:
             blockers.append(

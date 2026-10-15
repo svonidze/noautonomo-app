@@ -9,6 +9,7 @@ from dataclasses import replace
 from datetime import date
 from http.client import HTTPConnection
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from autonomo_taxes.cli import main
@@ -103,8 +104,10 @@ def _check(database: Path, **kwargs) -> dict:
 
 
 def test_migrates_schema_26_to_27_and_keeps_elections_append_only(tmp_path: Path) -> None:
-    database = _ledger(tmp_path)
-    with LedgerDB.open(database) as db:
+    # Build the old fixture without later annual-adjustment columns.
+    with patch("autonomo_taxes.ledger_db.LATEST_SCHEMA_VERSION", 30):
+        database = _ledger(tmp_path)
+    with patch("autonomo_taxes.ledger_db.LATEST_SCHEMA_VERSION", 30), LedgerDB.open(database) as db:
         election = _base(db, "2026-01-01")
         db.void_reta_base_election(election_id=election["election_id"], source_reference="Synthetic typo")
         for statement in (
@@ -125,7 +128,8 @@ def test_migrates_schema_26_to_27_and_keeps_elections_append_only(tmp_path: Path
                     (election["taxpayer_profile_id"], regime, base, "0" * 64),
                 )
             db.connection.rollback()
-        assert set(db.table_counts()) >= {"reta_rate_tables", "reta_base_elections", "reta_base_election_voids"}
+        tables = {row[0] for row in db.connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert tables >= {"reta_rate_tables", "reta_base_elections", "reta_base_election_voids"}
         party = db.upsert_counterparty(
             external_key="synthetic-reta-migration-vies",
             display_name="Synthetic VIES Supplier", country_code="DE",
@@ -143,7 +147,7 @@ def test_migrates_schema_26_to_27_and_keeps_elections_append_only(tmp_path: Path
         db.connection.commit()
 
     with LedgerDB.open(database, apply_migrations=True) as db:
-        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == LATEST_SCHEMA_VERSION
+        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == LATEST_SCHEMA_VERSION == 31
         assert db.list_reta_base_elections() == [] and db.reta_rate_table(2026) is None
         assert dict(db.connection.execute("SELECT * FROM vies_checks").fetchone()) == vies_before
         for statement in ("UPDATE vies_checks SET outcome='invalid'", "DELETE FROM vies_checks"):

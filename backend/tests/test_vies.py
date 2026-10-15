@@ -8,6 +8,7 @@ from pathlib import Path
 import ssl
 import sqlite3
 from urllib.error import URLError
+from unittest.mock import patch
 
 import pytest
 
@@ -222,7 +223,7 @@ def test_checks_are_immutable_and_protect_the_counterparty(tmp_path: Path) -> No
 
 def test_migrates_schema_25_to_27_preserves_vies_migration_26(tmp_path: Path) -> None:
     database = tmp_path / "ledger.sqlite"
-    with LedgerDB.initialize(database) as db:
+    with patch("autonomo_taxes.ledger_db.LATEST_SCHEMA_VERSION", 30), LedgerDB.initialize(database) as db:
         for name in ("asset_disposals", "receipt_registrations", "receipt_registration_series", "tax_attribution_fx_events", "transaction_tax_attributions", "reta_base_election_voids", "reta_base_elections", "reta_rate_tables", "vies_checks"):
             db.connection.execute(f"DROP TABLE {name}")
         db.connection.execute("PRAGMA user_version = 25")
