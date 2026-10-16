@@ -37,9 +37,12 @@ const publicLinks = computed(() => ({
   landing: locale.value === 'en' ? '/' : `/${locale.value}/`,
   blog: locale.value === 'en' ? '/blog/' : `/blog/${locale.value}/`,
 }));
+const navigationViews = computed(() =>
+  runtime.readOnly ? views.map((v) => (v === 'government-cases' ? 'aeat-documents' : v)) : views,
+);
 const icons = ['▦', '↗', '↙', '✓', '◇', '%', '◎', '▤', '⚙'];
 const shellMessageKey = (prefix: 'nav' | 'titles', value: string) =>
-  `${prefix}.${value === 'aeat-documents' ? 'aeatDocuments' : value}`;
+  `${prefix}.${value === 'aeat-documents' ? 'aeatDocuments' : value === 'government-cases' ? 'governmentCases' : value}`;
 const detail = computed(() => Boolean(route.value?.id));
 const navView = computed(() =>
   route.value?.view === 'contact-detail'
@@ -121,7 +124,7 @@ const refreshLabel = computed(() =>
     </button>
     <nav id="primary-nav" class="primary-nav" :aria-label="t('nav.aria')">
       <a
-        v-for="(item, index) in views"
+        v-for="(item, index) in navigationViews"
         :key="item"
         class="nav-item"
         :class="{ active: navView === item }"
@@ -168,7 +171,11 @@ const refreshLabel = computed(() =>
         </div>
         <label
           class="period-control"
-          :hidden="['contact-detail', 'settings', 'aeat-documents'].includes(route?.view || '')"
+          :hidden="
+            ['contact-detail', 'settings', 'aeat-documents', 'government-cases'].includes(
+              route?.view || '',
+            )
+          "
           ><span>{{ t('toolbar.period') }}</span
           ><select
             id="period-select"
@@ -193,7 +200,7 @@ const refreshLabel = computed(() =>
           :class="{ busy }"
           :title="runtime.readOnly ? t('demo.readOnlyReason') : refreshLabel"
           :aria-label="refreshLabel"
-          :hidden="['settings', 'aeat-documents'].includes(route?.view || '')"
+          :hidden="['settings', 'aeat-documents', 'government-cases'].includes(route?.view || '')"
           :disabled="
             runtime.readOnly || busy || (detail && route?.view !== 'contact-detail' && !resolved)
           "
@@ -207,7 +214,7 @@ const refreshLabel = computed(() =>
           :hidden="
             !route ||
             detail ||
-            ['settings', 'aeat-documents'].includes(route?.view || '') ||
+            ['settings', 'aeat-documents', 'government-cases'].includes(route?.view || '') ||
             (route?.view === 'review' && reviewTab === 'posting')
           "
         >

@@ -1375,6 +1375,44 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
     filings_refresh.add_argument("--document-inventory", type=Path, required=True)
     filings_refresh.set_defaults(_operational_handler=_cmd_filings_refresh_evidence)
 
+    government = subparsers.add_parser(
+        "government-cases", help="Evidence-backed AEAT and TGSS cases"
+    )
+    government_sub = government.add_subparsers(dest="government_command", required=True)
+    for operation in (
+        "list",
+        "show",
+        "create",
+        "state",
+        "event",
+        "action",
+        "document",
+        "reminders",
+        "resolve-reminder",
+    ):
+        command = government_sub.add_parser(operation)
+        _db_arg(command)
+        if operation not in {"list", "create", "reminders", "resolve-reminder"}:
+            command.add_argument("--case-id", required=True)
+        if operation in {
+            "create",
+            "state",
+            "event",
+            "action",
+            "document",
+            "resolve-reminder",
+        }:
+            command.add_argument("--input", type=Path, required=True)
+            command.add_argument("--actor", required=True)
+        if operation == "action":
+            command.add_argument("--action-id")
+        if operation == "document":
+            command.add_argument("--evidence", type=Path, required=True)
+            command.add_argument("--archive-root", type=Path)
+        if operation == "reminders":
+            command.add_argument("--dry-run", action="store_true")
+        command.set_defaults(_operational_handler=_cmd_government)
+
     aeat_documents = subparsers.add_parser(
         "aeat-documents",
         help="Archive official AEAT PDFs and maintain their sourced case history",
@@ -4700,7 +4738,7 @@ def _cmd_aeat_status_record(args: argparse.Namespace) -> int:
         raise ValueError("AEAT status occurred_at must use ISO 8601") from exc
     with open_ledger_db(args.db, read_only=args.dry_run) as db:
         case = db.connection.execute(
-            "SELECT * FROM aeat_cases WHERE aeat_case_id = ?", (args.case_id,)
+            "SELECT * FROM aeat_cases WHERE aeat_case_id = ? AND authority_code='AEAT'", (args.case_id,)
         ).fetchone()
         if case is None:
             raise ValueError("Unknown AEAT case")
@@ -6196,3 +6234,63 @@ from .services.posting_operations import post_batch
 from .services.review_operations import apply_fx, _check_manual_fx_rate
 
 from .services.calculation_operations import dashboard
+
+
+def _cmd_government(args: argparse.Namespace) -> int:
+    from . import government_cases as cases
+    from . import case_reminders
+
+    command = args.government_command
+    if hasattr(args, "input"):
+        raw = (
+            sys.stdin.read(65537)
+            if str(args.input) == "-"
+            else args.input.read_text(encoding="utf-8")
+            if args.input.stat().st_size <= 65536
+            else ""
+        )
+        if not raw or len(raw.encode("utf-8")) > 65536:
+            raise ValueError(
+                "Government request must be a JSON object no larger than 64 KiB"
+            )
+        payload = json.loads(raw)
+        if not isinstance(payload, dict):
+            raise ValueError("Expected a JSON object")
+    else:
+        payload = {}
+    with open_ledger_db(
+        args.db,
+        read_only=command in {"list", "show"}
+        or (command == "reminders" and args.dry_run),
+    ) as db:
+        if command == "list":
+            result = cases.list_cases(db)
+        elif command == "show":
+            result = cases.case_detail(db, args.case_id)
+        elif command == "create":
+            result = cases.create_case(db, payload, actor=args.actor)
+        elif command == "state":
+            result = cases.update_case(db, args.case_id, payload, actor=args.actor)
+        elif command == "event":
+            result = cases.add_event(db, args.case_id, payload, actor=args.actor)
+        elif command == "action":
+            result = cases.save_action(
+                db, args.case_id, payload, actor=args.actor, action_id=args.action_id
+            )
+        elif command == "resolve-reminder":
+            result = case_reminders.resolve_message(db, payload, actor=args.actor)
+        elif command == "document":
+            if args.archive_root is None:
+                raise ValueError("Evidence archive is required")
+            result = cases.attach_pdf(
+                db,
+                args.case_id,
+                args.evidence,
+                args.archive_root,
+                payload,
+                actor=args.actor,
+            )
+        else:
+            result = case_reminders.run(db, dry_run=args.dry_run)
+    _emit(result)
+    return 1 if result.get("status") in {"failed", "uncertain", "unconfigured"} else 0

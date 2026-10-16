@@ -1,0 +1,16 @@
+[Unit]
+Description=AEAT and TGSS case deadline reminders
+OnFailure=autonomo-alert.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=@RUNTIME_ENV@
+ExecStart=@RELEASE_ROOT@/current/.venv/bin/autonomo-tax government-cases reminders
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=@PRIVATE_ROOT@
+UMask=0077
+TimeoutStartSec=10min
