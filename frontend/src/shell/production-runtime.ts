@@ -11,11 +11,8 @@ export function createProductionRuntime(router: Router = createProductionRouter(
     router,
     request,
     readOnly: false,
-    locales: localeRegistry.filter((item) => item.code !== 'es'),
-    initialLocale: () => {
-      const locale = loadLocale(() => localStorage);
-      return locale === 'es' ? 'ru' : locale;
-    },
+    locales: localeRegistry,
+    initialLocale: () => loadLocale(() => localStorage),
     saveLocale: (value) => storeLocale(() => localStorage, value),
     refreshCalculation,
     intakeComponent: markRaw(IntakeDialog),

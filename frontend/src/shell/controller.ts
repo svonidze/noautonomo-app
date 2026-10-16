@@ -58,6 +58,7 @@ import ReviewDetail from '../features/review/ReviewDetailView.vue';
 import ReviewOverview from '../features/posting/ReviewOverviewView.vue';
 import TransactionLists from '../features/transactions/TransactionListsView.vue';
 import SettingsView from '../features/settings/SettingsView.vue';
+import GovernmentCasesView from '../features/government-cases/GovernmentCasesView.vue';
 import AeatDocumentsView from '../features/aeat-documents/AeatDocumentsView.vue';
 interface Bootstrap {
   periods: Period[];
@@ -251,13 +252,17 @@ export function useShell() {
       const saved = window.history.state?.contactGlobalPeriod;
       if (data.periods.some((row) => row.period_key === saved)) period.value = saved;
       contactGlobal = period.value;
-    } else if (next && !next.id && !['contacts', 'settings', 'aeat-documents'].includes(next.view))
+    } else if (
+      next &&
+      !next.id &&
+      !['contacts', 'settings', 'aeat-documents', 'government-cases'].includes(next.view)
+    )
       period.value =
         knownPeriod(query.toString(), data.periods) || period.value || data.default_period;
     if (
       next &&
       !next.id &&
-      !['contacts', 'settings', 'aeat-documents'].includes(next.view) &&
+      !['contacts', 'settings', 'aeat-documents', 'government-cases'].includes(next.view) &&
       period.value
     )
       query.set('period', period.value);
@@ -333,7 +338,8 @@ export function useShell() {
       revision.value++;
       screen.value = { component: markRaw(component), context };
     };
-    if (next.view === 'aeat-documents')
+    if (next.view === 'government-cases') mount(GovernmentCasesView, { services, settled, notify });
+    else if (next.view === 'aeat-documents')
       mount(AeatDocumentsView, {
         services,
         settled,
@@ -474,7 +480,9 @@ export function useShell() {
     await whileBusy(async () => {
       try {
         if (
-          !['contact-detail', 'expense-detail', 'aeat-documents'].includes(route.value?.view || '')
+          !['contact-detail', 'expense-detail', 'aeat-documents', 'government-cases'].includes(
+            route.value?.view || '',
+          )
         ) {
           await calculate(captured);
           if (version === generation)

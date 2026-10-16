@@ -27,7 +27,7 @@
   mobile table cards. Test 375px reflow and desktop separately.
 - Bundle complete demo translations, including profile, descriptions, documents,
   chart/table/tooltip/dialog labels, metadata and locale-specific money/dates.
-  The private app's RU/EN locale registry and defaults remain independent.
+  The private app also offers RU/EN/ES; its default language remains independent.
   Reuse `ChartHost` with a prepared `ChartSpec` and translated controls; its
   ordinary analytics/locale path remains the default for the private app.
 

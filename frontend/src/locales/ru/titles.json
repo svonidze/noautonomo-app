@@ -16,5 +16,7 @@
   "titles.settings": "Настройки аккаунта",
   "titles.settingsLead": "Профиль налогоплательщика, резервные копии и язык интерфейса",
   "titles.taxes": "Налоги и сроки",
-  "titles.taxesLead": "Сколько и когда заплатить AEAT за квартал"
+  "titles.taxesLead": "Сколько и когда заплатить AEAT за квартал",
+  "titles.governmentCases": "Дела и уведомления",
+  "titles.governmentCasesLead": "Взаимодействия с AEAT и TGSS, документы и сроки"
 }

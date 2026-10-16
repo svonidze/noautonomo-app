@@ -12,6 +12,7 @@ import { viewHref } from '../../vue/services.ts';
 import StatusCell from '../../components/StatusCell.vue';
 import AnnualAdjustments from './AnnualAdjustments.vue';
 import RecentTransactions from './RecentTransactions.vue';
+import CaseDeadlines from '../government-cases/CaseDeadlines.vue';
 import TaskList from './TaskList.vue';
 import { buildStartTasks, buildTasks, firstRun, type DashboardTask } from './tasks.ts';
 import { createFinancePresentation } from './presentation.ts';
@@ -245,6 +246,7 @@ const retry = () => (forbidden() ? window.location.reload() : void load(!!data.v
       </button>
     </div>
     <template v-if="data">
+      <CaseDeadlines v-if="!context.services.readOnly" :services="context.services" />
       <p v-if="data.has_tax_attributions" class="period-note">
         {{ t('taxAttribution.documentBasis') }}
       </p>

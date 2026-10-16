@@ -1,0 +1,10 @@
+[Unit]
+Description=Check AEAT and TGSS case deadlines hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=autonomo-case-reminders.service
+
+[Install]
+WantedBy=timers.target

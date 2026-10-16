@@ -172,11 +172,7 @@ async function submit(kind: 'profile' | 'backups') {
     if (active) pending.value = false;
   }
 }
-const availableLocales = computed(
-  () =>
-    props.context.services.locales ??
-    localeRegistry.filter((item) => item.code === 'ru' || item.code === 'en'),
-);
+const availableLocales = computed(() => props.context.services.locales ?? localeRegistry);
 const activity = computed(() => profile.value.activities || []);
 void load();
 defineExpose({ canLeave, isDirty, isBusy: () => pending.value });

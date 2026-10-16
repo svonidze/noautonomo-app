@@ -16,5 +16,7 @@
   "titles.settings": "Account settings",
   "titles.settingsLead": "Taxpayer details, backups and interface language",
   "titles.taxes": "Taxes and deadlines",
-  "titles.taxesLead": "How much to pay AEAT for the quarter and when"
+  "titles.taxesLead": "How much to pay AEAT for the quarter and when",
+  "titles.governmentCases": "Cases and notices",
+  "titles.governmentCasesLead": "AEAT and TGSS interactions, evidence and deadlines"
 }

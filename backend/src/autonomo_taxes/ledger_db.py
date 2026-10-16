@@ -34,12 +34,12 @@ from .tax_rules import ALL_FORM_CODES, ANNUAL_FORM_CODES, FORM_RULES, QUARTERLY_
 from .vat_classification import is_vat_investment_good
 
 
-LATEST_SCHEMA_VERSION = 31
+LATEST_SCHEMA_VERSION = 32
 
 # Migrations that rebuild a table referenced by a foreign key. They must
 # run with foreign-key enforcement temporarily disabled, and that pragma
 # only takes effect outside a transaction.
-FK_REBUILD_MIGRATIONS = frozenset({19})
+FK_REBUILD_MIGRATIONS = frozenset({19, 32})
 
 # Immutable provenance kinds for fx_rates rows (schema v19).
 FX_PROVENANCE_KINDS = {
@@ -5143,7 +5143,7 @@ class LedgerDB:
         if not reference or not actor:
             raise ValueError("AEAT status requires evidence_reference and actor")
         case = self._fetch_one(
-            "SELECT * FROM aeat_cases WHERE aeat_case_id = ?", (aeat_case_id,)
+            "SELECT * FROM aeat_cases WHERE aeat_case_id = ? AND authority_code='AEAT'", (aeat_case_id,)
         )
         existing = None if evidence_document_id else self._fetch_optional(
             """
@@ -5193,7 +5193,7 @@ class LedgerDB:
                 ),
             )
         updated = self._fetch_one(
-            "SELECT * FROM aeat_cases WHERE aeat_case_id = ?", (aeat_case_id,)
+            "SELECT * FROM aeat_cases WHERE aeat_case_id = ? AND authority_code='AEAT'", (aeat_case_id,)
         )
         event = self._fetch_one(
             "SELECT * FROM aeat_case_events WHERE aeat_case_event_id = ?", (event_id,)
@@ -5237,7 +5237,7 @@ class LedgerDB:
             requested_effective_on=requested_effective_on,
         )
         case = self._fetch_one(
-            "SELECT * FROM aeat_cases WHERE aeat_case_id = ?", (aeat_case_id,)
+            "SELECT * FROM aeat_cases WHERE aeat_case_id = ? AND authority_code='AEAT'", (aeat_case_id,)
         )
         self._check_row_version(case, expected_row_version)
         expected_case = {
@@ -6402,6 +6402,11 @@ class LedgerDB:
             "aeat_cases",
             "aeat_documents",
             "aeat_case_events",
+            "government_case_events",
+            "government_document_context",
+            "government_actions",
+            "government_reminder_runs",
+            "government_reminder_messages",
             "vies_checks",
             "invoice_templates",
             "outgoing_invoice_drafts",
@@ -8446,6 +8451,11 @@ def _migration_31(connection: sqlite3.Connection) -> None:
             )
 
 
+def _migration_32(connection: sqlite3.Connection) -> None:
+    from .government_cases import migrate
+    migrate(connection)
+
+
 _MIGRATIONS = {
     1: _migration_1,
     2: _migration_2,
@@ -8478,4 +8488,5 @@ _MIGRATIONS = {
     29: _migration_29,
     30: _migration_30,
     31: _migration_31,
+    32: _migration_32,
 }
