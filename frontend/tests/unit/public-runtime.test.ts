@@ -130,12 +130,12 @@ test('prefixes raw API and AEAT filing URLs once while preserving their actual I
   expect(app.documentUrl?.('an/id', true)).toBe('/demo/api/document/an%2Fid/preview');
 });
 
-test('production keeps RU/EN preferences and the existing pseudolocale without public routing', async () => {
+test('production keeps RU/EN/ES preferences and the existing pseudolocale without public routing', async () => {
   const router = createAppRouter(createMemoryHistory());
   const app = createProductionRuntime(router);
   expect(app.readOnly).toBe(false);
   expect(app.intakeComponent).toBeDefined();
-  expect(app.locales.some((item) => item.code === 'es')).toBe(false);
+  expect(app.locales.some((item) => item.code === 'es')).toBe(true);
   const registry = localeRegistry as LocaleSpec[];
   registry.push({ code: 'qps', name: 'Pseudo (test)', intl: 'en-GB', direction: 'ltr' });
   try {
@@ -147,7 +147,7 @@ test('production keeps RU/EN preferences and the existing pseudolocale without p
     registry.pop();
   }
   localStorage.setItem(localeStorageKey, 'es');
-  expect(app.initialLocale()).toBe('ru');
+  expect(app.initialLocale()).toBe('es');
   app.saveLocale('en');
   expect(localStorage.getItem(localeStorageKey)).toBe('en');
   expect(app.href).toBeUndefined();

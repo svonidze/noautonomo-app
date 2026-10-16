@@ -84,6 +84,9 @@ from .tax_result_view import (
 
 QUARTER_RE = re.compile(r"^\d{4}-Q[1-4]$")
 UUID_RE = re.compile(r"^[0-9a-fA-F-]{32,36}$")
+GOVERNMENT_WRITE_ROUTE = re.compile(
+    r"/api/government-cases/([0-9a-f-]{36})/(state|events|actions)(?:/([0-9a-f-]{36}))?"
+)
 SPA_TOP_LEVEL_ROUTES = {
     "/dashboard",
     "/income",
@@ -93,6 +96,7 @@ SPA_TOP_LEVEL_ROUTES = {
     "/taxes",
     "/contacts",
     "/aeat-documents",
+    "/government-cases",
     "/settings",
 }
 
@@ -747,6 +751,14 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     self.server.app.taxes(_single_query(query, "period"))
                 )
+            elif parsed.path == "/api/government-cases":
+                self._send_json(self.server.app.government_cases(
+                    authority=_optional_query(query, "authority"),
+                    state=_optional_query(query, "state"),
+                    query=_optional_query(query, "q") or "",
+                ))
+            elif match := re.fullmatch(r"/api/government-cases/([0-9a-f-]{36})", parsed.path):
+                self._send_json(self.server.app.government_case(match.group(1)))
             elif parsed.path == "/api/aeat-documents":
                 self._send_json(
                     self.server.app.aeat_documents(
@@ -910,6 +922,29 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
                     ),
                     status=HTTPStatus.CREATED,
                 )
+            elif parsed.path in {"/api/government-cases", "/api/government-reminders/resolve"} or GOVERNMENT_WRITE_ROUTE.fullmatch(parsed.path):
+                self._require_same_origin()
+                self._require_json_content_type()
+                payload = self._read_json(max_bytes=MAX_SETTINGS_BYTES)
+                match = GOVERNMENT_WRITE_ROUTE.fullmatch(parsed.path)
+                if match:
+                    operation = {"state": "state", "events": "event", "actions": "action"}[match.group(2)]
+                    if match.group(3) and match.group(2) != "actions":
+                        raise ValueError("Invalid government route")
+                else:
+                    operation = "create" if parsed.path == "/api/government-cases" else "resolve-reminder"
+                self._send_json(self.server.app.government_write(
+                    operation, payload, actor=principal or "local-session",
+                    case_id=match.group(1) if match else None,
+                    action_id=match.group(3) if match else None,
+                ))
+            elif match := re.fullmatch(r"/api/government-cases/([0-9a-f-]{36})/documents", parsed.path):
+                self._require_same_origin()
+                fields, filename, content = self._read_multipart()
+                self._send_json(self.server.app.ingest_government_upload(
+                    match.group(1), fields=fields, filename=filename, content=content,
+                    actor=principal or "local-session",
+                ), status=HTTPStatus.CREATED)
             elif parsed.path == "/api/aeat-documents":
                 self._require_same_origin()
                 fields, filename, content = self._read_multipart()
@@ -1001,6 +1036,8 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
         except LocalWebApiError as exc:
             self._send_error_json(exc.status, str(exc), code=exc.code, current=exc.current,
                 message_code=exc.message_code, params=exc.params, field=exc.field)
+        except StaleRowVersionError as exc:
+            self._send_error_json(HTTPStatus.CONFLICT, str(exc), code="stale_case_version")
         except FileNotFoundError as exc:
             self._send_error_json(HTTPStatus.NOT_FOUND, str(exc))
         except LocalWebPostingCommandError as exc:

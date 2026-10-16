@@ -16,5 +16,7 @@
   "titles.settings": "Configuración de la cuenta",
   "titles.settingsLead": "Datos del contribuyente, copias de seguridad e idioma de la interfaz",
   "titles.taxes": "Impuestos y plazos",
-  "titles.taxesLead": "Cuánto pagar a la AEAT por el trimestre y cuándo"
+  "titles.taxesLead": "Cuánto pagar a la AEAT por el trimestre y cuándo",
+  "titles.governmentCases": "Expedientes y avisos",
+  "titles.governmentCasesLead": "Interacciones con AEAT y TGSS, documentos y plazos"
 }

@@ -6,10 +6,10 @@ export const views = [
   'assets',
   'taxes',
   'contacts',
-  'aeat-documents',
+  'government-cases',
   'settings',
 ] as const;
-export type ListView = (typeof views)[number];
+export type ListView = (typeof views)[number] | 'aeat-documents';
 export type View = ListView | 'contact-detail' | 'expense-detail';
 export interface ScreenRoute {
   view: View;
@@ -41,7 +41,7 @@ export function parseRoute(path: string): ScreenRoute | null {
       id: canonicalId(detail[2]),
     };
   const view = path.slice(1) as ListView;
-  return views.includes(view) ? { view } : null;
+  return view === 'aeat-documents' || (views as readonly string[]).includes(view) ? { view } : null;
 }
 export function routeUrl(
   view: View,
@@ -52,7 +52,7 @@ export function routeUrl(
     view === 'contact-detail' ? 'contacts' : view === 'expense-detail' ? 'expenses' : view;
   const path = `/${root}${options.id ? `/${encodeURIComponent(canonicalId(options.id))}` : ''}`;
   const query = new URLSearchParams();
-  if (period && !['settings', 'contacts', 'aeat-documents'].includes(view))
+  if (period && !['settings', 'contacts', 'aeat-documents', 'government-cases'].includes(view))
     query.set('period', period);
   if ((view === 'expenses' || view === 'income') && options.q) query.set('q', options.q);
   if (view === 'review' && !options.id && options.tab && options.tab !== 'queue')

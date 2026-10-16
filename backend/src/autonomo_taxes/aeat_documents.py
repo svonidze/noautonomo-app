@@ -169,7 +169,7 @@ def record_aeat_document(
         raise ValueError("case_id is required when expected_row_version is supplied")
     existing = db.connection.execute(
         """
-        SELECT ad.*, ac.title, ac.procedure_kind, ac.procedure_code, ac.form_code,
+        SELECT ad.*, ac.authority_code, ac.title, ac.procedure_kind, ac.procedure_code, ac.form_code,
                ac.current_status, ac.requested_effective_on, ac.primary_reference,
                ac.row_version AS case_row_version, initial.status AS document_status
         FROM aeat_documents ad
@@ -180,6 +180,8 @@ def record_aeat_document(
         (candidate.source_sha256,),
     ).fetchone()
     if existing is not None:
+        if existing["authority_code"] != "AEAT":
+            raise ValueError("PDF belongs to a different authority")
         if case_id is not None and existing["aeat_case_id"] != case_id:
             raise ValueError("AEAT document already belongs to a different case")
         expected = {
@@ -206,7 +208,7 @@ def record_aeat_document(
         case = db.connection.execute(
             "SELECT * FROM aeat_cases WHERE aeat_case_id = ?", (case_id,)
         ).fetchone()
-        if case is None:
+        if case is None or case["authority_code"] != "AEAT":
             raise ValueError("Unknown AEAT case")
         if int(case["row_version"]) != expected_row_version:
             raise StaleRowVersionError(
@@ -384,6 +386,7 @@ def unified_aeat_documents(connection: Any) -> list[dict[str, Any]]:
             FROM aeat_documents ad
             JOIN aeat_cases ac ON ac.aeat_case_id = ad.aeat_case_id
             JOIN documents d ON d.document_id = ad.document_id
+            WHERE ac.authority_code = 'AEAT'
             ORDER BY ad.occurred_at DESC, ad.created_at DESC
             """
         ).fetchall()
