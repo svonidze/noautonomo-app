@@ -501,6 +501,7 @@ def test_tls_transport_uses_verification_and_no_original_attachments(monkeypatch
     assert operations == ["connect", "ehlo", "tls", "ehlo", "send", "close"]
 
 
+@pytest.mark.web
 def test_http_auth_csrf_and_case_conflict(tmp_path):
     import json, threading
     from http.client import HTTPConnection
