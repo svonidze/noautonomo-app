@@ -39,3 +39,26 @@ To stop reminders, stop/disable only this timer. SMTP failure before DATA is
 retryable; ambiguous delivery is held for an evidence-backed operator resolution.
 The queue/journal is included in ordinary database backups. Avoid running this
 worker against an unsanitized cloned database with production SMTP credentials.
+
+## Correspondence schema upgrade
+
+Schema 33 adds the authority catalogue, parent procedure links, correspondence
+source deduplication, immutable attachment links and message-linked actions.
+Original PDFs, identifiers and existing actions retain their identity. Source
+files use the existing private archive and replica catalogue. The old version
+cannot open a schema-33 database; rollback requires its verified pre-upgrade
+snapshot and preservation of subsequent correspondence writes.
+
+One previously released schema-29 branch already contained the annual-evidence
+columns/table instead of receipt registration tables. The upgrade recognizes
+only its complete, matching constraints, foreign keys, index and immutability
+triggers. It adds the missing receipt tables without changing annual data and
+skips only the verified existing annual migration. Partial or differing schemas
+stop migration. Test on the actual backup before a live release; never repair
+schema markers manually to bypass this check.
+
+Keep initial import manifests/reports and originals outside Git. Record a
+read-only baseline, rehearse migration and import on a copy, compare accounting
+tables, repeat the import to prove idempotency, and verify source hashes. A
+preview report must identify unresolved matching and unavailable sources. Do not
+replace the live database with the rehearsal copy or send test reminders from it.

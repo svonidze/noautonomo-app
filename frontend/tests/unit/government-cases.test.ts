@@ -112,3 +112,65 @@ test('case loading failure has a retry and does not show an empty successful res
   host.dispose();
   root.remove();
 });
+
+test('retrying interrupted originals resumes the existing message without a duplicate', async () => {
+  let messages = 0,
+    uploads = 0;
+  const eventId = '33333333-3333-4333-8333-333333333333';
+  const current = {
+    ...detail,
+    correspondence: [],
+    correspondence_event_id: eventId,
+    row_version: 3,
+  };
+  const request = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url === '/api/government-cases') return list;
+    if (options?.method === 'POST' && url.endsWith('/correspondence')) {
+      messages++;
+      return current;
+    }
+    if (options?.method === 'POST' && url.endsWith('/documents')) {
+      uploads++;
+      expect(JSON.parse(String((options.body as FormData).get('metadata')))).toMatchObject({
+        correspondence_event_id: eventId,
+      });
+      if (uploads === 1) throw new Error('Synthetic interrupted upload');
+      return { ...current, row_version: 4 };
+    }
+    return structuredClone(detail);
+  });
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, GovernmentCasesView, {
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    notify: vi.fn(),
+  });
+  await flush();
+  [...root.querySelectorAll('button')]
+    .find((b) => b.textContent?.includes('TGSS · Synthetic appeal'))!
+    .click();
+  await flush();
+  const summary = [...root.querySelectorAll('summary')].find(
+    (s) => s.textContent?.trim() === 'Добавить переписку',
+  )!;
+  const form = summary.parentElement!.querySelector('form')!;
+  const file = form.querySelector('input[type=file]')!;
+  Object.defineProperty(file, 'files', {
+    configurable: true,
+    value: [new File(['Original'], 'source.eml', { type: 'message/rfc822' })],
+  });
+  file.dispatchEvent(new Event('change', { bubbles: true }));
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  expect(messages).toBe(1);
+  expect(uploads).toBe(1);
+  expect(form.textContent).toContain('Повторите загрузку оставшихся вложений');
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  expect(messages).toBe(1);
+  expect(uploads).toBe(2);
+  expect(form.textContent).not.toContain('Повторите загрузку оставшихся вложений');
+  host.dispose();
+  root.remove();
+});

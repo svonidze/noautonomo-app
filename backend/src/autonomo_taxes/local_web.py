@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 import errno
+from email.message import EmailMessage
 from email.parser import BytesParser
 from email.policy import default as email_policy
 import hashlib
@@ -85,7 +86,7 @@ from .tax_result_view import (
 QUARTER_RE = re.compile(r"^\d{4}-Q[1-4]$")
 UUID_RE = re.compile(r"^[0-9a-fA-F-]{32,36}$")
 GOVERNMENT_WRITE_ROUTE = re.compile(
-    r"/api/government-cases/([0-9a-f-]{36})/(state|events|actions)(?:/([0-9a-f-]{36}))?"
+    r"/api/government-cases/([0-9a-f-]{36})/(state|events|actions|correspondence)(?:/([0-9a-f-]{36}))?"
 )
 SPA_TOP_LEVEL_ROUTES = {
     "/dashboard",
@@ -160,6 +161,14 @@ UPLOAD_SUFFIXES = {
     ".txt",
     ".webp",
 }
+class _UploadPart(EmailMessage):
+    def get_content_type(self):
+        # Uploaded emails and multipart files are opaque bytes, not nested MIME messages.
+        if self.get_filename() is not None:
+            return "application/octet-stream"
+        return super().get_content_type()
+
+
 MAX_UPLOAD_BYTES = 30 * 1024 * 1024
 MAX_REVIEW_PACKET_BYTES = 64 * 1024
 MAX_GOOGLE_DRIVE_URL_BYTES = 2048
@@ -925,10 +934,10 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
             elif parsed.path in {"/api/government-cases", "/api/government-reminders/resolve"} or GOVERNMENT_WRITE_ROUTE.fullmatch(parsed.path):
                 self._require_same_origin()
                 self._require_json_content_type()
-                payload = self._read_json(max_bytes=MAX_SETTINGS_BYTES)
+                payload = self._read_json(max_bytes=1024 * 1024 if parsed.path.endswith("/correspondence") else MAX_SETTINGS_BYTES)
                 match = GOVERNMENT_WRITE_ROUTE.fullmatch(parsed.path)
                 if match:
-                    operation = {"state": "state", "events": "event", "actions": "action"}[match.group(2)]
+                    operation = {"state": "state", "events": "event", "actions": "action", "correspondence": "correspondence"}[match.group(2)]
                     if match.group(3) and match.group(2) != "actions":
                         raise ValueError("Invalid government route")
                 else:
@@ -1202,16 +1211,23 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
             if mime_type not in signatures or not header.startswith(signatures[mime_type]):
                 raise LocalWebApiError(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "preview_unavailable",
                     "Inline preview supports verified PDF, JPEG and PNG; use Open original")
-        self._serve_path(path, mime_type, preview=preview)
+        filename = path.name
+        with closing(self.server.app._connect()) as connection:
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE name='government_correspondence_attachments'").fetchone():
+                attachment = connection.execute("SELECT filename FROM government_correspondence_attachments WHERE document_id=? ORDER BY created_at,filename LIMIT 1", (document_id,)).fetchone()
+                if attachment:
+                    filename = attachment[0]
+        download = mime_type not in {"application/pdf", "image/jpeg", "image/png"}
+        self._serve_path(path, "application/octet-stream" if download else mime_type, preview=preview, download=download, filename=filename)
 
-    def _serve_path(self, path: Path, mime_type: str, *, preview: bool = False) -> None:
+    def _serve_path(self, path: Path, mime_type: str, *, preview: bool = False, download: bool = False, filename: str | None = None) -> None:
         size = path.stat().st_size
         self.send_response(HTTPStatus.OK)
         self._security_headers(document_preview=preview or (self.server.app.config.public_demo and mime_type == "application/pdf"))
         self.send_header("Content-Type", mime_type)
         self.send_header(
             "Content-Disposition",
-            f'inline; filename="{_header_filename(path.name)}"',
+            f'{"attachment" if download else "inline"}; filename="{_header_filename(filename or path.name)}"',
         )
         self.send_header("Content-Length", str(size))
         self.send_header("Cache-Control", "private, no-store")
@@ -1285,7 +1301,7 @@ class LocalAccountingHandler(BaseHTTPRequestHandler):
         if length > MAX_UPLOAD_BYTES + 1024 * 1024:
             raise LocalWebError("Multipart request exceeds the upload limit")
         body = self.rfile.read(length)
-        message = BytesParser(policy=email_policy).parsebytes(
+        message = BytesParser(_class=_UploadPart, policy=email_policy).parsebytes(
             (
                 f"Content-Type: {content_type}\r\n"
                 "MIME-Version: 1.0\r\n\r\n"

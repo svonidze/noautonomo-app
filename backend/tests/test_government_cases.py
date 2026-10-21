@@ -102,7 +102,7 @@ def test_migration_preserves_populated_legacy_and_immutable_events(tmp_path):
             tuple(r) for r in db.connection.execute("SELECT * FROM aeat_case_events")
         ]
     with LedgerDB.open(path, apply_migrations=True) as db:
-        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == 32
+        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == 33
         assert [
             tuple(r) for r in db.connection.execute("SELECT * FROM aeat_case_events")
         ] == before
@@ -501,6 +501,7 @@ def test_tls_transport_uses_verification_and_no_original_attachments(monkeypatch
     assert operations == ["connect", "ehlo", "tls", "ehlo", "send", "close"]
 
 
+@pytest.mark.web
 def test_http_auth_csrf_and_case_conflict(tmp_path):
     import json, threading
     from http.client import HTTPConnection

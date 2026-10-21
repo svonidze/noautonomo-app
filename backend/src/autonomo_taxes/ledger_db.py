@@ -34,12 +34,12 @@ from .tax_rules import ALL_FORM_CODES, ANNUAL_FORM_CODES, FORM_RULES, QUARTERLY_
 from .vat_classification import is_vat_investment_good
 
 
-LATEST_SCHEMA_VERSION = 32
+LATEST_SCHEMA_VERSION = 33
 
 # Migrations that rebuild a table referenced by a foreign key. They must
 # run with foreign-key enforcement temporarily disabled, and that pragma
 # only takes effect outside a transaction.
-FK_REBUILD_MIGRATIONS = frozenset({19, 32})
+FK_REBUILD_MIGRATIONS = frozenset({19, 32, 33})
 
 # Immutable provenance kinds for fx_rates rows (schema v19).
 FX_PROVENANCE_KINDS = {
@@ -8415,7 +8415,86 @@ def _migration_29(connection: sqlite3.Connection) -> None:
                                "BEGIN SELECT RAISE(ABORT, 'Receipt registration is immutable'); END")
 
 
+def _annual_evidence_already_present(connection: sqlite3.Connection) -> bool:
+    """Recognize the complete historical annual-evidence schema, never a partial one."""
+    expected = {
+        "source_transaction_id",
+        "recognized_on",
+        "adjustment_kind",
+        "evidence_status",
+        "source_snapshot_hash",
+        "actor",
+    }
+    columns = {
+        row[1]: row
+        for row in connection.execute("PRAGMA table_info(annual_adjustments)")
+    }
+    present = expected & columns.keys()
+    if not present:
+        return False
+    if present != expected or any(
+        columns[name][2:6] != ("TEXT", 0, None, 0) for name in expected
+    ):
+        raise LedgerDbError(
+            "Unrecognized partial annual evidence schema; migration stopped"
+        )
+    sql = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE name='annual_adjustments'"
+    ).fetchone()[0]
+    compact = " ".join(sql.split())
+    for check in (
+        "CHECK (adjustment_kind IN ('income', 'expense'))",
+        "CHECK (evidence_status IN ('verified', 'provisional'))",
+    ):
+        if check not in compact:
+            raise LedgerDbError("Annual evidence constraints differ; migration stopped")
+    foreign_keys = {
+        tuple(row)[2:5]
+        for row in connection.execute("PRAGMA foreign_key_list(annual_adjustments)")
+    }
+    if ("transactions", "source_transaction_id", "transaction_id") not in foreign_keys:
+        raise LedgerDbError("Annual evidence foreign key differs; migration stopped")
+    void_sql = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE name='annual_adjustment_voids'"
+    ).fetchone()
+    if void_sql is None or "".join(void_sql[0].split()) != "".join(
+        """CREATE TABLE annual_adjustment_voids (
+        annual_adjustment_id TEXT PRIMARY KEY REFERENCES annual_adjustments(annual_adjustment_id),
+        reason TEXT NOT NULL CHECK (length(trim(reason)) > 0),
+        actor TEXT NOT NULL CHECK (length(trim(actor)) > 0), created_at TEXT NOT NULL)""".split()
+    ):
+        raise LedgerDbError("Annual evidence void table differs; migration stopped")
+    index = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE name='annual_adjustments_source_idx'"
+    ).fetchone()
+    if (
+        index is None
+        or " ".join(index[0].split())
+        != "CREATE INDEX annual_adjustments_source_idx ON annual_adjustments(source_transaction_id, tax_year)"
+    ):
+        raise LedgerDbError("Annual evidence source index differs; migration stopped")
+    for table in ("annual_adjustments", "annual_adjustment_voids"):
+        for action in ("UPDATE", "DELETE"):
+            name = f"{table}_no_{action.lower()}"
+            trigger = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE name=?", (name,)
+            ).fetchone()
+            expected_sql = f"CREATE TRIGGER {name} BEFORE {action} ON {table} BEGIN SELECT RAISE(ABORT, 'Annual adjustments are append-only'); END"
+            if trigger is None or " ".join(trigger[0].split()) != expected_sql:
+                raise LedgerDbError(
+                    "Annual evidence immutability differs; migration stopped"
+                )
+    return True
+
+
 def _migration_30(connection: sqlite3.Connection) -> None:
+    # A previously released schema-29 branch contains annual evidence instead of receipt numbers.
+    if not connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE name='receipt_registration_series'"
+    ).fetchone():
+        if not _annual_evidence_already_present(connection):
+            raise LedgerDbError("Unrecognized schema-29 layout; migration stopped")
+        _migration_29(connection)
     connection.execute("""CREATE TABLE asset_disposals (
         asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id),
         disposed_on TEXT NOT NULL, last_depreciable_on TEXT NOT NULL,
@@ -8428,6 +8507,8 @@ def _migration_30(connection: sqlite3.Connection) -> None:
 
 
 def _migration_31(connection: sqlite3.Connection) -> None:
+    if _annual_evidence_already_present(connection):
+        return
     connection.execute("ALTER TABLE annual_adjustments ADD COLUMN source_transaction_id TEXT REFERENCES transactions(transaction_id)")
     connection.execute("ALTER TABLE annual_adjustments ADD COLUMN recognized_on TEXT")
     connection.execute("ALTER TABLE annual_adjustments ADD COLUMN adjustment_kind TEXT CHECK (adjustment_kind IN ('income', 'expense'))")
@@ -8453,6 +8534,11 @@ def _migration_31(connection: sqlite3.Connection) -> None:
 
 def _migration_32(connection: sqlite3.Connection) -> None:
     from .government_cases import migrate
+    migrate(connection)
+
+
+def _migration_33(connection: sqlite3.Connection) -> None:
+    from .government_correspondence import migrate
     migrate(connection)
 
 
@@ -8489,4 +8575,5 @@ _MIGRATIONS = {
     30: _migration_30,
     31: _migration_31,
     32: _migration_32,
+    33: _migration_33,
 }
