@@ -1376,7 +1376,7 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
     filings_refresh.set_defaults(_operational_handler=_cmd_filings_refresh_evidence)
 
     government = subparsers.add_parser(
-        "government-cases", help="Evidence-backed AEAT and TGSS cases"
+        "government-cases", help="Government cases and original correspondence"
     )
     government_sub = government.add_subparsers(dest="government_command", required=True)
     for operation in (
@@ -1385,6 +1385,7 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
         "create",
         "state",
         "event",
+        "correspondence",
         "action",
         "document",
         "reminders",
@@ -1398,6 +1399,7 @@ def register_operational_commands(subparsers: argparse._SubParsersAction[Any]) -
             "create",
             "state",
             "event",
+            "correspondence",
             "action",
             "document",
             "resolve-reminder",
@@ -6238,20 +6240,22 @@ from .services.calculation_operations import dashboard
 
 def _cmd_government(args: argparse.Namespace) -> int:
     from . import government_cases as cases
+    from . import government_correspondence as correspondence
     from . import case_reminders
 
     command = args.government_command
+    limit = correspondence.MAX_REQUEST_BYTES if command == "correspondence" else 65536
     if hasattr(args, "input"):
         raw = (
-            sys.stdin.read(65537)
+            sys.stdin.read(limit + 1)
             if str(args.input) == "-"
             else args.input.read_text(encoding="utf-8")
-            if args.input.stat().st_size <= 65536
+            if args.input.stat().st_size <= limit
             else ""
         )
-        if not raw or len(raw.encode("utf-8")) > 65536:
+        if not raw or len(raw.encode("utf-8")) > limit:
             raise ValueError(
-                "Government request must be a JSON object no larger than 64 KiB"
+                f"Government request must be a JSON object no larger than {limit} bytes"
             )
         payload = json.loads(raw)
         if not isinstance(payload, dict):
@@ -6271,6 +6275,8 @@ def _cmd_government(args: argparse.Namespace) -> int:
             result = cases.create_case(db, payload, actor=args.actor)
         elif command == "state":
             result = cases.update_case(db, args.case_id, payload, actor=args.actor)
+        elif command == "correspondence":
+            result = correspondence.add(db, args.case_id, payload, actor=args.actor)
         elif command == "event":
             result = cases.add_event(db, args.case_id, payload, actor=args.actor)
         elif command == "action":
@@ -6282,7 +6288,12 @@ def _cmd_government(args: argparse.Namespace) -> int:
         elif command == "document":
             if args.archive_root is None:
                 raise ValueError("Evidence archive is required")
-            result = cases.attach_pdf(
+            operation = (
+                correspondence.attach
+                if payload.get("correspondence_event_id")
+                else cases.attach_pdf
+            )
+            result = operation(
                 db,
                 args.case_id,
                 args.evidence,

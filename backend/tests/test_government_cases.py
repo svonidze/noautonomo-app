@@ -102,7 +102,7 @@ def test_migration_preserves_populated_legacy_and_immutable_events(tmp_path):
             tuple(r) for r in db.connection.execute("SELECT * FROM aeat_case_events")
         ]
     with LedgerDB.open(path, apply_migrations=True) as db:
-        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == 32
+        assert db.connection.execute("PRAGMA user_version").fetchone()[0] == 33
         assert [
             tuple(r) for r in db.connection.execute("SELECT * FROM aeat_case_events")
         ] == before

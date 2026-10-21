@@ -12,6 +12,7 @@ from autonomo_test_support.paths import REPO_ROOT
 
 
 REVIEWED_UI_VALUES = (
+    ("email-address", "pass@example.invalid"),
     ("credential-literal", "synthetic-access-token"),
     ("email-address", "secret" + "@drive.google.com"),
     ("google-drive-link", "https://drive.google.com/file/d/synthetic-file-123/view"),
@@ -50,7 +51,7 @@ def test_reviewed_ui_values_do_not_exempt_other_categories(category, value):
 def test_reviewed_ui_exceptions_are_exactly_the_reviewed_category_digest_pairs():
     assert privacy_guard.ALLOWED_SYNTHETIC_FINDINGS == frozenset(
         (category, hashlib.sha256(value.encode()).hexdigest())
-        for category, value in REVIEWED_UI_VALUES
+        for category, value in (*REVIEWED_UI_VALUES, ("email-address", "'synthetic@example.invalid"))
     )
 
 
@@ -349,3 +350,12 @@ def test_package_manager_span_is_root_only_and_supports_multiline_json():
     assert findings[0].line == 3
     multiline = ('{\r\n"packageManager":\r\n"' + version + '"\r\n}').encode()
     assert not privacy_guard.scan_content(multiline, "index:package.json")
+
+
+def test_quoted_correspondence_fixture_is_an_exact_email_exception():
+    value = "'synthetic@example.invalid"
+    digest = hashlib.sha256(value.encode()).hexdigest()
+    assert privacy_guard.scan_content((value + "\n").encode(), "fixture.ts") == []
+    assert any(f.category == "email-address" for f in privacy_guard.scan_content((value + "-changed\n").encode(), "fixture.ts"))
+    assert ("credential-literal", digest) not in privacy_guard.ALLOWED_SYNTHETIC_FINDINGS
+    assert any(f.category == "credential-literal" for f in privacy_guard.scan_content(_ui_specimen("credential-literal", "pass@example.invalid"), "fixture.ts"))

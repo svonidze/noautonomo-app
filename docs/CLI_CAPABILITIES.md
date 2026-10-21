@@ -24,7 +24,7 @@ semantics. For end-to-end examples use [the agent workflow](AGENT_WORKFLOW.md).
 | Profile edit with ID/version/identity lock | `profile inspect/edit` | Stage 4 |
 | Backup retention and observed runs | `backup settings show/set` | Stage 4 |
 | Financial dashboard/taxes/analytics reads | `period summary/taxes/analytics` | Stage 4 |
-| AEAT/TGSS cases, evidence and deadline actions | `government-cases list/show/create/state/event/action/document` | Shared services |
+| Government cases, correspondence, evidence and deadline actions | `government-cases list/show/create/state/event/correspondence/action/document` | Shared services |
 | Case email reminders and delivery review | `government-cases reminders/resolve-reminder` | Server job, dry run available |
 | Calculation refresh | `period dashboard` | Existing, shared operation |
 
