@@ -1,4 +1,4 @@
-# AEAT and TGSS cases
+# Government cases and correspondence
 
 The **Cases and notices** page records government interactions separately from
 invoices and bookkeeping. Existing AEAT identifiers, evidence and status history
@@ -80,3 +80,64 @@ for the next hourly retry. Do not mark an unverified email delivered.
 
 The job does not discover new notifications in government inboxes. A separate
 portal-monitoring workflow is required for that coverage.
+
+## Correspondence with other Spanish authorities
+
+The authority field accepts an existing authority or a new name. Cases can be
+created before an official reference is assigned. An optional parent links a
+separate procedure, such as a delay complaint, without combining its decision,
+actions or deadlines with the parent. The parent can be changed with a sourced
+state update; self-links and cycles are rejected.
+
+**Add correspondence** records an incoming or outgoing email, portal message or
+paper letter. Store the subject, participants, full plain text, summary, source
+URL and originals. The single timeline includes correspondence, earlier evidence,
+decisions and action history. Search includes the complete text and participants.
+**Add action** links an action to its source message; receiving an email never
+confirms legal receipt or completes an action automatically.
+
+Use **Record correction** to append a replacement interpretation or transcription.
+The original remains visible, marked as superseded. Corrections retain their
+original attachment links. Source identity is provider + account + message ID,
+not the email thread or subject. A retry with the same identity and contents is
+idempotent; different contents or a different case require explicit review.
+
+The CLI uses the same service:
+
+```
+autonomo-tax government-cases correspondence --case-id CASE_UUID --input PRIVATE_MESSAGE_JSON --actor operator
+```
+
+Message JSON fields are `expected_row_version`, `direction` (`incoming` or
+`outgoing`), `channel` (`email`, `portal`, `paper`), `occurred_at` (ISO 8601 with
+timezone), `date_precision` (`instant`, the default, or `day` when only a date is known),
+`sender`, `recipients` (string array), `subject`, `body_text`, `summary`,
+`source_url` (optional HTTPS URL), `source_provider`, `source_account`,
+`source_message_id`, `reply_to_event_id`, `supersedes_event_id` and
+`attachment_names` (unique filenames). Optional string fields default to empty;
+optional arrays default to empty. A source message ID requires provider and
+account. Subject and either text, originals or a source URL are required.
+The HTTP endpoint is `POST /api/government-cases/{id}/correspondence`; request
+size is limited to 1 MiB on both transports. `GET` case details returns
+`correspondence`, `related_cases` and the existing events/documents/actions.
+The list response includes `authorities`, `last_message` and `next_action` per
+case. Case creation accepts `authority_name` and `parent_case_id`. State updates
+also accept `parent_case_id`, `title`, `subject` and `primary_reference`, with
+a sourced before/after history and duplicate-reference protection. Actions accept `correspondence_event_id`.
+
+Attach each original with the existing `government-cases document` CLI or
+`POST /api/government-cases/{id}/documents`. For a correspondence attachment,
+metadata contains `expected_row_version`, `correspondence_event_id` and, for CLI,
+`filename`. HTTP takes the filename from the uploaded file. The returned
+`correspondence_event_id` identifies a newly recorded message; read the latest
+case version after each upload. Files are limited to 30 MB each. Identical files
+reuse the existing document and archived bytes. A conflicting filename/hash is
+rejected. Expected files not yet uploaded remain listed under
+`missing_attachments`; reload and use **Add message attachments** to resume.
+
+Email originals (`.eml`) and attachments retain their bytes and SHA-256. Verified
+PDF/JPEG/PNG can be previewed; other formats are downloaded, never rendered as
+HTML or executed. The app does not fetch remote images or source URLs. All text,
+files, source IDs and import reports belong in the configured private root.
+Importing correspondence does not write accounting entries, send mail or access
+government portals.

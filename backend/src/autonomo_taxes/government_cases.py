@@ -11,6 +11,8 @@ from typing import Any, Mapping
 from urllib.parse import urlsplit
 from uuid import uuid4
 
+from . import government_correspondence as correspondence
+
 from .ledger_db import (
     AEAT_CASE_STATUSES,
     AEAT_DOCUMENT_KINDS,
@@ -189,16 +191,16 @@ def create_case(
             "primary_reference",
             "opened_at",
             "evidence_reference",
+            "authority_name",
+            "parent_case_id",
         },
     )
     authority = payload.get("authority_code")
-    if not isinstance(authority, str) or authority not in {"AEAT", "TGSS"}:
-        raise ValueError("Authority must be AEAT or TGSS")
     title = _text(payload.get("title"), "title", required=True, limit=200)
     reference = _text(
         payload.get("primary_reference", ""),
         "primary_reference",
-        required=True,
+        required=False,
         limit=200,
     )
     subject = _text(payload.get("subject", ""), "subject")
@@ -208,10 +210,17 @@ def create_case(
     )
     case_id, timestamp = str(uuid4()), _now()
     with db.transaction():
-        if db.connection.execute(
-            "SELECT 1 FROM aeat_cases WHERE authority_code=? AND primary_reference=?",
-            (authority, reference),
-        ).fetchone():
+        authority = correspondence.authority(
+            db, authority, payload.get("authority_name")
+        )
+        parent = correspondence.validate_parent(db, None, payload.get("parent_case_id"))
+        if (
+            reference
+            and db.connection.execute(
+                "SELECT 1 FROM aeat_cases WHERE authority_code=? AND primary_reference=?",
+                (authority, reference),
+            ).fetchone()
+        ):
             raise ValueError("A case with this authority and reference already exists")
         db.connection.execute(
             """INSERT INTO aeat_cases (aeat_case_id,authority_code,title,procedure_kind,
@@ -228,7 +237,20 @@ def create_case(
                 subject,
             ),
         )
-        _event(db, case_id, "case_opened", opened, evidence, "", actor)
+        db.connection.execute(
+            "UPDATE aeat_cases SET parent_case_id=? WHERE aeat_case_id=?",
+            (parent, case_id),
+        )
+        _event(
+            db,
+            case_id,
+            "case_opened",
+            opened,
+            evidence,
+            "",
+            actor,
+            {"parent_case_id": parent},
+        )
     return case_detail(db, case_id)
 
 
@@ -239,8 +261,6 @@ def list_cases(
     state: str | None = None,
     query: str = "",
 ) -> dict[str, Any]:
-    if authority and authority not in {"AEAT", "TGSS"}:
-        raise ValueError("Invalid authority")
     if state and state not in WORK_STATES:
         raise ValueError("Invalid work state")
     rows = [
@@ -249,18 +269,44 @@ def list_cases(
             "SELECT *,aeat_case_id AS case_id FROM aeat_cases ORDER BY updated_at DESC,aeat_case_id"
         )
     ]
+    for row in rows:
+        row["authority_name"] = db.connection.execute(
+            "SELECT name FROM government_authorities WHERE authority_code=?",
+            (row["authority_code"],),
+        ).fetchone()[0]
+        history = correspondence.messages(db, row["case_id"])
+        row["last_message"] = (
+            {
+                k: history[-1].get(k)
+                for k in ("subject", "occurred_at", "event_id", "date_precision")
+            }
+            if history
+            else None
+        )
+        row["search_text"] = " ".join(
+            [
+                str(row.get(k) or "")
+                for k in ("title", "subject", "primary_reference", "authority_name")
+            ]
+            + [
+                " ".join(
+                    [
+                        m["subject"],
+                        m["body_text"],
+                        m["summary"],
+                        m["sender"],
+                        *m["recipients"],
+                    ]
+                )
+                for m in history
+            ]
+        )
     rows = [
         r
         for r in rows
         if (not authority or r["authority_code"] == authority)
         and (not state or r["work_state"] == state)
-        and (
-            not query
-            or query.casefold()
-            in " ".join(
-                str(r.get(k) or "") for k in ("title", "subject", "primary_reference")
-            ).casefold()
-        )
+        and (not query or query.casefold() in r["search_text"].casefold())
     ]
     for row in rows:
         row["decision_outcome"] = (
@@ -274,7 +320,16 @@ def list_cases(
             "SELECT a.*,c.title,c.authority_code FROM government_actions a JOIN aeat_cases c ON c.aeat_case_id=a.case_id WHERE a.status='open' AND c.work_state<>'closed' ORDER BY a.due_on IS NULL,a.due_on,a.created_at"
         )
     ]
-    return {"rows": rows, "total": len(rows), "actions": actions}
+    for row in rows:
+        row["next_action"] = next(
+            (a for a in actions if a["case_id"] == row["case_id"]), None
+        )
+    return {
+        "rows": rows,
+        "total": len(rows),
+        "actions": actions,
+        "authorities": correspondence.authorities(db),
+    }
 
 
 def case_detail(db: LedgerDB, case_id: str) -> dict[str, Any]:
@@ -321,6 +376,18 @@ def case_detail(db: LedgerDB, case_id: str) -> dict[str, Any]:
         "decision_outcome": case["current_status"]
         if case["current_status"] in {"approved", "rejected"}
         else None,
+        "authority_name": db.connection.execute(
+            "SELECT name FROM government_authorities WHERE authority_code=?",
+            (case["authority_code"],),
+        ).fetchone()[0],
+        "correspondence": correspondence.messages(db, case_id),
+        "related_cases": [
+            dict(r)
+            for r in db.connection.execute(
+                "SELECT aeat_case_id AS case_id,title,authority_code,primary_reference,work_state FROM aeat_cases WHERE parent_case_id=? OR aeat_case_id=? ORDER BY opened_at",
+                (case_id, case["parent_case_id"]),
+            )
+        ],
         "events": events,
         "documents": documents,
         "actions": [
@@ -337,7 +404,17 @@ def update_case(
     db: LedgerDB, case_id: str, payload: Mapping[str, Any], *, actor: str
 ) -> dict[str, Any]:
     _fields(
-        payload, {"expected_row_version", "work_state", "evidence_reference", "notes"}
+        payload,
+        {
+            "expected_row_version",
+            "work_state",
+            "evidence_reference",
+            "notes",
+            "parent_case_id",
+            "title",
+            "subject",
+            "primary_reference",
+        },
     )
     state = payload.get("work_state")
     if not isinstance(state, str) or state not in WORK_STATES:
@@ -355,6 +432,36 @@ def update_case(
             ).fetchone()
         ):
             raise ValueError("Complete or cancel open actions before closing the case")
+        changes = {
+            key: _text(
+                payload[key],
+                key,
+                required=key == "title",
+                limit=200 if key in {"title", "primary_reference"} else 4000,
+            )
+            for key in ("title", "subject", "primary_reference")
+            if key in payload
+        }
+        if (
+            changes.get("primary_reference")
+            and db.connection.execute(
+                "SELECT 1 FROM aeat_cases WHERE authority_code=? AND primary_reference=? AND aeat_case_id<>?",
+                (row["authority_code"], changes["primary_reference"], case_id),
+            ).fetchone()
+        ):
+            raise ValueError("A case with this authority and reference already exists")
+        for key, value in changes.items():
+            db.connection.execute(
+                f"UPDATE aeat_cases SET {key}=? WHERE aeat_case_id=?", (value, case_id)
+            )
+        if "parent_case_id" in payload:
+            parent = correspondence.validate_parent(
+                db, case_id, payload["parent_case_id"]
+            )
+            db.connection.execute(
+                "UPDATE aeat_cases SET parent_case_id=? WHERE aeat_case_id=?",
+                (parent, case_id),
+            )
         _bump(db, case_id, row["row_version"])
         db.connection.execute(
             "UPDATE aeat_cases SET work_state=? WHERE aeat_case_id=?", (state, case_id)
@@ -367,7 +474,13 @@ def update_case(
             evidence,
             _text(payload.get("notes", ""), "notes"),
             actor,
-            {"from": row["work_state"], "to": state},
+            {
+                "from": row["work_state"],
+                "to": state,
+                "parent_case_id": payload.get("parent_case_id", row["parent_case_id"]),
+                "metadata_before": {k: row[k] for k in changes},
+                "metadata_after": changes,
+            },
         )
     return case_detail(db, case_id)
 
@@ -465,6 +578,7 @@ def save_action(
             "deadline_source",
             "confirmed",
             "status",
+            "correspondence_event_id",
         },
     )
     kind, status = payload.get("kind"), payload.get("status", "open")
@@ -493,6 +607,9 @@ def save_action(
         case = _version(db, case_id, payload.get("expected_row_version"))
         if case["work_state"] == "closed":
             raise ValueError("Reopen the case before changing actions")
+        source_event = payload.get("correspondence_event_id") or None
+        if source_event:
+            correspondence._message(db, case_id, source_event)
         before = None
         timestamp = _now()
         if action_id:
@@ -522,7 +639,7 @@ def save_action(
         else:
             action_id = str(uuid4())
             db.connection.execute(
-                "INSERT INTO government_actions VALUES (?,?,?,?,?,?,?,?,1,?,?)",
+                "INSERT INTO government_actions (action_id,case_id,kind,description,due_on,deadline_source,confirmed,status,row_version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,1,?,?)",
                 (
                     action_id,
                     case_id,
@@ -536,6 +653,12 @@ def save_action(
                     timestamp,
                 ),
             )
+        if "correspondence_event_id" not in payload and before:
+            source_event = before["correspondence_event_id"]
+        db.connection.execute(
+            "UPDATE government_actions SET correspondence_event_id=? WHERE action_id=?",
+            (source_event, action_id),
+        )
         _bump(db, case_id, case["row_version"])
         _event(
             db,

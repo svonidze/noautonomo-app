@@ -242,7 +242,7 @@ def resolve_verified_filesystem_replica(
             continue
         try:
             verify_file(path, str(row["content_sha256"]))
-        except (StorageObjectCorruptError, OSError):
+        except (StorageAdapterError, OSError):
             continue
         return ResolvedFileReplica(
             path=path,

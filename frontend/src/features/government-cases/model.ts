@@ -4,6 +4,11 @@ export interface CaseRow {
   decision_outcome?: string | null;
   case_id: string;
   authority_code: string;
+  authority_name?: string;
+  parent_case_id?: string | null;
+  search_text?: string;
+  last_message?: { subject: string; occurred_at: string; date_precision?: string } | null;
+  next_action?: CaseAction | null;
   title: string;
   subject: string;
   primary_reference: string;
@@ -12,6 +17,7 @@ export interface CaseRow {
   row_version: number;
 }
 export interface CaseAction {
+  correspondence_event_id?: string | null;
   action_id: string;
   case_id: string;
   kind: string;
@@ -42,7 +48,32 @@ export interface CaseDocument {
   received_at?: string;
   access_expires_at?: string;
 }
+export interface CorrespondenceMessage {
+  date_precision?: string;
+  event_id: string;
+  direction: string;
+  channel: string;
+  occurred_at: string;
+  sender: string;
+  recipients: string[];
+  subject: string;
+  body_text: string;
+  summary: string;
+  source_url: string;
+  source_provider: string;
+  source_account: string;
+  source_message_id: string;
+  reply_to_event_id: string;
+  supersedes_event_id: string;
+  superseded: boolean;
+  attachment_names: string[];
+  missing_attachments: string[];
+  attachments: { filename: string; content_url: string; mime_type: string }[];
+}
 export interface CaseDetail extends CaseRow {
+  correspondence?: CorrespondenceMessage[];
+  related_cases?: CaseRow[];
+  correspondence_event_id?: string;
   actions: CaseAction[];
   events: CaseEvent[];
   documents: CaseDocument[];
@@ -55,6 +86,7 @@ export interface ReminderHealth {
   messages: { message_id: string; status: string; error?: string; created_at: string }[];
 }
 export interface CaseList {
+  authorities?: { authority_code: string; name: string }[];
   rows: CaseRow[];
   actions: CaseAction[];
   reminders: ReminderHealth;

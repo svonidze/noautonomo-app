@@ -99,6 +99,9 @@ ALLOWED_SYNTHETIC_FINDINGS: frozenset[tuple[str, str]] = frozenset(
         ("credential-literal", "177d2245b6ba1eb7a3510070af30fe4688d1525524168bddf0fa1055767dff16"),
         # Email-shaped userinfo/host fragment of a rejected test URL, not a mailbox.
         ("email-address", "ddadd30ea42a3b187c76ad8ee4872feeb2913ea2cc51b1c03f7cfc63b068638b"),
+        # Reserved-domain message participant and rejected URL userinfo in correspondence tests.
+        ("email-address", "63a8c5d6155de596ed86dcf517b17c863f7cf28ecaabd881a6c0b0b52bdb504d"),
+        ("email-address", "e08f554db309a1265d19b6cedf6a95163a1fdda3c7d451f9937a677bf83161ec"),
         # Exact synthetic Drive file/open/document URLs and rejected HTTP/folder URLs.
         ("google-drive-link", "5bb3fd66d21c2966bf74656a0aafa22b7f2c255662003017a27c3439ce0121e5"),
         ("google-drive-link", "baf02ddaf0a44ecf3ab4b04476f13ebb148da2a17490febe1e279746cefd1bc1"),
