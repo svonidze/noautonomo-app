@@ -45,8 +45,13 @@ the backup form is unavailable and profile settings remain independent.
   older local archives **and manifests** beyond the selected limit are
   permanently deleted. The web cannot know the exact number of deletions.
   For operator-managed values, even the numeric limit is unknown to the web.
+- With offsite upload configured, the server keeps only the newest pair once
+  `rclone cryptcheck` confirms its upload, and deletes older pairs whose remote
+  copies match. The count limit is still applied to every pair before the
+  upload, so it caps pairs whose upload is not confirmed. Remote retention is
+  the bucket lifecycle.
 - Saving does not run a backup, change timers, configure cloud storage or
-  verify recovery. Remote retention remains independent of local retention.
+  verify recovery.
 
 The page reports observed runs from the per-class markers: time, local readiness,
 whether offsite upload was acknowledged, and the retention limit actually used.

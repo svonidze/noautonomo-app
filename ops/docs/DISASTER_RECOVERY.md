@@ -52,8 +52,12 @@ foreign keys. It archives regular files from private-root, with these exclusions
   are not followed into the archive.
 
 Archive and manifest are local plaintext files with mode `0600`; rclone crypt
-encrypts their upload. Local retention defaults to 35 daily or 13 monthly
-pairs by count. Cloud lifecycle is a separate provisioning policy. SQLite is
+encrypts their upload. Once `rclone cryptcheck` confirms the new pair in the
+crypt remote, the job keeps only that newest pair locally and deletes each older
+pair whose remote copy also matches. Recovery therefore reads older backups
+from the bucket. Without a configured or matching remote, local retention
+falls back to 35 daily or 13 monthly pairs by count. The bucket lifecycle
+(daily 35 days, monthly 400 days) is the retention of record. SQLite is
 consistent, but this is not a filesystem-wide point-in-time snapshot: quiesce
 uploads/config edits when a coordinated recovery point matters.
 

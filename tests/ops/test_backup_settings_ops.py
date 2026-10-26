@@ -132,13 +132,11 @@ def test_no_policy_does_not_need_installed_reader(installed):
     assert marker["keep"] == 12
 
 
-def test_offsite_marker_records_upload_acknowledgement_without_readback(installed, tmp_path):
-    private, _, ops, env = installed
+def _fake_crypt_remote(env, tmp_path):
     config = tmp_path / "rclone.conf"
     config.write_text("[crypt]\ntype = crypt\n")
     config.chmod(0o600)
-    rclone_state = tmp_path / "rclone-state"
-    rclone_state.mkdir()
+    commands = tmp_path / "rclone-commands"
     rclone = Path(env["PATH"].split(":", 1)[0]) / "rclone"
     rclone.write_text(
         "#!/bin/sh\n"
@@ -146,6 +144,14 @@ def test_offsite_marker_records_upload_acknowledgement_without_readback(installe
         "case \"$1\" in\n"
         "  config) printf 'type = crypt\\n' ;;\n"
         "  copyto) printf '%s\\n' \"$*\" >> \"$FAKE_RCLONE_STATE\" ;;\n"
+        "  cryptcheck) printf '%s\\n' \"$*\" >> \"$FAKE_RCLONE_STATE\"\n"
+        "    case \"$*\" in *\"${FAKE_CRYPTCHECK_FAIL:-no-such-pair}\"*) exit 1 ;; esac\n"
+        "    case \"$*\" in *\"${FAKE_CRYPTCHECK_SILENT:-no-such-pair}\"*) exit 0 ;; esac\n"
+        "    previous=\n"
+        "    for argument in \"$@\"; do\n"
+        "      [ \"$previous\" = --include ] && printf '%s\\n' \"${argument#/}\"\n"
+        "      previous=\"$argument\"\n"
+        "    done ;;\n"
         "  *) exit 2 ;;\n"
         "esac\n"
     )
@@ -155,7 +161,13 @@ def test_offsite_marker_records_upload_acknowledgement_without_readback(installe
         runtime.read_text()
         + f"AUTONOMO_RCLONE_CONFIG={config}\nAUTONOMO_RCLONE_REMOTE=crypt:daily\n"
     )
-    env["FAKE_RCLONE_STATE"] = str(rclone_state / "commands")
+    env["FAKE_RCLONE_STATE"] = str(commands)
+    return commands
+
+
+def test_offsite_marker_records_checksum_verified_upload_without_download(installed, tmp_path):
+    private, _, ops, env = installed
+    commands = _fake_crypt_remote(env, tmp_path)
 
     result = _run(ops / "backup.sh", env)
 
@@ -163,9 +175,73 @@ def test_offsite_marker_records_upload_acknowledgement_without_readback(installe
     marker = json.loads((private / "backups" / "last-backup-daily.json").read_text())
     assert marker["offsite"] == "yes"
     assert marker["offsite_status"] == "acknowledged"
-    commands = (rclone_state / "commands").read_text()
-    assert commands.count("copyto") == 2
-    assert "size" not in commands
+    log = commands.read_text()
+    assert log.count("copyto") == 2
+    assert f"--include /{marker['archive']}" in log
+    assert f"--include /{marker['manifest']}" in log
+    assert "size" not in log
+
+
+def test_verified_upload_keeps_only_the_newest_local_pair(installed, tmp_path):
+    private, database, ops, env = installed
+    output = _seed_archives(private, database, "daily")
+    unmatched = sorted(output.glob("*.tar.gz"))[2].name.removesuffix(".tar.gz")
+    _fake_crypt_remote(env, tmp_path)
+    env["FAKE_CRYPTCHECK_FAIL"] = unmatched
+
+    result = _run(ops / "backup.sh", env)
+
+    assert result.returncode == 0, result.stderr
+    marker = json.loads((private / "backups" / "last-backup-daily.json").read_text())
+    kept = {path.name.removesuffix(".tar.gz") for path in output.glob("*.tar.gz")}
+    assert kept == {marker["archive"].removesuffix(".tar.gz"), unmatched}
+    assert {path.name.removesuffix(".manifest.json") for path in output.glob("*.manifest.json")} == kept
+    assert f"kept {unmatched}.tar.gz" in result.stderr
+
+
+def test_offsite_pruning_keeps_the_newest_pair_for_a_trailing_slash_backup_dir(installed, tmp_path):
+    private, database, ops, env = installed
+    output = _seed_archives(private, database, "daily")
+    _fake_crypt_remote(env, tmp_path)
+    runtime = Path(env["AUTONOMO_RUNTIME_ENV_PATH"])
+    runtime.write_text(runtime.read_text() + f"AUTONOMO_BACKUP_DIR={output}/\n")
+
+    result = _run(ops / "backup.sh", env)
+
+    assert result.returncode == 0, result.stderr
+    marker = json.loads((private / "backups" / "last-backup-daily.json").read_text())
+    assert [path.name for path in output.glob("*.tar.gz")] == [marker["archive"]]
+    assert [path.name for path in output.glob("*.manifest.json")] == [marker["manifest"]]
+
+
+def test_cryptcheck_without_reported_matches_deletes_nothing(installed, tmp_path):
+    private, database, ops, env = installed
+    output = _seed_archives(private, database, "daily")
+    silent = sorted(output.glob("*.tar.gz"))[1].name.removesuffix(".tar.gz")
+    _fake_crypt_remote(env, tmp_path)
+    env["FAKE_CRYPTCHECK_SILENT"] = silent
+
+    result = _run(ops / "backup.sh", env)
+
+    assert result.returncode == 0, result.stderr
+    assert (output / f"{silent}.tar.gz").is_file()
+    assert (output / f"{silent}.manifest.json").is_file()
+    assert len(list(output.glob("*.tar.gz"))) == 2
+
+
+def test_unverified_upload_prunes_nothing_beyond_the_count_limit(installed, tmp_path):
+    private, database, ops, env = installed
+    output = _seed_archives(private, database, "daily")
+    _fake_crypt_remote(env, tmp_path)
+    env["FAKE_CRYPTCHECK_FAIL"] = "private-root-"
+
+    result = _run(ops / "backup.sh", env)
+
+    assert result.returncode != 0
+    assert len(list(output.glob("*.tar.gz"))) == 9
+    marker = json.loads((private / "backups" / "last-backup-daily.json").read_text())
+    assert marker["local_status"] == "verified"
+    assert marker["offsite_status"] == "failed"
 
 
 def test_upload_failure_preserves_local_readiness_and_records_failure(installed, tmp_path):
