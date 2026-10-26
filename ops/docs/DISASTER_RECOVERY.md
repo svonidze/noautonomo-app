@@ -15,10 +15,12 @@ application SHA, schema, missing material, and observed result.
 | Material | Authoritative location in default mode | Recovery coverage |
 |---|---|---|
 | SQLite, including file/replica identities and accounting records | `AUTONOMO_PRIVATE_ROOT/autonomo.sqlite` | Consistent snapshot included as `autonomo.sqlite` |
-| Evidence bytes | Original Google files; registered Yandex crypt replicas; local files under private-root | Local regular files included; remote-only bytes require their provider credentials and locator records |
-| Application config, including Picker settings | Private-root `config.yaml` | Included when a regular file inside the root |
+| Evidence bytes | Original Google files; registered Yandex crypt replicas; local files under private-root | Full scope includes local regular files; database scope requires the verified separate evidence copy and file index. Remote-only bytes still need provider credentials and locators |
+| Application config, including Picker settings | Private-root `config.yaml` | Included in both scopes when present and regular |
+| Backup preferences | Private-root `account-backup-settings.json` | Included in both scopes when present and regular |
+| Inbox, filing archives, legacy path map and other working files | Regular files under private-root | Full scope includes them; database scope requires the versioned separate file copy |
 | Runtime environment | `~/.config/autonomo-tax/runtime.env` unless overridden | Usually outside the archive; needs a separate recoverable copy |
-| Google reader service-account JSON, OAuth token/client | Paths in enabled backend `credential_ref` values | Included only if actual regular files are inside private-root |
+| Google reader service-account JSON, OAuth token/client | Paths in enabled backend `credential_ref` values | Full scope includes regular files inside private-root; database scope copies them separately. External credentials require independent recovery |
 | Session principal secret | `AUTONOMO_SESSION_PRINCIPAL_SECRET_FILE`, or private runtime configuration | Coverage depends on its real location; replacement invalidates existing sessions |
 | S3 access and crypt configuration | `AUTONOMO_RCLONE_CONFIG`, often outside private-root | Separate recoverable copy required if outside the root |
 | Application release, installed ops, unit definitions | Code Git plus release/ops roots and user-systemd directory | Not normally in the archive; record SHA and rebuild from reviewed code |
@@ -42,7 +44,7 @@ A SOPS config-only reversion using paired `deploy.sh` also remains OCR-gated;
 this differs from the dedicated rollback/restore commands.
 
 The helper snapshots SQLite through its backup API and verifies integrity and
-foreign keys. It archives regular files from private-root, with these exclusions:
+foreign keys. Its default `--scope full` archives regular files from private-root, with these exclusions:
 
 - Top-level `backups/`, `cache/`, and `browser/` trees.
 - The live database and its WAL/SHM/journal files; the consistent snapshot is
@@ -50,6 +52,59 @@ foreign keys. It archives regular files from private-root, with these exclusions
 - Symlinks and non-regular entries. Empty directories are not preserved.
 - Files outside private-root. Credential references and external Drive paths
   are not followed into the archive.
+
+### Opt-in database archive and separate file history
+
+`AUTONOMO_BACKUP_SCOPE=database` changes both daily and monthly archives to
+`autonomo.sqlite`, plus `config.yaml` and `account-backup-settings.json` when
+present. Existing symlinks/non-regular selected files fail before rotation.
+The archive/manifest names and manifest format 1 remain compatible with the
+existing restore helper. The default `full` scope remains unchanged.
+
+Database scope requires the class archive remote, `AUTONOMO_RCLONE_EVIDENCE_REMOTE`,
+`AUTONOMO_RCLONE_FILES_REMOTE`, and a private `AUTONOMO_RCLONE_CONFIG`. Both file
+remotes must be distinct named crypt roots backed by explicit static S3
+configuration. They cannot use connection-string overrides. File history uses
+`archive/private-root-files/` as its recommended raw S3 prefix. Never reuse the
+backup prefixes whose lifecycle expires objects.
+
+Before creating an archive, the file helper reads S3 versioning/lifecycle through
+signed GET requests using the private rclone credentials. Versioning must be
+Enabled, with no enabled expiration rule overlapping either file prefix,
+including previous-version expiration. Unreadable policy, unsupported config,
+missing remote or denied policy permissions stops the job without creating or
+rotating an archive. It does not grant permissions or change bucket policies.
+
+The job runs configured reconciliation before the SQLite snapshot. It then
+uploads the archive pair, copies `evidence/` immutably to its existing remote,
+and copies remaining regular files to the file remote's `tree/` with `rclone
+copy`. New/changed bytes are uploaded; source deletion does not delete remote
+objects. S3 versioning retains replaced contents. The copy excludes the three
+archive members, main SQLite sidecars, `backups/`, `cache/`, `browser/`, effective
+daily/monthly output directories and symlinks. Other databases, inbox and filing
+artifacts are included; their cleanup is a separate operation.
+
+Every successful run writes an immutable
+`snapshots/private-root-<timestamp>.files.json` index to the file remote, with
+the archive/manifest hashes, a historical S3 cutoff, relative paths, sizes and
+SHA-256 values. A local copy accompanies the retained pair. The helper verifies
+all selected remote matches, unchanged local bytes and attachment coverage from
+the frozen database, including hash-checked remote-only configured S3 replicas and filing-manifest
+artifacts. The archive pair uses the same strict verification. It falls back to a streaming download check when the cryptcheck JSON report explicitly identifies unavailable provider
+hashes, even if cryptcheck exits zero. Other errors fail the job. Missing/unmapped local references fail closed. This can expose
+pre-existing catalogue or legacy-path problems; fix their recovery coverage
+rather than accepting an incomplete index.
+
+Only after the file copies and uploaded index verify does database scope mark
+its offsite upload acknowledged and prune older checksum-matched local pairs.
+On later failure, the fresh local pair remains deployment-ready, offsite is
+failed, and additional offsite pruning is skipped. Existing local count limits
+still apply. No timer schedule changes. File history and indexes have no automatic
+expiration; monitor their growth separately from daily/monthly archive retention.
+
+This is not a transactional filesystem snapshot. Changing/deleting required
+files during copying can fail a run. For a coordinated recovery point, exclude
+application/CLI writes as well as taking the operations lock.
 
 Archive and manifest are local plaintext files with mode `0600`; rclone crypt
 encrypts their upload. Once `rclone cryptcheck` confirms the new pair in the
@@ -155,6 +210,54 @@ wrapper: the source-tree default wrapper expects a helper beside it, which the
 installer supplies. The source helper command above works directly in a checkout.
 There are no `backup list`, `backup verify`, or `backup drill` CLI commands.
 
+## Recover files for a database-scope archive
+
+The monthly verifier and deploy readiness validate SQLite, not complete document
+recovery. A small archive's successful verification is insufficient on its own.
+Recover its exact immutable file index and historical objects as a separate drill.
+Use the original crypt material and a reviewed checkout with both file helpers.
+The helper is standard-library-only, plus the installed rclone executable.
+
+After downloading the archive pair, run in the same private recovery shell:
+
+```bash
+read -r -p 'Named file crypt remote, ending in colon: ' files_remote
+read -r -p 'Named evidence crypt remote, ending in colon: ' evidence_remote
+read -r -p 'Absolute live private root to exclude: ' live_private_root
+file_restore_root="$drill_root/with-files"
+python3 "$code_root/ops/backup_files.py" restore \
+  --rclone-config "$recovery_rclone" \
+  --files-remote "$files_remote" --evidence-remote "$evidence_remote" \
+  --archive "$archive" --manifest "$manifest" \
+  --private-root "$live_private_root" --target-root "$file_restore_root"
+```
+
+The helper refuses a nonempty destination or any overlap with the live root,
+checks the index binding and safe paths, extracts the database archive and copies
+only indexed files using `--s3-version-at`. Every downloaded size/SHA-256 must
+match. Local evidence paths remain relative to `evidence/`; catalogue S3 objects
+use `sha256/<digest>` and are retained under `evidence/sha256/` in the drill.
+These layouts are not interchangeable. Do not bulk-register or reconcile files
+as a recovery smoke test. A failed attempt can leave partial plaintext; preserve
+it privately and retry only into another empty directory.
+
+For the application drill below, use this restored database/tree and inspect
+absolute config paths, filesystem backend roots and legacy mappings in the
+isolated copy. Map them explicitly to the drill tree, never to production.
+Check representative local uploads, official documents and filing artifacts
+through the compatible application. If a remote replica is tested, use deliberately
+scoped recovery credentials and verify its content hash. Restore configuration,
+credential references and the legacy map before any production cutover.
+
+Before first opt-in on an existing host, preserve one verified full recovery
+set outside automatic archive rotation. Verify its download, extraction and
+independent credential decryption, and keep it until separately approved cleanup.
+Then demonstrate a synthetic changed-file historical restore through the actual
+Yandex/crypt configuration before enabling database scope. An unreadable old
+version is a blocker. Do not remove old S3 archives manually; let their existing
+lifecycle expire them. Rollback restores the previous ops files and `full` scope;
+it does not undo missing files or recover versions already expired.
+
 ## Optional isolated web smoke
 
 First complete the verified extraction above. Use a code version compatible with
@@ -219,7 +322,8 @@ under the [cutover prerequisites](#production-cutover-dangerous).
 
 Stop the service and timers so they cannot create replacement state. Recover
 the archive pair plus independently stored credentials. Restore into an empty
-sibling directory, verify SQLite and local evidence, and audit config paths
+sibling directory; for database scope also recover the matching file index and
+historical tree using the preceding drill. Verify SQLite and evidence, and audit config paths
 and backend credential references. The archive may lack remote-only evidence;
 recover those reads from Google originals or Yandex replicas. Never assume an
 external credential file survived just because SQLite names it.
@@ -345,6 +449,10 @@ after application and recovery checks pass.
 
 ## Synthetic validation of the backup helpers
 
+The `tests/ops` compatibility fixtures read a pinned ancestor from Git and
+verify the historical reader digests. Use a full-history checkout (the core CI
+job does this); a shallow checkout needs its history fetched before these tests.
+
 This exercise uses no production files, credentials, network, or systemd. Run
 from a reviewed checkout with its test dependencies installed. The shell defines
 the checkout and Python interpreter; the Python block creates only synthetic
@@ -365,7 +473,7 @@ import tempfile
 
 code = Path(sys.argv[1])
 def load(name):
-    spec = importlib.util.spec_from_file_location(name, code / 'scripts' / f'{name}.py')
+    spec = importlib.util.spec_from_file_location(name, code / 'ops' / 'backup' / f'{name}.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

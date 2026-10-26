@@ -143,3 +143,52 @@ def test_restore_cli_reads_the_private_root_from_the_environment(
                 str(private_root / "restore-drill"),
             ]
         )
+
+
+@pytest.mark.parametrize("optional", [False, True])
+def test_database_scope_contains_only_selected_files_and_wal_snapshot(tmp_path, optional):
+    import sqlite3
+    root = tmp_path / "private"
+    root.mkdir()
+    database = root / "autonomo.sqlite"
+    with sqlite3.connect(database) as connection:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("CREATE TABLE sample (value TEXT)")
+        connection.execute("INSERT INTO sample VALUES ('synthetic')")
+        connection.commit()
+        if optional:
+            (root / "config.yaml").write_text("ledger_db: autonomo.sqlite\n")
+            (root / "account-backup-settings.json").write_text('{}')
+        for name in ("evidence/source.txt", "audit/report.txt", "archives/filing.txt", "extra.txt"):
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("synthetic")
+        archive, manifest = _module().create_backup(private_root=root, database=database, output_dir=root / "backups", keep=2, scope="database")
+    expected = {"autonomo.sqlite"}
+    if optional:
+        expected |= {"config.yaml", "account-backup-settings.json"}
+    payload = json.loads(manifest.read_text())
+    assert payload["format"] == 1
+    assert {row["path"] for row in payload["files"]} == expected
+    restored = _restore_module().restore_backup(archive=archive, manifest=manifest, target_root=tmp_path / "restored")
+    with sqlite3.connect(restored / "autonomo.sqlite") as connection:
+        assert connection.execute("SELECT value FROM sample").fetchall() == [("synthetic",)]
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+
+@pytest.mark.parametrize("name", ["config.yaml", "account-backup-settings.json", "autonomo.sqlite"])
+@pytest.mark.parametrize("kind", ["symlink", "directory"])
+def test_database_scope_rejects_non_regular_selected_files_before_rotation(tmp_path, name, kind):
+    root, archive, manifest = _archive_pair(tmp_path)
+    path = root / name
+    if path.exists():
+        path.unlink()
+    if kind == "symlink":
+        external = tmp_path / "external"
+        external.write_text("synthetic")
+        path.symlink_to(external)
+    else:
+        path.mkdir()
+    with pytest.raises((ValueError, OSError)):
+        _module().create_backup(private_root=root, database=root / "autonomo.sqlite", output_dir=archive.parent, keep=1, scope="database")
+    assert archive.is_file() and manifest.is_file()

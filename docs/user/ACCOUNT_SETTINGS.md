@@ -31,7 +31,7 @@ settings drafts are not persisted in browser storage.
 
 The UI stores requested **local** retention limits in
 `AUTONOMO_PRIVATE_ROOT/account-backup-settings.json` (private mode 0600, atomic
-replacement). This file is inside the existing private-root archive boundary.
+replacement). This file is included in both full and database-scope archives.
 An explicit, absolute `AUTONOMO_PRIVATE_ROOT` must be present in the web service
 environment. The location of `--config` is not used: in SOPS mode it points to
 a different, immutable secret generation. If no explicit root is available,
@@ -60,6 +60,14 @@ last successful isolated restore. Older markers do not
 prove support for the new preferences. Missing, malformed or future-dated
 markers are unknown, not a green health signal. A past successful upload is not
 proof that the cloud is healthy now or that a restore has been tested.
+
+The operator can opt into a small archive containing SQLite, application config
+and these preferences. Documents and other working files then require separately
+verified versioned copies. The observed local readiness and monthly SQLite
+verification do not establish complete document recovery. In database scope,
+offsite acknowledgement is recorded only after the separate file copies and
+matching recovery index verify. A recovery drill must also check documents.
+The preference form changes neither this backup scope nor cloud-file retention.
 
 ## Release and control-plane compatibility
 

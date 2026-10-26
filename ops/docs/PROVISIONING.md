@@ -99,7 +99,9 @@ For the private `spain-autonomo-taxes` bucket:
    uploads 7 days. Do not expire evidence. Backups are uploaded with
    `--immutable`, so non-current versions appear only when the lifecycle expires
    an object; keeping them longer only doubles the stored volume. Size the
-   bucket quota for about 36 daily archives plus the monthly ones. This policy
+   bucket quota for about 36 daily archives plus the monthly ones. With database
+   scope, these archives are small, but separately copied files and their historical
+   versions still consume space; measure the first copy and monitor growth. This policy
    is the backup retention of record: once an upload is checksum-verified, the
    server keeps only the newest pair locally.
 6. Independently preserve and test recovery of the complete rclone config,
@@ -109,6 +111,29 @@ The backend shape is in [the Yandex example](../../examples/config/storage-yande
 Keep `credential_ref` as `file:` plus the private absolute rclone config path.
 Credentials do not belong in SQLite. See [backup coverage](DISASTER_RECOVERY.md#what-is-backed-up)
 before relying on a private-root archive to recover this config.
+
+### Separate file-history prefix (opt-in)
+
+For database-scope backup, add a named crypt root at
+`archive/private-root-files/`, exposed as `AUTONOMO_RCLONE_FILES_REMOTE`.
+Keep its encryption/decryption material in the independent recovery bundle.
+The existing evidence crypt root remains separate. Both prefixes require Enabled
+bucket versioning and no overlapping expiration of current/previous versions;
+the 1-day noncurrent-version rule must stay restricted to archive-backup prefixes.
+Do not change account permissions or lifecycle as part of an inspection.
+
+The standalone preflight reads `GetBucketVersioning` and
+`GetBucketLifecycleConfiguration` with the explicit credentials in the private
+rclone config. Existing put/get/list access does not prove those reads are allowed.
+Permission errors block opt-in; never substitute an assumed policy or broaden
+permissions without authorization. Named crypt-to-S3 roots, an explicit HTTPS
+endpoint, region and static credentials are supported. Environment credential
+chains, rclone overrides and dynamic remotes are intentionally rejected.
+
+Follow [the recovery drill](DISASTER_RECOVERY.md#recover-files-for-a-database-scope-archive)
+before activation, including a previous-version download with the installed
+rclone/Yandex combination. No new service, bucket, quota, lifecycle mutation or
+scheduled cleanup is performed by these helpers.
 
 ## Google Drive storage choices
 

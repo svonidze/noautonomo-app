@@ -295,3 +295,167 @@ def test_both_installers_deliver_the_standalone_reader(sops):
     installer = path.read_text()
     source = "$source_ops_dir" if sops else "$script_dir"
     assert f'install -m 644 "{source}/../backend/src/autonomo_taxes/backup_settings.py" "$ops_root/backup_settings.py"' in installer
+
+
+@pytest.fixture
+def database_installed(installed, tmp_path):
+    """New backup writers with the unchanged readers from the deployed baseline."""
+    import hashlib
+    import subprocess
+    private, database, ops, env = installed
+    for name in ("backup_files.py", "backup_storage_policy.py"):
+        shutil.copy2(ROOT / "ops" / name, ops / name)
+    # The reachable main baseline has byte-identical readers to deployed 81b3b54.
+    expected_readers = {
+        'lib.sh': '5f567545827d26caf9acb70867191339e89a0603ca7f7917b3c38a224fe504b4',
+        'backup_state.py': '750e371155cd26aa1cbb41552b18d89393d450d9b5af6d38bc4eda1bfa13ff46',
+        'backup_readiness.py': '20854cb9755e73648f9b1f0326fe8c87f621b6066cfac1dca386ce3f01de0692',
+        'verify_backup.py': '432480b44367064db536458f53c71f81353fa0c372eb0701c992e6b790731d75',
+    }
+    for name, expected_digest in expected_readers.items():
+        old = subprocess.run(["git", "show", f"410c8955408006d9b1dc0b2f0d4677c4c67cee54:ops/{name}"], cwd=ROOT, capture_output=True, check=True)
+        assert hashlib.sha256(old.stdout).hexdigest() == expected_digest
+        (ops / name).write_bytes(old.stdout)
+    shutil.copy2(ROOT / "ops/backup/restore_private_root.py", ops / "restore_private_root.py")
+    # Network policy behavior is covered separately; this fixture tests the job wiring.
+    (ops / "backup_storage_policy.py").write_text(
+        "class PolicyError(ValueError): pass\n"
+        "def check_remote(configs, remote):\n"
+        "    if remote not in {'files-crypt:', 'evidence-crypt:'}: raise PolicyError('missing named crypt root')\n"
+        "    return ('synthetic', 'synthetic-bucket', remote[:-1] + '/')\n"
+    )
+    config = tmp_path / "rclone.conf"
+    config.write_text("synthetic")
+    config.chmod(0o600)
+    state = tmp_path / "versioned-remote.json"
+    env["FAKE_VERSIONED_STATE"] = str(state)
+    script = '''import base64
+import importlib.util
+import json
+import os
+from pathlib import Path
+import sys
+sys.path.insert(0, os.environ['FAKE_TEST_SUPPORT'])
+spec = importlib.util.spec_from_file_location('synthetic_versioned_remote', os.environ['FAKE_TEST_REMOTE_MODULE'])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+remote = module.VersionedRemote()
+state = Path(os.environ['FAKE_VERSIONED_STATE'])
+if state.exists():
+    data = json.loads(state.read_text())
+    remote.versions = {key: [(stamp, base64.b64decode(value)) for stamp, value in rows] for key, rows in data['versions'].items()}
+    remote.commands = data['commands']
+arguments = sys.argv[1:]
+if arguments[:1] == ['--config']: arguments = arguments[2:]
+if arguments[0] == 'config':
+    if arguments[1] == 'dump': print(json.dumps({'archive-crypt': {'type': 'crypt'}}))
+    else: print('type = crypt')
+    sys.exit(0)
+if '--files-from-raw' in arguments and os.environ.get('FAKE_OLD_NO_HASH'):
+    paths = Path(arguments[arguments.index('--files-from-raw') + 1]).read_text().splitlines()
+    if os.environ['FAKE_OLD_NO_HASH'] in paths:
+        if arguments[0] == 'cryptcheck':
+            print(''.join(path + '\\n' for path in paths), end='')
+            print(json.dumps({'msg': '1 hashes could not be checked'}), file=sys.stderr)
+            sys.exit(0)
+        if arguments[0] == 'check' and os.environ.get('FAKE_OLD_DOWNLOAD_FAILURE'):
+            sys.exit(2)
+if os.environ.get('FAKE_FILES_FAILURE') == arguments[0]:
+    sys.exit(2)
+try:
+    print(remote(Path('unused'), *arguments), end='')
+finally:
+    state.write_text(json.dumps({'versions': {key: [(stamp, base64.b64encode(value).decode()) for stamp, value in rows] for key, rows in remote.versions.items()}, 'commands': remote.commands}))
+'''
+    executable = Path(env["PATH"].split(":", 1)[0]) / "rclone"
+    executable.write_text(f"#!{sys.executable}\n" + script)
+    executable.chmod(0o755)
+    env["FAKE_TEST_SUPPORT"] = str(ROOT / "tests/support")
+    env["FAKE_TEST_REMOTE_MODULE"] = str(ROOT / "tests/ops/test_backup_files.py")
+    runtime = Path(env["AUTONOMO_RUNTIME_ENV_PATH"])
+    runtime.write_text(runtime.read_text() + f"AUTONOMO_BACKUP_SCOPE=database\nAUTONOMO_RCLONE_CONFIG={config}\nAUTONOMO_RCLONE_REMOTE=archive-crypt:\nAUTONOMO_RCLONE_MONTHLY_REMOTE=archive-crypt:\nAUTONOMO_RCLONE_FILES_REMOTE=files-crypt:\nAUTONOMO_RCLONE_EVIDENCE_REMOTE=evidence-crypt:\n")
+    for name in ("inbox/new.txt", "evidence/source.txt", "archives/filed.txt"):
+        path = private / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic")
+    return private, database, ops, env
+
+
+@pytest.mark.parametrize("backup_class", ["daily", "monthly"])
+def test_database_job_with_old_readers_acknowledges_only_after_file_index(database_installed, backup_class):
+    private, database, ops, env = database_installed
+    env["AUTONOMO_BACKUP_CLASS"] = backup_class
+    result = _run(ops / "backup.sh", env)
+    assert result.returncode == 0, result.stderr
+    marker = json.loads((private / "backups" / f"last-backup-{backup_class}.json").read_text())
+    assert marker["local_status"] == "verified" and marker["offsite_status"] == "acknowledged"
+    output = private / "backups" / ("private-root" if backup_class == "daily" else "monthly")
+    with tarfile.open(output / marker["archive"]) as tar:
+        assert set(tar.getnames()) == {"autonomo.sqlite", "config.yaml"}
+    commands = json.loads(Path(env["FAKE_VERSIONED_STATE"]).read_text())["commands"]
+    assert any(command[0] == "copyto" and "snapshots/" in command[2] for command in commands)
+    if backup_class == "daily":
+        release_root = Path(env["AUTONOMO_RUNTIME_ENV_PATH"]).parent / "releases"
+        readiness = subprocess.run([sys.executable, str(ops / "backup_readiness.py"), "--runtime-env", env["AUTONOMO_RUNTIME_ENV_PATH"], "--private-root", str(private), "--release-root", str(release_root)], capture_output=True, text=True)
+        assert readiness.returncode == 0, readiness.stderr
+    verification = subprocess.run([sys.executable, str(ops / "verify_backup.py"), "--class", backup_class, "--private-root", str(private), "--backup-dir", str(output), "--remote", "archive-crypt:", "--rclone-config", str(Path(env["AUTONOMO_RUNTIME_ENV_PATH"]).parent / "rclone.conf"), "--restore-script", str(ops / "restore_private_root.py")], env=env, capture_output=True, text=True)
+    assert verification.returncode == 0, verification.stderr
+
+
+def test_database_job_file_copy_failure_keeps_local_pair_and_old_archives(database_installed):
+    private, database, ops, env = database_installed
+    output = _seed_archives(private, database, "daily")
+    env["FAKE_FILES_FAILURE"] = "copy"
+    result = _run(ops / "backup.sh", env)
+    assert result.returncode != 0
+    marker = json.loads((private / "backups/last-backup-daily.json").read_text())
+    assert marker["local_status"] == "verified" and marker["offsite_status"] == "failed"
+    assert len(list(output.glob("*.tar.gz"))) == 9
+
+
+@pytest.mark.parametrize("failure", ["missing_remote", "reconcile"])
+def test_database_job_stops_before_creation_or_rotation(database_installed, failure):
+    private, database, ops, env = database_installed
+    output = _seed_archives(private, database, "daily")
+    before = {path.name: path.read_bytes() for path in output.iterdir()}
+    runtime = Path(env["AUTONOMO_RUNTIME_ENV_PATH"])
+    if failure == "missing_remote":
+        runtime.write_text(runtime.read_text().replace("AUTONOMO_RCLONE_FILES_REMOTE=files-crypt:\n", ""))
+    else:
+        binary = runtime.parent / "releases/releases" / ("a" * 40) / ".venv/bin/autonomo-tax"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("#!/bin/sh\nexit 2\n")
+        binary.chmod(0o755)
+        runtime.write_text(runtime.read_text() + "AUTONOMO_RECONCILE_BACKENDS=synthetic\n")
+    result = _run(ops / "backup.sh", env)
+    assert result.returncode != 0
+    assert {path.name: path.read_bytes() for path in output.iterdir()} == before
+    assert not (private / "backups/last-backup-daily.json").exists()
+
+
+@pytest.mark.parametrize("sops", [False, True])
+def test_both_installers_deliver_file_history_helpers(sops):
+    path = ROOT / "ops/sops/install-systemd-user-units.sh" if sops else ROOT / "ops/install-systemd-user-units.sh"
+    source = "$source_ops_dir" if sops else "$script_dir"
+    assert f'install -m 644 "{source}/backup_files.py" "{source}/backup_storage_policy.py" "$ops_root/"' in path.read_text()
+
+
+@pytest.mark.parametrize("download_fails", [False, True])
+def test_database_pruning_requires_hashes_or_download_for_old_large_pairs(database_installed, download_fails):
+    import base64
+    private, database, ops, env = database_installed
+    output = _seed_archives(private, database, "daily")
+    old_archive = sorted(output.glob("*.tar.gz"))[0]
+    versions = {}
+    for path in output.iterdir():
+        versions["archive-crypt:" + path.name] = [["2020-01-01T00:00:00.000000+00:00", base64.b64encode(path.read_bytes()).decode()]]
+    Path(env["FAKE_VERSIONED_STATE"]).write_text(json.dumps({"versions": versions, "commands": []}))
+    env["FAKE_OLD_NO_HASH"] = old_archive.name
+    if download_fails:
+        env["FAKE_OLD_DOWNLOAD_FAILURE"] = "1"
+    result = _run(ops / "backup.sh", env)
+    assert result.returncode == 0, result.stderr
+    marker = json.loads((private / "backups/last-backup-daily.json").read_text())
+    assert marker["offsite_status"] == "acknowledged"
+    assert old_archive.exists() is download_fails
+    assert len(list(output.glob("*.tar.gz"))) == (2 if download_fails else 1)

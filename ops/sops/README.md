@@ -354,9 +354,13 @@ reconstructed automatically by cloning the secrets repository.
   Rehearse this lifecycle and resolve it before production opt-in; do not edit
   manifests or bypass validation. Normal default mode does not have this
   immutable-generation constraint.
-- Private-root archives can include plaintext generation files. They exclude
-  the `current` symlink and external bootstrap identities. Preserve independent
-  bootstrap/recovery material; re-stage/activate through SOPS when rebuilding.
+- Full private-root archives can include plaintext generation files. In opt-in
+  database scope those regular files instead enter the separate versioned copy;
+  the `current` symlink and external bootstrap identities remain excluded.
+  Both installers deliver the standalone file/policy helpers. Review active
+  generation paths and independent recovery material before opt-in, and follow
+  [database-scope recovery](../docs/DISASTER_RECOVERY.md#recover-files-for-a-database-scope-archive).
+  Re-stage/activate through SOPS when rebuilding; file extraction activates nothing.
 - Test coverage for staging/rotation helpers is not evidence of a real production
   SOPS migration. Keep actual activation and off-server recovery evidence private.
 

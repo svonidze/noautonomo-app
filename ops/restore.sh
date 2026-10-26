@@ -7,7 +7,7 @@ if [[ $# -eq 4 && "$1" == "--yes-restore-archive" ]]; then
   archive="$2"; manifest="$3"; target_root="$4"
   [[ -f "$archive" && -f "$manifest" ]] || die "archive and manifest must exist"
   # A drill on a live host must not unpack into the private root: the backup
-  # perimeter is a three-entry deny list, so anything left there is archived and
+  # perimeter can include files beyond SQLite, so anything left there may be archived and
   # uploaded every night from then on. A bare recovery host has no runtime
   # environment yet, so load it only when it exists.
   if [[ -f "$(runtime_env_path)" ]]; then load_runtime_env; fi
