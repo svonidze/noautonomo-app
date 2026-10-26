@@ -49,6 +49,33 @@ verify_crypt_remote() {
   rclone "${rclone_args[@]}" config show "$name" | grep -Eq '^type = crypt$' \
     || { echo "error: rclone remote is not configured as crypt" >&2; return 1; }
 }
+# cryptcheck encrypts the local pair with each object's nonce and compares the
+# stored MD5, so it proves the remote copy without downloading the archive.
+# A filter that matches nothing also exits 0, so both names must be reported
+# as matching.
+cryptcheck_pair() {
+  local archive="$1" base matched
+  base="$(basename "$archive" .tar.gz)"
+  matched="$(rclone "${rclone_args[@]}" cryptcheck --one-way --match - \
+    "$(dirname "$archive")" "$remote" \
+    --include "/$base.tar.gz" --include "/$base.manifest.json")" || return 1
+  grep -qxF "$base.tar.gz" <<< "$matched" && grep -qxF "$base.manifest.json" <<< "$matched"
+}
+# The newest pair stays for deploy readiness; an older one leaves the disk only
+# once its remote copy matches. Unmatched pairs stay under the count limit.
+prune_offsite_pairs() {
+  local old old_manifest
+  for old in "$(dirname "$backup_file")"/private-root-*.tar.gz; do
+    [[ "${old##*/}" != "${backup_file##*/}" ]] || continue
+    old_manifest="${old%.tar.gz}.manifest.json"
+    [[ -f "$old" && -f "$old_manifest" ]] || continue
+    if cryptcheck_pair "$old"; then
+      rm -f -- "$old" "$old_manifest"
+    else
+      echo "warning: kept $(basename "$old"): remote copy did not match" >&2
+    fi
+  done
+}
 python3 "$state_tool" local \
   --marker "$marker" --class "$backup_class" \
   --archive "$backup_file" --manifest "$manifest_file" \
@@ -63,8 +90,10 @@ if [[ -n "$remote" ]]; then
   backup_remote_file="${remote%/}/$(basename "$backup_file")"
   manifest_remote_file="${remote%/}/$(basename "$manifest_file")"
   if rclone "${rclone_args[@]}" copyto --immutable "$backup_file" "$backup_remote_file" \
-    && rclone "${rclone_args[@]}" copyto --immutable "$manifest_file" "$manifest_remote_file"; then
+    && rclone "${rclone_args[@]}" copyto --immutable "$manifest_file" "$manifest_remote_file" \
+    && cryptcheck_pair "$backup_file"; then
     python3 "$state_tool" offsite --marker "$marker" --status acknowledged
+    prune_offsite_pairs
   else
     python3 "$state_tool" offsite --marker "$marker" --status failed
     die "offsite backup upload failed"

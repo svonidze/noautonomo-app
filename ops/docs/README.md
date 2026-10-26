@@ -463,9 +463,13 @@ Yandex privately; a database status alone does not check the provider.
 ## Backups and monthly drill
 
 Daily and monthly jobs archive the private root with a consistent SQLite
-snapshot. Local retention is **35 daily / 13 monthly archive pairs by count**
-unless overridden, not a guarantee of days covered. Bucket lifecycle is
-configured separately. See [exact coverage and exclusions](DISASTER_RECOVERY.md#what-is-backed-up).
+snapshot. With a crypt remote configured, the server keeps only the newest
+pair: after `rclone cryptcheck` confirms an upload, older local pairs are
+deleted once their own remote copies match. Retention of record is the bucket
+lifecycle (daily 35 days, monthly 400 days). Before the upload every run still
+prunes to **35 daily / 13 monthly archive pairs by count** unless overridden;
+that limit is what remains without a remote or when remote copies do not match.
+See [exact coverage and exclusions](DISASTER_RECOVERY.md#what-is-backed-up).
 
 Running a backup is a production change: it creates/prunes local archives,
 uploads to configured remotes, may copy local evidence, and reconciles
@@ -482,8 +486,11 @@ For a deliberate fresh backup, after the checklist setup:
 Expect `archive=` and `manifest=`. The format-2 marker records local validation
 before remote work and distinguishes `pending`, `acknowledged`, `failed`, and
 `disabled`; its legacy `offsite` Boolean remains compatible with older readers.
-The ordinary backup never reads an uploaded object back. Upload/configuration
-failure returns nonzero and preserves the locally verified marker.
+The ordinary backup does not download an uploaded object: `rclone cryptcheck`
+re-encrypts the local pair with each object's nonce and compares the stored MD5,
+and only that match records `acknowledged`. Upload, checksum or configuration
+failure returns nonzero, preserves the locally verified marker and deletes no
+local pair.
 
 The monthly backup still runs on day 1. On day 2 the separate
 `autonomo-backup-verification-monthly.timer` downloads the exact pair named by

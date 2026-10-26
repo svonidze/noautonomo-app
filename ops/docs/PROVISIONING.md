@@ -95,9 +95,13 @@ For the private `spain-autonomo-taxes` bucket:
 4. Configure separate crypt remotes rooted at the exact raw prefixes
    `backups/daily/`, `backups/monthly/`, and `data/evidence/`.
 5. Set and verify the intended lifecycle: daily backups 35 days, monthly
-   backups 400 days, non-current backup versions 30 days, incomplete multipart
-   uploads 7 days. Do not expire evidence. This cloud policy is separate from
-   the scripts' local retention by archive count.
+   backups 400 days, non-current backup versions 1 day, incomplete multipart
+   uploads 7 days. Do not expire evidence. Backups are uploaded with
+   `--immutable`, so non-current versions appear only when the lifecycle expires
+   an object; keeping them longer only doubles the stored volume. Size the
+   bucket quota for about 36 daily archives plus the monthly ones. This policy
+   is the backup retention of record: once an upload is checksum-verified, the
+   server keeps only the newest pair locally.
 6. Independently preserve and test recovery of the complete rclone config,
    including crypt material. A new access key cannot decrypt old backups.
 
