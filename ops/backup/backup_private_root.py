@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import stat
 import tarfile
 import tempfile
 from typing import Iterable
@@ -41,15 +42,31 @@ def create_backup(
     database: Path,
     output_dir: Path,
     keep: int,
+    scope: str = "full",
 ) -> tuple[Path, Path]:
     if keep < 1:
         raise ValueError("keep must be at least 1")
+    if scope not in {"full", "database"}:
+        raise ValueError("unsupported backup scope")
     root = private_root.expanduser().resolve(strict=True)
+    if scope == "database" and not stat.S_ISREG(database.expanduser().lstat().st_mode):
+        raise ValueError("database must be a regular non-symlink file")
     db = database.expanduser().resolve(strict=True)
     try:
         db.relative_to(root)
     except ValueError as exc:
         raise ValueError("database must be inside private_root") from exc
+    selected = []
+    if scope == "database":
+        for name in ("config.yaml", "account-backup-settings.json"):
+            path = root / name
+            try:
+                info = path.lstat()
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise ValueError("backup configuration must be a regular unlinked file")
+            selected.append(path)
     out = output_dir.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True, mode=0o700)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
@@ -62,7 +79,7 @@ def create_backup(
         _snapshot_database(db, snapshot)
         temporary_archive = temporary / archive.name
         with tarfile.open(temporary_archive, "w:gz", format=tarfile.PAX_FORMAT) as tar:
-            for path in sorted(root.rglob("*")):
+            for path in selected if scope == "database" else sorted(root.rglob("*")):
                 relative = path.relative_to(root)
                 if not relative.parts:
                     continue
@@ -94,6 +111,7 @@ def create_backup(
     archives = sorted(out.glob("private-root-*.tar.gz"), key=lambda path: path.name, reverse=True)
     for expired in archives[keep:]:
         expired.unlink()
+        expired.with_name(expired.name.removesuffix(".tar.gz") + ".files.json").unlink(missing_ok=True)
         expired.with_suffix("").with_suffix(".manifest.json").unlink(missing_ok=True)
     return archive, manifest
 
@@ -121,6 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--database", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--keep", type=int, default=35)
+    parser.add_argument("--scope", choices=("full", "database"), default="full")
     return parser
 
 
@@ -131,6 +150,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         database=args.database,
         output_dir=args.out_dir,
         keep=args.keep,
+        scope=args.scope,
     )
     print(f"archive={archive}")
     print(f"manifest={manifest}")
