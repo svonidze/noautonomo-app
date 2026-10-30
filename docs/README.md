@@ -1,6 +1,7 @@
 # Documentation
 
 Start with [Local setup](../SETUP.md) to install and run the application.
+Read the [experimental-use terms](../TERMS.md) for permitted use and responsibility.
 
 User guidance is in [user/](user/): the accounting workflow, statuses, account
 settings, counterparty corrections, VIES checks, exchange rates, history replay,
