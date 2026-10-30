@@ -26,6 +26,9 @@ semantics. For end-to-end examples use [the agent workflow](AGENT_WORKFLOW.md).
 | Financial dashboard/taxes/analytics reads | `period summary/taxes/analytics` | Stage 4 |
 | Government cases, correspondence, evidence and deadline actions | `government-cases list/show/create/state/event/correspondence/action/document` | Shared services |
 | Case email reminders and delivery review | `government-cases reminders/resolve-reminder` | Server job, dry run available |
+| Annual preparation adjustments | `annual-adjustments list/preview/record/void` | Shared services; annual only |
+| Separate cumulative IVA/IRPF XLSX | `books aeat-separate-write` | Evidence-gated; not a completeness certificate |
+| Retained export archive and integrity | `filing-package archive/archive-verify/integrity` | Offline retention; separate replay required |
 | Calculation refresh | `period dashboard` | Existing, shared operation |
 
 Browser sessions, Origin/cookies, Picker credential delivery/chooser, HTML preview,

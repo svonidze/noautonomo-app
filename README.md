@@ -16,6 +16,14 @@ For complete command-driven accounting flows, read the [agent workflow](docs/AGE
 - See income, expenses and working tax figures for each quarter.
 - Track equipment and depreciation, spreading its deductible cost over time.
 - Keep tax filing receipts and customer VAT checks alongside your records.
+- Track [government cases and correspondence](docs/user/GOVERNMENT_CASES.md),
+  originals, linked procedures and reviewed deadline actions. Configured server
+  reminders work without an open browser; they do not discover portal notices.
+- Prepare [separate IVA/IRPF XLSX books](docs/user/TAX_ATTRIBUTION.md#separate-iva-and-irpf-xlsx)
+  and retain [reproducible export archives](docs/user/BOOKS_ARCHIVES.md), subject
+  to evidence and completeness checks.
+- Review [annual income and expense adjustments](docs/user/RENTA_DRAFT_CHECKLIST.md#annual-preparation-adjustments)
+  without changing quarterly journals or filed snapshots.
 
 ## Installation choices
 
@@ -88,8 +96,9 @@ Browse the [documentation](docs/README.md) for help with statuses, exchange rate
 VAT checks and accounting corrections.
 
 For development, see [builds and tests](docs/development/UI_DEVELOPMENT.md) and
-[repository privacy checks](docs/development/PRIVACY.md). For a server installation,
-see [Operations](ops/docs/README.md) and [Disaster recovery](ops/docs/DISASTER_RECOVERY.md).
+[repository privacy checks](docs/development/PRIVACY.md). For backup scope, observed upload status and recovery limits, see
+[Backup settings](docs/user/ACCOUNT_SETTINGS.md#backup-preferences-and-observed-status).
+For a server installation, see [Operations](ops/docs/README.md) and [Disaster recovery](ops/docs/DISASTER_RECOVERY.md).
 
 ## Deployment skill
 

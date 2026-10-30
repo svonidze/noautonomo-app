@@ -9,6 +9,21 @@ the [Renta WEB draft review checklist](user/RENTA_DRAFT_CHECKLIST.md), the
 [RETA bracket check](user/RETA_CHECK.md), and the
 [official references](user/OFFICIAL_REFERENCES.md) behind the interface term
 tooltips.
+For recent capabilities, start with:
+
+- [Cases and notices](user/GOVERNMENT_CASES.md): correspondence, original files,
+  independent procedures, confirmed deadlines and configured email reminders.
+- [Tax attribution and separate XLSX](user/TAX_ATTRIBUTION.md#separate-iva-and-irpf-xlsx)
+  and [retained book archives](user/BOOKS_ARCHIVES.md): choose the appropriate
+  export and distinguish integrity from source completeness.
+- [Annual preparation adjustments](user/RENTA_DRAFT_CHECKLIST.md#annual-preparation-adjustments):
+  reviewed or provisional entries that leave quarterly records unchanged.
+- [Backup preferences and status](user/ACCOUNT_SETTINGS.md#backup-preferences-and-observed-status)
+  and [recovery](../ops/docs/DISASTER_RECOVERY.md): full archives by default,
+  optional database archives with separately verified file history.
+- [Agent workflow](AGENT_WORKFLOW.md) and [CLI capabilities](CLI_CAPABILITIES.md)
+  for accounting without the optional browser package.
+
 Developer guidance is in [development/](development/): frontend development,
 localization, privacy, and the repository layout. Operational runbooks live in
 [ops/docs/](../ops/docs/), including deployment, provisioning, frontend build,
