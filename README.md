@@ -64,6 +64,13 @@ projection of future income.
 This project does not provide legal or tax advice. Check figures against official
 sources and a qualified professional before filing.
 
+## Use terms
+
+Read the [experimental-use terms](TERMS.md). Keeping your own accounts, including
+your professional activity, is permitted. Selling the software or providing a
+paid service based on it requires separate written permission. The terms explain
+use at your own risk and preserve obligations imposed by mandatory law.
+
 ## Your records
 
 Invoices, accounting records and credentials belong in private storage outside
