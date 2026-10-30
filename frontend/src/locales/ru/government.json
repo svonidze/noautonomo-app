@@ -150,5 +150,7 @@
   "government.caseDetail": "Дело",
   "government.caseUnavailable": "Не удалось открыть дело.",
   "government.invalidCase": "Некорректная ссылка на дело.",
-  "government.leaveUnsaved": "Есть несохраненные изменения или незагруженные вложения. Покинуть страницу?"
+  "government.leaveUnsaved": "Есть несохраненные изменения или незагруженные вложения. Покинуть страницу?",
+  "government.refreshCase": "Обновить дело",
+  "government.saving": "Сохранение..."
 }

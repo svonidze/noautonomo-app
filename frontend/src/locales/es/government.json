@@ -150,5 +150,7 @@
   "government.caseDetail": "Expediente",
   "government.caseUnavailable": "No se pudo abrir el expediente.",
   "government.invalidCase": "El enlace al expediente no es válido.",
-  "government.leaveUnsaved": "Hay cambios sin guardar o archivos pendientes. ¿Salir de la página?"
+  "government.leaveUnsaved": "Hay cambios sin guardar o archivos pendientes. ¿Salir de la página?",
+  "government.refreshCase": "Actualizar expediente",
+  "government.saving": "Guardando..."
 }

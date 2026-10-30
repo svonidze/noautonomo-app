@@ -4,6 +4,7 @@ import { followSpaLink } from '../../vue/services.ts';
 import { useLocale } from '../../vue/locale.ts';
 import { formatMessage } from '../../core/i18n.ts';
 import { errorMessage } from '../../core/error-message.ts';
+import { ApiError } from '../../core/http.ts';
 import type {
   GovernmentContext,
   CaseList,
@@ -24,7 +25,8 @@ const list = shallowRef<CaseList>();
 const detail = shallowRef<CaseDetail>();
 const error = ref(''),
   saving = ref(false),
-  loading = ref(true);
+  loading = ref(true),
+  conflict = ref(false);
 const savedFilters = window.history.state?.governmentFilters;
 const filters = reactive({
   authority: savedFilters?.authority || '',
@@ -55,10 +57,10 @@ function markDirty(event: Event) {
   }
 }
 function submitted(event: Event) {
-  submittedForm = event.target as HTMLFormElement;
+  submittedForm = (event.target as HTMLElement).closest('form');
 }
 function isDirty() {
-  return dirty.value || !!pendingMessageId.value;
+  return dirty.value || !!pendingMessageId.value || extraFiles.value.length > 0;
 }
 function canLeave() {
   if (saving.value) return false;
@@ -111,7 +113,8 @@ const pdf = reactive({
 });
 let active = true,
   generation = 0,
-  selectionGeneration = 0;
+  selectionGeneration = 0,
+  listGeneration = 0;
 onBeforeUnmount(() => {
   active = false;
   generation++;
@@ -198,12 +201,14 @@ function eventSummary(row: CaseEvent) {
   return '';
 }
 async function loadList() {
+  const revision = ++listGeneration;
   listError.value = '';
   try {
     const result = (await props.context.services.request('/api/government-cases')) as CaseList;
-    if (active) list.value = result;
+    if (active && revision === listGeneration) list.value = result;
   } catch (failure) {
-    if (active) listError.value = errorMessage(failure, locale.value);
+    if (active && revision === listGeneration)
+      listError.value = errorMessage(failure, locale.value);
   }
 }
 async function load() {
@@ -246,6 +251,7 @@ async function write(path: string, payload: unknown, multipart = false) {
   if (saving.value || props.context.services.readOnly) return;
   saving.value = true;
   error.value = '';
+  conflict.value = false;
   try {
     const result = (await props.context.services.request(path, {
       method: 'POST',
@@ -260,10 +266,22 @@ async function write(path: string, payload: unknown, multipart = false) {
     props.context.notify(t('government.saved'));
     return result;
   } catch (failure) {
-    if (active) error.value = errorMessage(failure, locale.value);
+    if (active) {
+      error.value = errorMessage(failure, locale.value);
+      conflict.value = failure instanceof ApiError && failure.code === 'stale_case_version';
+    }
   } finally {
+    submittedForm = null;
     if (active) saving.value = false;
   }
+}
+function reloadAfterConflict() {
+  if (isDirty() && !window.confirm(t('government.leaveUnsaved'))) return;
+  dirtyForms.clear();
+  dirty.value = false;
+  pendingMessageId.value = '';
+  extraFiles.value = [];
+  window.location.reload();
 }
 async function createCase() {
   const created = await write('/api/government-cases', {
@@ -512,10 +530,10 @@ function actionForMessage(row: CorrespondenceMessage) {
   actionForm.value?.scrollIntoView?.({ block: 'nearest' });
 }
 async function attachExisting() {
-  for (const value of extraFiles.value) {
-    if (!(await attachMessageFile(attachmentTarget.value, value))) return;
+  while (extraFiles.value.length) {
+    if (!(await attachMessageFile(attachmentTarget.value, extraFiles.value[0]))) return;
+    extraFiles.value = extraFiles.value.slice(1);
   }
-  extraFiles.value = [];
 }
 watch(
   () => props.context,
@@ -533,14 +551,14 @@ watch(
     @change="markDirty"
     @submit.capture="submitted"
   >
-    <h2 ref="heading" tabindex="-1">
+    <h2 ref="heading" tabindex="-1" aria-live="polite">
       {{ showingCase ? detail?.title || t('government.caseDetail') : t('government.cases') }}
     </h2>
     <a v-if="showingCase" href="/government-cases" @click="follow">{{
       t('government.backToCases')
     }}</a>
     <div v-if="detailError" class="panel" role="alert">
-      {{ t('government.caseUnavailable') }}
+      {{ invalidCase ? t('government.invalidCase') : t('government.caseUnavailable') }}
       <button v-if="!invalidCase" @click="load">{{ t('common.reload') }}</button>
     </div>
     <div v-if="listError" class="panel" role="alert">
@@ -549,11 +567,20 @@ watch(
     <p class="period-note">{{ t('government.timezoneHint', { zone: browserZone }) }}</p>
     <div v-if="error" role="alert" class="panel">
       <p>{{ error }}</p>
+      <button
+        v-if="conflict && caseId"
+        class="secondary-button"
+        :disabled="saving"
+        @click="reloadAfterConflict"
+      >
+        {{ t('government.refreshCase') }}
+      </button>
       <button class="secondary-button" :disabled="saving" @click="error = ''">
         {{ t('common.close') }}
       </button>
     </div>
     <p v-if="loading" role="status">{{ t('common.loading') }}</p>
+    <p v-if="saving" role="status">{{ t('government.saving') }}</p>
     <template v-if="list && !showingCase">
       <section class="panel">
         <h2>{{ t('government.reminders') }}</h2>
@@ -596,7 +623,10 @@ watch(
                 ><button
                   type="button"
                   :disabled="saving || !resolutionSource.trim()"
-                  @click="resolve(message.message_id, 'failed')"
+                  @click="
+                    submitted($event);
+                    resolve(message.message_id, 'failed');
+                  "
                 >
                   {{ t('government.retryConfirmed') }}
                 </button>
@@ -619,7 +649,6 @@ watch(
         </ul>
       </section>
       <section class="panel">
-        <h2>{{ t('government.cases') }}</h2>
         <p>
           <a href="/aeat-documents">{{ t('government.legacyAeat') }}</a>
         </p>
@@ -727,7 +756,7 @@ watch(
       </section>
     </template>
     <section v-if="detail && showingCase" class="panel" aria-live="polite">
-      <h2>{{ detail.authority_name || detail.authority_code }} · {{ detail.title }}</h2>
+      <p>{{ detail.authority_name || detail.authority_code }}</p>
       <p>{{ detail.primary_reference }} · {{ detail.subject }}</p>
       <p>
         {{ t('government.outcome') }}:

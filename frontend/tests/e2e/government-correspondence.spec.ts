@@ -123,6 +123,10 @@ test('case links isolate detail and restore filtered list through history', asyn
   await page.getByRole('link', { name: ru['government.backToCases'] }).click();
   await expect(page).toHaveURL(new RegExp(`case=${child.case_id}`));
   await expect(description).toHaveValue('Synthetic unsaved action');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.evaluate(() => history.back());
+  await expect(page).toHaveURL(new RegExp(`case=${child.case_id}`));
+  await expect(description).toHaveValue('Synthetic unsaved action');
   page.once('dialog', (dialog) => dialog.accept());
   await page
     .getByRole('navigation', { name: ru['government.relatedCases'] })

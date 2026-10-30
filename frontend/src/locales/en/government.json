@@ -150,5 +150,7 @@
   "government.caseDetail": "Case",
   "government.caseUnavailable": "Could not open the case.",
   "government.invalidCase": "Invalid case link.",
-  "government.leaveUnsaved": "There are unsaved changes or pending attachments. Leave this page?"
+  "government.leaveUnsaved": "There are unsaved changes or pending attachments. Leave this page?",
+  "government.refreshCase": "Refresh case",
+  "government.saving": "Saving..."
 }
