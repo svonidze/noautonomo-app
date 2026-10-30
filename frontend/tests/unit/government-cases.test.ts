@@ -2,12 +2,13 @@ import { nextTick } from 'vue';
 import { ApiError } from '../../src/core/http.ts';
 import { afterEach, expect, test, vi } from 'vitest';
 
-afterEach(() => {
-  window.history.replaceState({}, '', '/');
-});
 import GovernmentCasesView from '../../src/features/government-cases/GovernmentCasesView.vue';
 import type { GovernmentContext } from '../../src/features/government-cases/model.ts';
 import { mountView } from '../support/mount.ts';
+
+afterEach(() => {
+  window.history.replaceState({}, '', '/');
+});
 
 async function flush() {
   for (let i = 0; i < 8; i++) {
@@ -280,7 +281,7 @@ test('partial attachment upload keeps pending files and retries only the remaind
   root.remove();
 });
 
-test('stale case conflict offers refresh while preserving edits when cancelled', async () => {
+test('stale case conflict refresh preserves unsaved edits', async () => {
   window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
   const conflict = new ApiError('Synthetic stale case');
   conflict.code = 'stale_case_version';
@@ -302,14 +303,13 @@ test('stale case conflict offers refresh while preserving edits when cancelled',
   title.dispatchEvent(new Event('input', { bubbles: true }));
   title.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   await flush();
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   [...root.querySelectorAll('button')]
     .find((button) => button.textContent?.trim() === 'Обновить дело')!
     .click();
-  expect(confirm).toHaveBeenCalledOnce();
+  await flush();
   expect(title.value).toBe('Synthetic unsaved edit');
   expect(host.isDirty()).toBe(true);
-  confirm.mockRestore();
+  expect(root.textContent).not.toContain('Synthetic stale case');
   host.dispose();
   root.remove();
 });
@@ -505,6 +505,98 @@ test('a case field conflict does not interrupt uploads for a saved message', asy
   expect(root.textContent).toContain('Дело изменилось в другом месте');
   expect(title.value).toBe('Synthetic local title');
   expect(form.textContent).not.toContain('Повторите загрузку оставшихся вложений');
+  host.dispose();
+  root.remove();
+});
+
+test('a stale upload can refresh the case and retry without losing pending attachments', async () => {
+  window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
+  const eventId = '33333333-3333-4333-8333-333333333333';
+  const current = {
+    ...detail,
+    correspondence: [],
+    correspondence_event_id: eventId,
+    row_version: 3,
+  };
+  let uploads = 0;
+  let messages = 0;
+  const request = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url === '/api/government-cases') return list;
+    if (options?.method === 'POST' && url.endsWith('/correspondence')) {
+      messages++;
+      return current;
+    }
+    if (options?.method === 'POST' && url.endsWith('/documents')) {
+      if (++uploads === 1) {
+        const failure = new ApiError('Synthetic stale case');
+        failure.code = 'stale_case_version';
+        throw failure;
+      }
+      return current;
+    }
+    return structuredClone(current);
+  });
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, GovernmentCasesView, {
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    notify: vi.fn(),
+  });
+  await flush();
+  const summary = [...root.querySelectorAll('summary')].find(
+    (s) => s.textContent?.trim() === 'Добавить переписку',
+  )!;
+  const form = summary.parentElement!.querySelector('form')!;
+  const input = form.querySelector('input[type=file]')!;
+  Object.defineProperty(input, 'files', {
+    configurable: true,
+    value: [new File(['original'], 'source.eml')],
+  });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  expect(host.isDirty()).toBe(true);
+  [...root.querySelectorAll('button')]
+    .find((button) => button.textContent?.trim() === 'Обновить дело')!
+    .click();
+  await flush();
+  expect(host.isDirty()).toBe(true);
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  expect(messages).toBe(1);
+  expect(uploads).toBe(2);
+  expect(host.isDirty()).toBe(false);
+  host.dispose();
+  root.remove();
+});
+
+test('a remote change matching the local draft is not a conflict', async () => {
+  window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
+  const request = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url === '/api/government-cases') return list;
+    if (options?.method === 'POST')
+      return { ...structuredClone(detail), title: 'Synthetic matching title', row_version: 3 };
+    return structuredClone(detail);
+  });
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, GovernmentCasesView, {
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    notify: vi.fn(),
+  });
+  await flush();
+  const title = root.querySelector('input[maxlength="200"]') as HTMLInputElement;
+  title.value = 'Synthetic matching title';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  const actionForm = [...root.querySelectorAll('form')].find((form) =>
+    form.textContent?.includes('Новое действие'),
+  )!;
+  actionForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  expect(root.textContent).not.toContain('Дело изменилось в другом месте');
+  expect(title.value).toBe('Synthetic matching title');
   host.dispose();
   root.remove();
 });

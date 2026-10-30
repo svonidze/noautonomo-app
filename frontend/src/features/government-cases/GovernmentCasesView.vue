@@ -275,6 +275,44 @@ async function select(id: string) {
   }
 }
 
+function applyCaseResult(result: CaseDetail, preserveDraft: boolean) {
+  savedTitle.value = result.title;
+  const latest = caseValues(result);
+  if (
+    preserveDraft &&
+    stateForm.value &&
+    dirtyForms.has(stateForm.value) &&
+    detail.value &&
+    caseBaseline.value
+  ) {
+    const draft = caseValues(detail.value);
+    const changed = caseFields.filter((key) => draft[key] !== caseBaseline.value![key]);
+    const overlapping = changed.some(
+      (key) => latest[key] !== caseBaseline.value![key] && latest[key] !== draft[key],
+    );
+    const patch = Object.fromEntries(changed.map((key) => [key, draft[key]]));
+    detail.value = { ...result, ...patch };
+    if (overlapping) draftConflict.value = true;
+  } else detail.value = result;
+  caseBaseline.value = latest;
+}
+async function refreshAfterConflict() {
+  if (!caseId || saving.value) return;
+  saving.value = true;
+  try {
+    const result = (await props.context.services.request(
+      `/api/government-cases/${encodeURIComponent(caseId)}`,
+    )) as CaseDetail;
+    if (!active) return;
+    applyCaseResult(result, true);
+    conflict.value = false;
+    error.value = '';
+  } catch (failure) {
+    if (active) error.value = errorMessage(failure, locale.value);
+  } finally {
+    if (active) saving.value = false;
+  }
+}
 async function write(path: string, payload: unknown, multipart = false) {
   if (saving.value || conflict.value || props.context.services.readOnly) return;
   const focusBefore =
@@ -294,27 +332,8 @@ async function write(path: string, payload: unknown, multipart = false) {
     })) as CaseDetail;
     if (!active) return;
     const changedDuringSave = !!savedForm && formVersions.get(savedForm) !== savedVersion;
-    if (result.case_id && caseId === result.case_id) {
-      savedTitle.value = result.title;
-      const latest = caseValues(result);
-      if (
-        stateForm.value &&
-        dirtyForms.has(stateForm.value) &&
-        (savedForm !== stateForm.value || changedDuringSave) &&
-        detail.value &&
-        caseBaseline.value
-      ) {
-        const draft = caseValues(detail.value);
-        const changed = caseFields.filter((key) => draft[key] !== caseBaseline.value![key]);
-        const overlapping = changed.some((key) => latest[key] !== caseBaseline.value![key]);
-        const patch = Object.fromEntries(changed.map((key) => [key, draft[key]]));
-        detail.value = { ...result, ...patch };
-        if (overlapping) {
-          draftConflict.value = true;
-        }
-      } else detail.value = result;
-      caseBaseline.value = latest;
-    }
+    if (result.case_id && caseId === result.case_id)
+      applyCaseResult(result, savedForm !== stateForm.value || changedDuringSave);
     if (savedForm && !changedDuringSave) dirtyForms.delete(savedForm);
     dirty.value = dirtyForms.size > 0;
     void loadList();
@@ -658,16 +677,24 @@ watch(
         v-if="conflict && caseId"
         class="secondary-button"
         :disabled="saving"
-        @click="reloadAfterConflict"
+        @click="refreshAfterConflict"
       >
         {{ t('government.refreshCase') }}
       </button>
-      <button v-if="!conflict" class="secondary-button" :disabled="saving" @click="error = ''">
+      <button
+        v-if="!conflict || !caseId"
+        class="secondary-button"
+        :disabled="saving"
+        @click="
+          error = '';
+          conflict = false;
+        "
+      >
         {{ t('common.close') }}
       </button>
     </div>
-    <p v-if="loading" role="status">{{ t('common.loading') }}</p>
-    <p v-if="saving" role="status">{{ t('government.saving') }}</p>
+    <p role="status">{{ loading ? t('common.loading') : '' }}</p>
+    <p role="status">{{ saving ? t('government.saving') : '' }}</p>
     <template v-if="list && !showingCase">
       <section class="panel">
         <h2>{{ t('government.reminders') }}</h2>
