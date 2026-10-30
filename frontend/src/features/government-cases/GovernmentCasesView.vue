@@ -46,13 +46,17 @@ const showingCase = Boolean(caseId) || invalidCase;
 const detailError = ref('');
 const listError = ref('');
 const heading = ref<HTMLElement>();
+const stateForm = ref<HTMLFormElement>();
+const savedTitle = ref('');
 const dirtyForms = new Set<HTMLFormElement>();
+const formVersions = new WeakMap<HTMLFormElement, number>();
 const dirty = ref(false);
 let submittedForm: HTMLFormElement | null = null;
 function markDirty(event: Event) {
   const form = (event.target as HTMLElement).closest('form');
   if (form) {
     dirtyForms.add(form);
+    formVersions.set(form, (formVersions.get(form) || 0) + 1);
     dirty.value = true;
   }
 }
@@ -216,7 +220,7 @@ async function load() {
   loading.value = true;
   error.value = '';
   detailError.value = '';
-  const listRequest = loadList();
+  const listRequest = invalidCase ? Promise.resolve() : loadList();
   if (invalidCase) detailError.value = t('government.invalidCase');
   else if (caseId) await select(caseId);
   if (!showingCase) await listRequest;
@@ -239,6 +243,7 @@ async function select(id: string) {
     )) as CaseDetail;
     if (active && revision === selectionGeneration) {
       detail.value = result;
+      savedTitle.value = result.title;
       resetAction();
     }
   } catch (failure) {
@@ -250,6 +255,8 @@ async function select(id: string) {
 async function write(path: string, payload: unknown, multipart = false) {
   if (saving.value || props.context.services.readOnly) return;
   saving.value = true;
+  const savedForm = submittedForm;
+  const savedVersion = savedForm ? formVersions.get(savedForm) : undefined;
   error.value = '';
   conflict.value = false;
   try {
@@ -259,8 +266,20 @@ async function write(path: string, payload: unknown, multipart = false) {
       ...(!multipart ? { headers: { 'Content-Type': 'application/json' } } : {}),
     })) as CaseDetail;
     if (!active) return;
-    if (result.case_id && caseId === result.case_id) detail.value = result;
-    if (submittedForm) dirtyForms.delete(submittedForm);
+    const changedDuringSave = !!savedForm && formVersions.get(savedForm) !== savedVersion;
+    if (result.case_id && caseId === result.case_id) {
+      savedTitle.value = result.title;
+      if (
+        stateForm.value &&
+        dirtyForms.has(stateForm.value) &&
+        (savedForm !== stateForm.value || changedDuringSave) &&
+        detail.value
+      ) {
+        const { title, subject, primary_reference, work_state, parent_case_id } = detail.value;
+        detail.value = { ...result, title, subject, primary_reference, work_state, parent_case_id };
+      } else detail.value = result;
+    }
+    if (savedForm && !changedDuringSave) dirtyForms.delete(savedForm);
     dirty.value = dirtyForms.size > 0;
     void loadList();
     props.context.notify(t('government.saved'));
@@ -313,6 +332,8 @@ async function addEvent() {
   }
 }
 function resetAction() {
+  if (actionForm.value) dirtyForms.delete(actionForm.value);
+  dirty.value = dirtyForms.size > 0;
   editId.value = '';
   actionVersion.value = 0;
   Object.assign(action, {
@@ -382,11 +403,18 @@ async function uploadPdf() {
     file.value = undefined;
 }
 async function resolve(messageId: string, outcome: string) {
-  await write('/api/government-reminders/resolve', {
-    message_id: messageId,
-    outcome,
-    evidence_reference: resolutionSource.value,
-  });
+  if (
+    await write('/api/government-reminders/resolve', {
+      message_id: messageId,
+      outcome,
+      evidence_reference: resolutionSource.value,
+    })
+  ) {
+    resolutionSource.value = '';
+    for (const form of dirtyForms)
+      if (form.hasAttribute('data-reminder-form')) dirtyForms.delete(form);
+    dirty.value = dirtyForms.size > 0;
+  }
 }
 const blankMessage = () => ({
   date_precision: 'instant',
@@ -551,9 +579,10 @@ watch(
     @change="markDirty"
     @submit.capture="submitted"
   >
-    <h2 ref="heading" tabindex="-1" aria-live="polite">
-      {{ showingCase ? detail?.title || t('government.caseDetail') : t('government.cases') }}
+    <h2 ref="heading" tabindex="-1">
+      {{ showingCase ? savedTitle || t('government.caseDetail') : t('government.cases') }}
     </h2>
+    <span class="visually-hidden" aria-live="polite">{{ savedTitle }}</span>
     <a v-if="showingCase" href="/government-cases" @click="follow">{{
       t('government.backToCases')
     }}</a>
@@ -613,7 +642,9 @@ watch(
               {{ dateText(message.created_at) }} · {{ label('delivery', message.status) }}
               <span v-if="message.error">{{ message.error }}</span>
               <form
+                :inert="saving"
                 v-if="message.status === 'uncertain'"
+                data-reminder-form
                 @submit.prevent="resolve(message.message_id, 'sent')"
               >
                 <label
@@ -707,7 +738,7 @@ watch(
         </ul>
         <details>
           <summary>{{ t('government.create') }}</summary>
-          <form class="government-form-grid" @submit.prevent="createCase">
+          <form :inert="saving" class="government-form-grid" @submit.prevent="createCase">
             <label
               >{{ t('government.authority')
               }}<input
@@ -776,7 +807,12 @@ watch(
           </li>
         </ul>
       </nav>
-      <form class="government-form-grid" @submit.prevent="saveState">
+      <form
+        :inert="saving"
+        ref="stateForm"
+        class="government-form-grid"
+        @submit.prevent="saveState"
+      >
         <label
           >{{ t('government.title') }}<input v-model="detail.title" required maxlength="200"
         /></label>
@@ -825,7 +861,12 @@ watch(
           </button>
         </li>
       </ul>
-      <form ref="actionForm" class="government-form-grid" @submit.prevent="saveAction">
+      <form
+        :inert="saving"
+        ref="actionForm"
+        class="government-form-grid"
+        @submit.prevent="saveAction"
+      >
         <label
           >{{ t('government.actionKind')
           }}<select v-model="action.kind">
@@ -892,7 +933,7 @@ watch(
       </ul>
       <details>
         <summary>{{ t('government.addPdf') }}</summary>
-        <form class="government-form-grid" @submit.prevent="uploadPdf">
+        <form :inert="saving" class="government-form-grid" @submit.prevent="uploadPdf">
           <label
             >{{ t('government.pdf')
             }}<input
@@ -925,7 +966,7 @@ watch(
       </details>
       <details ref="messageForm">
         <summary>{{ t('government.addCorrespondence') }}</summary>
-        <form class="government-form-grid" @submit.prevent="addCorrespondence">
+        <form :inert="saving" class="government-form-grid" @submit.prevent="addCorrespondence">
           <fieldset :disabled="saving || !!pendingMessageId" class="government-form-grid">
             <label
               >{{ t('government.direction')
@@ -1022,7 +1063,7 @@ watch(
       </details>
       <details>
         <summary>{{ t('government.addAttachments') }}</summary>
-        <form class="government-form-grid" @submit.prevent="attachExisting">
+        <form :inert="saving" class="government-form-grid" @submit.prevent="attachExisting">
           <label
             >{{ t('government.sourceMessage')
             }}<select v-model="attachmentTarget" required>
@@ -1121,7 +1162,7 @@ watch(
       </ol>
       <details>
         <summary>{{ t('government.addEvent') }}</summary>
-        <form class="government-form-grid" @submit.prevent="addEvent">
+        <form :inert="saving" class="government-form-grid" @submit.prevent="addEvent">
           <label
             >{{ t('government.eventKind')
             }}<select v-model="event.kind">

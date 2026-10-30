@@ -223,7 +223,7 @@ test('invalid or duplicate case parameters show an error and keep a way back', a
   expect(root.querySelector('[role=alert]')).not.toBeNull();
   expect(root.querySelector('a[href="/government-cases"]')).not.toBeNull();
   expect(root.textContent).not.toContain('Ближайшие действия по делам');
-  expect(request).toHaveBeenCalledTimes(1);
+  expect(request).not.toHaveBeenCalled();
   host.dispose();
   root.remove();
 });
@@ -356,6 +356,37 @@ test('older case-list response cannot overwrite a newer refresh', async () => {
   firstList(list);
   await flush();
   expect(root.textContent).toContain('Synthetic newest parent');
+  host.dispose();
+  root.remove();
+});
+
+test('saving another form keeps unsaved case fields and the saved heading', async () => {
+  window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
+  const request = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url === '/api/government-cases') return list;
+    if (options?.method === 'POST') return { ...structuredClone(detail), row_version: 3 };
+    return structuredClone(detail);
+  });
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, GovernmentCasesView, {
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    notify: vi.fn(),
+  });
+  await flush();
+  const title = root.querySelector('input[maxlength="200"]') as HTMLInputElement;
+  title.value = 'Synthetic unsaved title';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  const actionForm = [...root.querySelectorAll('form')].find((form) =>
+    form.textContent?.includes('Новое действие'),
+  )!;
+  actionForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  expect(title.value).toBe('Synthetic unsaved title');
+  expect(root.querySelector('h2')?.textContent).toContain(caseRow.title);
+  expect(root.querySelector('h2')?.textContent).not.toContain('Synthetic unsaved title');
+  expect(host.isDirty()).toBe(true);
   host.dispose();
   root.remove();
 });
