@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
+import { followSpaLink } from '../../vue/services.ts';
 import { useLocale } from '../../vue/locale.ts';
 import { formatMessage } from '../../core/i18n.ts';
 import { errorMessage } from '../../core/error-message.ts';
+import { ApiError } from '../../core/http.ts';
 import type {
   GovernmentContext,
   CaseList,
@@ -23,8 +25,79 @@ const list = shallowRef<CaseList>();
 const detail = shallowRef<CaseDetail>();
 const error = ref(''),
   saving = ref(false),
-  loading = ref(true);
-const filters = reactive({ authority: '', state: '', query: '' });
+  loading = ref(true),
+  conflict = ref(false),
+  draftConflict = ref(false);
+const savedFilters = window.history.state?.governmentFilters;
+const filters = reactive({
+  authority: savedFilters?.authority || '',
+  state: savedFilters?.state || '',
+  query: savedFilters?.query || '',
+});
+watch(filters, () => {
+  window.history.replaceState({ ...window.history.state, governmentFilters: { ...filters } }, '');
+});
+const params = new URLSearchParams(window.location.search);
+const caseParams = params.getAll('case');
+const caseId = caseParams.length === 1 ? caseParams[0].trim().toLowerCase() : '';
+const invalidCase =
+  caseParams.length > 1 ||
+  (!!caseId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(caseId));
+const showingCase = Boolean(caseId) || invalidCase;
+const detailError = ref('');
+const listError = ref('');
+const heading = ref<HTMLElement>();
+const stateForm = ref<HTMLFormElement>();
+const savedTitle = ref('');
+const caseFields = [
+  'title',
+  'subject',
+  'primary_reference',
+  'work_state',
+  'parent_case_id',
+] as const;
+type CaseFields = Pick<CaseDetail, (typeof caseFields)[number]>;
+const caseBaseline = shallowRef<CaseFields>();
+function caseValues(value: CaseDetail): CaseFields {
+  return {
+    title: value.title,
+    subject: value.subject,
+    primary_reference: value.primary_reference,
+    work_state: value.work_state,
+    parent_case_id: value.parent_case_id ?? null,
+  };
+}
+function mayReplace(form?: HTMLFormElement | null) {
+  return !form || !dirtyForms.has(form) || window.confirm(t('government.leaveUnsaved'));
+}
+const dirtyForms = new Set<HTMLFormElement>();
+const formVersions = new WeakMap<HTMLFormElement, number>();
+const dirty = ref(false);
+let submittedForm: HTMLFormElement | null = null;
+function markDirty(event: Event) {
+  const form = (event.target as HTMLElement).closest('form');
+  if (form) {
+    dirtyForms.add(form);
+    formVersions.set(form, (formVersions.get(form) || 0) + 1);
+    dirty.value = true;
+  }
+}
+function submitted(event: Event) {
+  submittedForm = (event.target as HTMLElement).closest('form');
+}
+function isDirty() {
+  return dirty.value || !!pendingMessageId.value || extraFiles.value.length > 0;
+}
+function canLeave() {
+  if (saving.value) return false;
+  return !isDirty() || window.confirm(t('government.leaveUnsaved'));
+}
+defineExpose({ isDirty, isBusy: () => saving.value, canLeave });
+const caseUrl = (id: string) => `/government-cases?case=${encodeURIComponent(id)}`;
+function follow(event: MouseEvent) {
+  followSpaLink(event, props.context.services.navigate);
+}
+void nextTick(() => heading.value?.focus());
 const create = reactive({
   authority_code: 'TGSS',
   parent_case_id: '',
@@ -66,7 +139,8 @@ const pdf = reactive({
 });
 let active = true,
   generation = 0,
-  selectionGeneration = 0;
+  selectionGeneration = 0,
+  listGeneration = 0;
 onBeforeUnmount(() => {
   active = false;
   generation++;
@@ -152,33 +226,31 @@ function eventSummary(row: CaseEvent) {
   }
   return '';
 }
+async function loadList() {
+  const revision = ++listGeneration;
+  listError.value = '';
+  try {
+    const result = (await props.context.services.request('/api/government-cases')) as CaseList;
+    if (active && revision === listGeneration) list.value = result;
+  } catch (failure) {
+    if (active && revision === listGeneration)
+      listError.value = errorMessage(failure, locale.value);
+  }
+}
 async function load() {
   const revision = ++generation;
   loading.value = true;
   error.value = '';
-  try {
-    const result = (await props.context.services.request('/api/government-cases')) as CaseList;
-    if (!active || revision !== generation) return;
-    list.value = result;
-    const id = new URLSearchParams(window.location.search).get('case');
-    if (id) await select(id);
-  } catch (failure) {
-    if (active && revision === generation) error.value = errorMessage(failure, locale.value);
-  } finally {
-    if (active && revision === generation) {
-      loading.value = false;
-      props.context.settled();
-    }
+  detailError.value = '';
+  const listRequest = invalidCase ? Promise.resolve() : loadList();
+  if (invalidCase) detailError.value = t('government.invalidCase');
+  else if (caseId) await select(caseId);
+  if (!showingCase) await listRequest;
+  if (active && revision === generation) {
+    loading.value = false;
+    props.context.settled();
   }
 }
-watch(
-  () => props.context,
-  () => {
-    detail.value = undefined;
-    void load();
-  },
-  { immediate: true },
-);
 async function select(id: string) {
   pendingMessageId.value = '';
   messageFiles.value = [];
@@ -193,18 +265,65 @@ async function select(id: string) {
     )) as CaseDetail;
     if (active && revision === selectionGeneration) {
       detail.value = result;
+      savedTitle.value = result.title;
+      caseBaseline.value = caseValues(result);
       resetAction();
     }
   } catch (failure) {
     if (active && revision === selectionGeneration)
-      error.value = errorMessage(failure, locale.value);
+      detailError.value = errorMessage(failure, locale.value);
   }
 }
 
-async function write(path: string, payload: unknown, multipart = false) {
-  if (saving.value || props.context.services.readOnly) return;
+function applyCaseResult(result: CaseDetail, preserveDraft: boolean) {
+  savedTitle.value = result.title;
+  const latest = caseValues(result);
+  if (
+    preserveDraft &&
+    stateForm.value &&
+    dirtyForms.has(stateForm.value) &&
+    detail.value &&
+    caseBaseline.value
+  ) {
+    const draft = caseValues(detail.value);
+    const changed = caseFields.filter((key) => draft[key] !== caseBaseline.value![key]);
+    const overlapping = changed.some(
+      (key) => latest[key] !== caseBaseline.value![key] && latest[key] !== draft[key],
+    );
+    const patch = Object.fromEntries(changed.map((key) => [key, draft[key]]));
+    detail.value = { ...result, ...patch };
+    if (overlapping) draftConflict.value = true;
+  } else detail.value = result;
+  caseBaseline.value = latest;
+}
+async function refreshAfterConflict() {
+  if (!caseId || saving.value) return;
   saving.value = true;
+  try {
+    const result = (await props.context.services.request(
+      `/api/government-cases/${encodeURIComponent(caseId)}`,
+    )) as CaseDetail;
+    if (!active) return;
+    applyCaseResult(result, true);
+    conflict.value = false;
+    error.value = '';
+  } catch (failure) {
+    if (active) error.value = errorMessage(failure, locale.value);
+  } finally {
+    if (active) saving.value = false;
+  }
+}
+async function write(path: string, payload: unknown, multipart = false) {
+  if (saving.value || conflict.value || props.context.services.readOnly) return;
+  const focusBefore =
+    document.activeElement instanceof HTMLElement && document.activeElement.closest('form')
+      ? document.activeElement
+      : null;
+  saving.value = true;
+  const savedForm = submittedForm;
+  const savedVersion = savedForm ? formVersions.get(savedForm) : undefined;
   error.value = '';
+  conflict.value = false;
   try {
     const result = (await props.context.services.request(path, {
       method: 'POST',
@@ -212,18 +331,43 @@ async function write(path: string, payload: unknown, multipart = false) {
       ...(!multipart ? { headers: { 'Content-Type': 'application/json' } } : {}),
     })) as CaseDetail;
     if (!active) return;
-    if (result.case_id) detail.value = result;
-    list.value = (await props.context.services.request('/api/government-cases')) as CaseList;
+    const changedDuringSave = !!savedForm && formVersions.get(savedForm) !== savedVersion;
+    if (result.case_id && caseId === result.case_id)
+      applyCaseResult(result, savedForm !== stateForm.value || changedDuringSave);
+    if (savedForm && !changedDuringSave) dirtyForms.delete(savedForm);
+    dirty.value = dirtyForms.size > 0;
+    void loadList();
     props.context.notify(t('government.saved'));
     return result;
   } catch (failure) {
-    if (active) error.value = errorMessage(failure, locale.value);
+    if (active) {
+      error.value = errorMessage(failure, locale.value);
+      conflict.value = failure instanceof ApiError && failure.code === 'stale_case_version';
+    }
   } finally {
-    if (active) saving.value = false;
+    submittedForm = null;
+    if (active) {
+      saving.value = false;
+      await nextTick();
+      if (focusBefore?.isConnected && document.activeElement === document.body) focusBefore.focus();
+    }
   }
 }
+function reloadAfterConflict() {
+  if (isDirty() && !window.confirm(t('government.leaveUnsaved'))) return;
+  dirtyForms.clear();
+  dirty.value = false;
+  pendingMessageId.value = '';
+  extraFiles.value = [];
+  window.location.reload();
+}
 async function createCase() {
-  if (await write('/api/government-cases', { ...create, opened_at: instant(create.opened_at) })) {
+  const created = await write('/api/government-cases', {
+    ...create,
+    opened_at: instant(create.opened_at),
+  });
+  if (created) {
+    props.context.services.navigate(caseUrl(created.case_id));
     create.title = '';
     create.primary_reference = '';
     create.evidence_reference = '';
@@ -247,6 +391,8 @@ async function addEvent() {
   }
 }
 function resetAction() {
+  if (actionForm.value) dirtyForms.delete(actionForm.value);
+  dirty.value = dirtyForms.size > 0;
   editId.value = '';
   actionVersion.value = 0;
   Object.assign(action, {
@@ -260,9 +406,12 @@ function resetAction() {
   });
 }
 function editAction(row: CaseAction) {
+  if (!mayReplace(actionForm.value)) return;
   editId.value = row.action_id;
   actionVersion.value = row.row_version;
   Object.assign(action, row, { due_on: row.due_on || '', confirmed: Boolean(row.confirmed) });
+  if (actionForm.value) dirtyForms.delete(actionForm.value);
+  dirty.value = dirtyForms.size > 0;
 }
 async function saveAction() {
   if (!detail.value) return;
@@ -286,6 +435,7 @@ async function saveAction() {
     resetAction();
 }
 async function saveState() {
+  if (draftConflict.value) return;
   if (detail.value)
     await write(`/api/government-cases/${detail.value.case_id}/state`, {
       expected_row_version: detail.value.row_version,
@@ -316,11 +466,18 @@ async function uploadPdf() {
     file.value = undefined;
 }
 async function resolve(messageId: string, outcome: string) {
-  await write('/api/government-reminders/resolve', {
-    message_id: messageId,
-    outcome,
-    evidence_reference: resolutionSource.value,
-  });
+  if (
+    await write('/api/government-reminders/resolve', {
+      message_id: messageId,
+      outcome,
+      evidence_reference: resolutionSource.value,
+    })
+  ) {
+    resolutionSource.value = '';
+    for (const form of dirtyForms)
+      if (form.hasAttribute('data-reminder-form')) dirtyForms.delete(form);
+    dirty.value = dirtyForms.size > 0;
+  }
 }
 const blankMessage = () => ({
   date_precision: 'instant',
@@ -413,16 +570,24 @@ async function addCorrespondence() {
     if (!saved?.correspondence_event_id) return;
     pendingMessageId.value = saved.correspondence_event_id;
   }
-  for (const value of messageFiles.value) {
-    if (!(await attachMessageFile(pendingMessageId.value, value))) return;
+  while (messageFiles.value.length) {
+    if (!(await attachMessageFile(pendingMessageId.value, messageFiles.value[0]))) return;
+    messageFiles.value = messageFiles.value.slice(1);
   }
   pendingMessageId.value = '';
   messageFiles.value = [];
   Object.assign(correspondence, blankMessage());
-  if (messageForm.value) messageForm.value.open = false;
+  if (messageForm.value) {
+    const restore = messageForm.value.contains(document.activeElement);
+    messageForm.value.open = false;
+    if (restore) {
+      await nextTick();
+      messageForm.value?.querySelector('summary')?.focus();
+    }
+  }
 }
 function correctMessage(row: CorrespondenceMessage) {
-  if (pendingMessageId.value) return;
+  if (pendingMessageId.value || !mayReplace(messageForm.value?.querySelector('form'))) return;
   Object.assign(correspondence, row, {
     recipients: row.recipients.join('\n'),
     occurred_at:
@@ -442,35 +607,95 @@ function correctMessage(row: CorrespondenceMessage) {
       delete (correspondence as unknown as Record<string, unknown>)[key];
   messageFiles.value = [];
   if (messageForm.value) {
+    const form = messageForm.value.querySelector('form');
+    if (form) {
+      dirtyForms.add(form);
+      dirty.value = true;
+    }
     messageForm.value.open = true;
     messageForm.value.scrollIntoView?.({ block: 'nearest' });
   }
 }
 function actionForMessage(row: CorrespondenceMessage) {
+  if (!mayReplace(actionForm.value)) return;
   resetAction();
+  if (actionForm.value) {
+    dirtyForms.add(actionForm.value);
+    dirty.value = true;
+  }
   action.description = row.subject;
   action.correspondence_event_id = row.event_id;
   action.deadline_source = row.source_url || row.event_id;
   actionForm.value?.scrollIntoView?.({ block: 'nearest' });
 }
 async function attachExisting() {
-  for (const value of extraFiles.value) {
-    if (!(await attachMessageFile(attachmentTarget.value, value))) return;
+  while (extraFiles.value.length) {
+    if (!(await attachMessageFile(attachmentTarget.value, extraFiles.value[0]))) return;
+    extraFiles.value = extraFiles.value.slice(1);
   }
-  extraFiles.value = [];
 }
+watch(
+  () => props.context,
+  () => {
+    detail.value = undefined;
+    void load();
+  },
+  { immediate: true },
+);
 </script>
 <template>
-  <div class="section-stack government-cases-page">
+  <div
+    class="section-stack government-cases-page"
+    @input="markDirty"
+    @change="markDirty"
+    @submit.capture="submitted"
+  >
+    <h2 ref="heading" tabindex="-1">
+      {{ showingCase ? savedTitle || t('government.caseDetail') : t('nav.governmentCases') }}
+    </h2>
+    <span class="visually-hidden" aria-live="polite">{{ savedTitle }}</span>
+    <a v-if="showingCase" href="/government-cases" @click="follow">{{
+      t('government.backToCases')
+    }}</a>
+    <div v-if="detailError" class="panel" role="alert">
+      {{ invalidCase ? t('government.invalidCase') : t('government.caseUnavailable') }}
+      <button v-if="!invalidCase" @click="load">{{ t('common.reload') }}</button>
+    </div>
+    <div v-if="draftConflict" class="panel" role="alert">
+      <p>{{ t('government.concurrentEdit') }}</p>
+      <button class="secondary-button" :disabled="saving" @click="reloadAfterConflict">
+        {{ t('government.refreshCase') }}
+      </button>
+    </div>
+    <div v-if="listError" class="panel" role="alert">
+      {{ listError }} <button @click="loadList">{{ t('common.reload') }}</button>
+    </div>
     <p class="period-note">{{ t('government.timezoneHint', { zone: browserZone }) }}</p>
     <div v-if="error" role="alert" class="panel">
       <p>{{ error }}</p>
-      <button class="secondary-button" :disabled="saving" @click="load">
-        {{ t('common.reload') }}
+      <button
+        v-if="conflict && caseId"
+        class="secondary-button"
+        :disabled="saving"
+        @click="refreshAfterConflict"
+      >
+        {{ t('government.refreshCase') }}
+      </button>
+      <button
+        v-if="!conflict || !caseId"
+        class="secondary-button"
+        :disabled="saving"
+        @click="
+          error = '';
+          conflict = false;
+        "
+      >
+        {{ t('common.close') }}
       </button>
     </div>
-    <p v-if="loading" role="status">{{ t('common.loading') }}</p>
-    <template v-if="list">
+    <p role="status">{{ loading ? t('common.loading') : '' }}</p>
+    <p role="status">{{ saving ? t('government.saving') : '' }}</p>
+    <template v-if="list && !showingCase">
       <section class="panel">
         <h2>{{ t('government.reminders') }}</h2>
         <p>
@@ -502,7 +727,9 @@ async function attachExisting() {
               {{ dateText(message.created_at) }} · {{ label('delivery', message.status) }}
               <span v-if="message.error">{{ message.error }}</span>
               <form
+                :inert="saving"
                 v-if="message.status === 'uncertain'"
+                data-reminder-form
                 @submit.prevent="resolve(message.message_id, 'sent')"
               >
                 <label
@@ -512,7 +739,10 @@ async function attachExisting() {
                 ><button
                   type="button"
                   :disabled="saving || !resolutionSource.trim()"
-                  @click="resolve(message.message_id, 'failed')"
+                  @click="
+                    submitted($event);
+                    resolve(message.message_id, 'failed');
+                  "
                 >
                   {{ t('government.retryConfirmed') }}
                 </button>
@@ -526,9 +756,9 @@ async function attachExisting() {
         <p v-if="!list.actions.length">{{ t('government.noActions') }}</p>
         <ul>
           <li v-for="row in list.actions" :key="row.action_id">
-            <button class="secondary-button" :disabled="saving" @click="select(row.case_id)">
+            <a class="secondary-button" :href="caseUrl(row.case_id)" @click="follow">
               {{ row.title }}: {{ row.description }}
-            </button>
+            </a>
             · {{ dateText(row.due_on) }}
             <strong v-if="!row.confirmed">{{ t('government.unconfirmed') }}</strong>
           </li>
@@ -570,10 +800,10 @@ async function attachExisting() {
         <p v-if="!rows.length">{{ t('government.empty') }}</p>
         <ul>
           <li v-for="row in rows" :key="row.case_id">
-            <button class="secondary-button" :disabled="saving" @click="select(row.case_id)">
+            <a class="secondary-button" :href="caseUrl(row.case_id)" @click="follow">
               {{ row.authority_name || row.authority_code }} · {{ row.title }} ·
               {{ row.primary_reference }}
-            </button>
+            </a>
             · {{ label('state', row.work_state) }}
             <p v-if="row.last_message">
               {{ t('government.lastMessage') }}:
@@ -594,7 +824,7 @@ async function attachExisting() {
         </ul>
         <details>
           <summary>{{ t('government.create') }}</summary>
-          <form class="government-form-grid" @submit.prevent="createCase">
+          <form :inert="saving" class="government-form-grid" @submit.prevent="createCase">
             <label
               >{{ t('government.authority')
               }}<input
@@ -641,280 +871,259 @@ async function attachExisting() {
           </form>
         </details>
       </section>
-      <section v-if="detail" class="panel" aria-live="polite">
-        <h2>{{ detail.authority_name || detail.authority_code }} · {{ detail.title }}</h2>
-        <p>{{ detail.primary_reference }} · {{ detail.subject }}</p>
-        <p>
-          {{ t('government.outcome') }}:
-          {{
-            ['approved', 'rejected'].includes(detail.current_status)
-              ? label('outcome', detail.current_status)
-              : t('government.noDecision')
-          }}
-        </p>
-        <nav v-if="detail.related_cases?.length" :aria-label="t('government.relatedCases')">
-          <h3>{{ t('government.relatedCases') }}</h3>
-          <ul>
-            <li v-for="r in detail.related_cases" :key="r.case_id">
-              <button class="secondary-button" @click="select(r.case_id)">
-                {{ r.title }} · {{ r.primary_reference }}
-              </button>
-            </li>
-          </ul>
-        </nav>
-        <form class="government-form-grid" @submit.prevent="saveState">
-          <label
-            >{{ t('government.title') }}<input v-model="detail.title" required maxlength="200"
-          /></label>
-          <label
-            >{{ t('government.reference')
-            }}<input v-model="detail.primary_reference" maxlength="200"
-          /></label>
-          <label
-            >{{ t('government.subject') }}<textarea v-model="detail.subject" maxlength="4000" />
-          </label>
-          <label
-            >{{ t('government.workState')
-            }}<select v-model="detail.work_state">
-              <option v-for="state in workStates" :key="state" :value="state">
-                {{ label('state', state) }}
-              </option>
-            </select></label
-          ><label
-            >{{ t('government.parentCase')
-            }}<select v-model="detail.parent_case_id" :aria-label="t('government.parentCase')">
-              <option :value="null">{{ t('government.noParent') }}</option>
-              <option
-                v-for="r in list.rows.filter((r) => r.case_id !== detail?.case_id)"
-                :key="r.case_id"
-                :value="r.case_id"
-              >
-                {{ r.title }}
-              </option>
-            </select></label
-          >
-          <label>{{ t('government.evidence') }}<input v-model="stateSource" required /></label
-          ><button :disabled="saving">{{ t('government.saveState') }}</button>
-        </form>
-        <h3>{{ t('government.actions') }}</h3>
-        <p v-if="!detail.actions.length">{{ t('government.noActions') }}</p>
+    </template>
+    <section v-if="detail && showingCase" class="panel">
+      <p>{{ detail.authority_name || detail.authority_code }}</p>
+      <p>{{ caseBaseline?.primary_reference }} · {{ caseBaseline?.subject }}</p>
+      <p>
+        {{ t('government.outcome') }}:
+        {{
+          ['approved', 'rejected'].includes(detail.current_status)
+            ? label('outcome', detail.current_status)
+            : t('government.noDecision')
+        }}
+      </p>
+      <nav v-if="detail.related_cases?.length" :aria-label="t('government.relatedCases')">
+        <h3>{{ t('government.relatedCases') }}</h3>
         <ul>
-          <li v-for="row in detail.actions" :key="row.action_id">
-            {{ row.description }} · {{ dateText(row.due_on) }} ·
-            {{ label('actionStatus', row.status) }}
-            <strong v-if="!row.confirmed">{{ t('government.unconfirmed') }}</strong
-            ><button class="secondary-button" :disabled="saving" @click="editAction(row)">
-              {{ t('government.edit') }}
-            </button>
+          <li v-for="r in detail.related_cases" :key="r.case_id">
+            <a class="secondary-button" :href="caseUrl(r.case_id)" @click="follow">
+              {{ r.title }} · {{ r.primary_reference }}
+            </a>
           </li>
         </ul>
-        <form ref="actionForm" class="government-form-grid" @submit.prevent="saveAction">
-          <label
-            >{{ t('government.actionKind')
-            }}<select v-model="action.kind">
-              <option v-for="kind in actionKinds" :key="kind" :value="kind">
-                {{ label('actionKind', kind) }}
-              </option>
-            </select></label
-          ><label
-            >{{ t('government.sourceMessage')
-            }}<select
-              v-model="action.correspondence_event_id"
-              :aria-label="t('government.sourceMessage')"
-            >
-              <option value="">{{ t('government.notRecorded') }}</option>
-              <option
-                v-for="m in detail.correspondence || []"
-                :key="m.event_id"
-                :value="m.event_id"
-              >
-                {{ m.subject }}
-              </option>
-            </select></label
+      </nav>
+      <form
+        :inert="saving"
+        ref="stateForm"
+        class="government-form-grid"
+        @submit.prevent="saveState"
+      >
+        <label
+          >{{ t('government.title') }}<input v-model="detail.title" required maxlength="200"
+        /></label>
+        <label
+          >{{ t('government.reference') }}<input v-model="detail.primary_reference" maxlength="200"
+        /></label>
+        <label
+          >{{ t('government.subject') }}<textarea v-model="detail.subject" maxlength="4000" />
+        </label>
+        <label
+          >{{ t('government.workState')
+          }}<select v-model="detail.work_state">
+            <option v-for="state in workStates" :key="state" :value="state">
+              {{ label('state', state) }}
+            </option>
+          </select></label
+        ><label
+          >{{ t('government.parentCase')
+          }}<select
+            v-model="detail.parent_case_id"
+            :disabled="!list"
+            :aria-label="t('government.parentCase')"
           >
-          <label
-            >{{ t('government.description')
-            }}<input v-model="action.description" required maxlength="1000" /></label
-          ><label>{{ t('government.dueOn') }}<input v-model="action.due_on" type="date" /></label
-          ><label
-            >{{ t('government.deadlineSource')
-            }}<input v-model="action.deadline_source" :required="action.confirmed" /></label
-          ><label
-            ><input v-model="action.confirmed" type="checkbox" />{{
-              t('government.confirmed')
-            }}</label
-          ><label
-            >{{ t('government.actionStatus')
-            }}<select v-model="action.status">
-              <option
-                v-for="status in ['open', 'completed', 'cancelled']"
-                :key="status"
-                :value="status"
-              >
-                {{ label('actionStatus', status) }}
-              </option>
-            </select></label
-          ><button class="primary-button" :disabled="saving">
-            {{ t(editId ? 'government.saveAction' : 'government.addAction') }}</button
-          ><button type="button" class="secondary-button" :disabled="saving" @click="resetAction">
-            {{ t('government.reset') }}
+            <option :value="null">{{ t('government.noParent') }}</option>
+            <option
+              v-for="r in (list?.rows || []).filter((r) => r.case_id !== detail?.case_id)"
+              :key="r.case_id"
+              :value="r.case_id"
+            >
+              {{ r.title }}
+            </option>
+          </select></label
+        >
+        <label>{{ t('government.evidence') }}<input v-model="stateSource" required /></label
+        ><button :disabled="saving || !list || draftConflict">
+          {{ t('government.saveState') }}
+        </button>
+      </form>
+      <h3>{{ t('government.actions') }}</h3>
+      <p v-if="!detail.actions.length">{{ t('government.noActions') }}</p>
+      <ul>
+        <li v-for="row in detail.actions" :key="row.action_id">
+          {{ row.description }} · {{ dateText(row.due_on) }} ·
+          {{ label('actionStatus', row.status) }}
+          <strong v-if="!row.confirmed">{{ t('government.unconfirmed') }}</strong
+          ><button class="secondary-button" :disabled="saving" @click="editAction(row)">
+            {{ t('government.edit') }}
           </button>
-        </form>
-        <h3>{{ t('government.documents') }}</h3>
-        <ul>
-          <li v-for="document in detail.documents" :key="document.aeat_document_id">
-            <a :href="document.content_url" target="_blank" rel="noopener"
-              >{{ label('documentKind', document.document_kind) }} ·
-              {{ dateText(document.occurred_at) }}</a
+        </li>
+      </ul>
+      <form
+        :inert="saving"
+        ref="actionForm"
+        class="government-form-grid"
+        @submit.prevent="saveAction"
+      >
+        <label
+          >{{ t('government.actionKind')
+          }}<select v-model="action.kind">
+            <option v-for="kind in actionKinds" :key="kind" :value="kind">
+              {{ label('actionKind', kind) }}
+            </option>
+          </select></label
+        ><label
+          >{{ t('government.sourceMessage')
+          }}<select
+            v-model="action.correspondence_event_id"
+            :aria-label="t('government.sourceMessage')"
+          >
+            <option value="">{{ t('government.notRecorded') }}</option>
+            <option v-for="m in detail.correspondence || []" :key="m.event_id" :value="m.event_id">
+              {{ m.subject }}
+            </option>
+          </select></label
+        >
+        <label
+          >{{ t('government.description')
+          }}<input v-model="action.description" required maxlength="1000" /></label
+        ><label>{{ t('government.dueOn') }}<input v-model="action.due_on" type="date" /></label
+        ><label
+          >{{ t('government.deadlineSource')
+          }}<input v-model="action.deadline_source" :required="action.confirmed" /></label
+        ><label
+          ><input v-model="action.confirmed" type="checkbox" />{{
+            t('government.confirmed')
+          }}</label
+        ><label
+          >{{ t('government.actionStatus')
+          }}<select v-model="action.status">
+            <option
+              v-for="status in ['open', 'completed', 'cancelled']"
+              :key="status"
+              :value="status"
             >
-            <dl v-if="document.placed_at || document.received_at || document.access_expires_at">
-              <dt>{{ t('government.placed') }}</dt>
-              <dd>{{ dateText(document.placed_at) }}</dd>
-              <dt>{{ t('government.received') }}</dt>
-              <dd>{{ dateText(document.received_at) }}</dd>
-              <dt>{{ t('government.accessExpires') }}</dt>
-              <dd>{{ dateText(document.access_expires_at) }}</dd>
-            </dl>
-          </li>
-        </ul>
-        <details>
-          <summary>{{ t('government.addPdf') }}</summary>
-          <form class="government-form-grid" @submit.prevent="uploadPdf">
+              {{ label('actionStatus', status) }}
+            </option>
+          </select></label
+        ><button class="primary-button" :disabled="saving">
+          {{ t(editId ? 'government.saveAction' : 'government.addAction') }}</button
+        ><button type="button" class="secondary-button" :disabled="saving" @click="resetAction">
+          {{ t('government.reset') }}
+        </button>
+      </form>
+      <h3>{{ t('government.documents') }}</h3>
+      <ul>
+        <li v-for="document in detail.documents" :key="document.aeat_document_id">
+          <a :href="document.content_url" target="_blank" rel="noopener"
+            >{{ label('documentKind', document.document_kind) }} ·
+            {{ dateText(document.occurred_at) }}</a
+          >
+          <dl v-if="document.placed_at || document.received_at || document.access_expires_at">
+            <dt>{{ t('government.placed') }}</dt>
+            <dd>{{ dateText(document.placed_at) }}</dd>
+            <dt>{{ t('government.received') }}</dt>
+            <dd>{{ dateText(document.received_at) }}</dd>
+            <dt>{{ t('government.accessExpires') }}</dt>
+            <dd>{{ dateText(document.access_expires_at) }}</dd>
+          </dl>
+        </li>
+      </ul>
+      <details>
+        <summary>{{ t('government.addPdf') }}</summary>
+        <form :inert="saving" class="government-form-grid" @submit.prevent="uploadPdf">
+          <label
+            >{{ t('government.pdf')
+            }}<input
+              type="file"
+              accept="application/pdf"
+              required
+              @change="file = ($event.target as HTMLInputElement).files?.[0]" /></label
+          ><label
+            >{{ t('government.documentKind')
+            }}<select v-model="pdf.document_kind">
+              <option v-for="kind in documentKinds" :key="kind" :value="kind">
+                {{ label('documentKind', kind) }}
+              </option>
+            </select></label
+          ><label
+            >{{ t('government.occurred')
+            }}<input v-model="pdf.occurred_at" type="datetime-local" step="1" required /></label
+          ><label
+            >{{ t('government.placed')
+            }}<input v-model="pdf.placed_at" type="datetime-local" step="1" /></label
+          ><label
+            >{{ t('government.received')
+            }}<input v-model="pdf.received_at" type="datetime-local" step="1" /></label
+          ><label
+            >{{ t('government.accessExpires')
+            }}<input v-model="pdf.access_expires_at" type="datetime-local" step="1" /></label
+          ><label>{{ t('government.notes') }}<textarea v-model="pdf.notes" /></label
+          ><button :disabled="saving || !file">{{ t('government.save') }}</button>
+        </form>
+      </details>
+      <details ref="messageForm">
+        <summary>{{ t('government.addCorrespondence') }}</summary>
+        <form :inert="saving" class="government-form-grid" @submit.prevent="addCorrespondence">
+          <fieldset :disabled="saving || !!pendingMessageId" class="government-form-grid">
             <label
-              >{{ t('government.pdf')
-              }}<input
-                type="file"
-                accept="application/pdf"
-                required
-                @change="file = ($event.target as HTMLInputElement).files?.[0]" /></label
-            ><label
-              >{{ t('government.documentKind')
-              }}<select v-model="pdf.document_kind">
-                <option v-for="kind in documentKinds" :key="kind" :value="kind">
-                  {{ label('documentKind', kind) }}
+              >{{ t('government.direction')
+              }}<select v-model="correspondence.direction">
+                <option value="incoming">{{ t('government.direction.incoming') }}</option>
+                <option value="outgoing">{{ t('government.direction.outgoing') }}</option>
+              </select></label
+            >
+            <label
+              >{{ t('government.channel')
+              }}<select v-model="correspondence.channel">
+                <option v-for="c in ['email', 'portal', 'paper']" :key="c" :value="c">
+                  {{ label('channel', c) }}
                 </option>
               </select></label
-            ><label
-              >{{ t('government.occurred')
-              }}<input v-model="pdf.occurred_at" type="datetime-local" step="1" required /></label
-            ><label
-              >{{ t('government.placed')
-              }}<input v-model="pdf.placed_at" type="datetime-local" step="1" /></label
-            ><label
-              >{{ t('government.received')
-              }}<input v-model="pdf.received_at" type="datetime-local" step="1" /></label
-            ><label
-              >{{ t('government.accessExpires')
-              }}<input v-model="pdf.access_expires_at" type="datetime-local" step="1" /></label
-            ><label>{{ t('government.notes') }}<textarea v-model="pdf.notes" /></label
-            ><button :disabled="saving || !file">{{ t('government.save') }}</button>
-          </form>
-        </details>
-        <details ref="messageForm">
-          <summary>{{ t('government.addCorrespondence') }}</summary>
-          <form class="government-form-grid" @submit.prevent="addCorrespondence">
-            <fieldset :disabled="saving || !!pendingMessageId" class="government-form-grid">
-              <label
-                >{{ t('government.direction')
-                }}<select v-model="correspondence.direction">
-                  <option value="incoming">{{ t('government.direction.incoming') }}</option>
-                  <option value="outgoing">{{ t('government.direction.outgoing') }}</option>
-                </select></label
-              >
-              <label
-                >{{ t('government.channel')
-                }}<select v-model="correspondence.channel">
-                  <option v-for="c in ['email', 'portal', 'paper']" :key="c" :value="c">
-                    {{ label('channel', c) }}
-                  </option>
-                </select></label
-              >
-              <label
-                >{{ t('government.datePrecision')
-                }}<select
-                  v-model="correspondence.date_precision"
-                  @change="
-                    correspondence.occurred_at =
-                      correspondence.date_precision === 'day'
-                        ? correspondence.occurred_at.slice(0, 10)
-                        : ''
-                  "
-                >
-                  <option value="instant">{{ t('government.datePrecision.instant') }}</option>
-                  <option value="day">{{ t('government.datePrecision.day') }}</option>
-                </select></label
-              >
-              <label
-                >{{ t('government.occurred')
-                }}<input
-                  v-model="correspondence.occurred_at"
-                  :type="correspondence.date_precision === 'day' ? 'date' : 'datetime-local'"
-                  step="1"
-                  required
-              /></label>
-              <label
-                >{{ t('government.sender')
-                }}<input v-model="correspondence.sender" maxlength="4000"
-              /></label>
-              <label
-                >{{ t('government.recipients')
-                }}<textarea
-                  v-model="correspondence.recipients"
-                  :placeholder="t('government.onePerLine')"
-                />
-              </label>
-              <label
-                >{{ t('government.messageSubject')
-                }}<input v-model="correspondence.subject" required maxlength="4000"
-              /></label>
-              <label
-                >{{ t('government.fullText')
-                }}<textarea v-model="correspondence.body_text" rows="10" />
-              </label>
-              <label
-                >{{ t('government.summary')
-                }}<textarea v-model="correspondence.summary" maxlength="4000" />
-              </label>
-              <label
-                >{{ t('government.openSource')
-                }}<input v-model="correspondence.source_url" type="url" maxlength="4000"
-              /></label>
-              <label
-                >{{ t('government.replyTo')
-                }}<select v-model="correspondence.reply_to_event_id">
-                  <option value="">{{ t('government.notRecorded') }}</option>
-                  <option
-                    v-for="m in detail.correspondence || []"
-                    :key="m.event_id"
-                    :value="m.event_id"
-                  >
-                    {{ m.subject }}
-                  </option>
-                </select></label
-              >
-              <label
-                >{{ t('government.attachments')
-                }}<input
-                  :key="correspondence.source_message_id"
-                  type="file"
-                  multiple
-                  @change="selectFiles($event, 'message')"
-              /></label>
-            </fieldset>
-            <p v-if="correspondence.supersedes_event_id">{{ t('government.correctMessage') }}</p>
-            <p v-if="pendingMessageId" role="status">{{ t('government.resumeAttachments') }}</p>
-            <button class="primary-button" :disabled="saving">
-              {{ t('government.saveCorrespondence') }}
-            </button>
-          </form>
-        </details>
-        <details>
-          <summary>{{ t('government.addAttachments') }}</summary>
-          <form class="government-form-grid" @submit.prevent="attachExisting">
+            >
             <label
-              >{{ t('government.sourceMessage')
-              }}<select v-model="attachmentTarget" required>
-                <option value="">{{ t('government.choose') }}</option>
+              >{{ t('government.datePrecision')
+              }}<select
+                v-model="correspondence.date_precision"
+                @change="
+                  correspondence.occurred_at =
+                    correspondence.date_precision === 'day'
+                      ? correspondence.occurred_at.slice(0, 10)
+                      : ''
+                "
+              >
+                <option value="instant">{{ t('government.datePrecision.instant') }}</option>
+                <option value="day">{{ t('government.datePrecision.day') }}</option>
+              </select></label
+            >
+            <label
+              >{{ t('government.occurred')
+              }}<input
+                v-model="correspondence.occurred_at"
+                :type="correspondence.date_precision === 'day' ? 'date' : 'datetime-local'"
+                step="1"
+                required
+            /></label>
+            <label
+              >{{ t('government.sender') }}<input v-model="correspondence.sender" maxlength="4000"
+            /></label>
+            <label
+              >{{ t('government.recipients')
+              }}<textarea
+                v-model="correspondence.recipients"
+                :placeholder="t('government.onePerLine')"
+              />
+            </label>
+            <label
+              >{{ t('government.messageSubject')
+              }}<input v-model="correspondence.subject" required maxlength="4000"
+            /></label>
+            <label
+              >{{ t('government.fullText')
+              }}<textarea v-model="correspondence.body_text" rows="10" />
+            </label>
+            <label
+              >{{ t('government.summary')
+              }}<textarea v-model="correspondence.summary" maxlength="4000" />
+            </label>
+            <label
+              >{{ t('government.openSource')
+              }}<input v-model="correspondence.source_url" type="url" maxlength="4000"
+            /></label>
+            <label
+              >{{ t('government.replyTo')
+              }}<select v-model="correspondence.reply_to_event_id">
+                <option value="">{{ t('government.notRecorded') }}</option>
                 <option
                   v-for="m in detail.correspondence || []"
                   :key="m.event_id"
@@ -926,124 +1135,155 @@ async function attachExisting() {
             >
             <label
               >{{ t('government.attachments')
-              }}<input type="file" multiple required @change="selectFiles($event, 'extra')"
+              }}<input
+                :key="correspondence.source_message_id"
+                type="file"
+                multiple
+                @change="selectFiles($event, 'message')"
             /></label>
-            <button :disabled="saving || !extraFiles.length">{{ t('government.save') }}</button>
-          </form>
-        </details>
-        <h3>{{ t('government.history') }}</h3>
-        <ol class="government-history">
-          <li v-for="row in detail.events" :key="row.event_id">
-            <strong>{{ label('eventKind', row.kind) }}</strong> ·
-            {{
-              dateText(
-                messageById.get(row.event_id)?.date_precision === 'day'
-                  ? row.occurred_at.slice(0, 10)
-                  : row.occurred_at,
-              )
-            }}
-            <template v-if="messageById.has(row.event_id)">
-              <template v-for="m in [messageById.get(row.event_id)!]" :key="m.event_id">
-                <p>
-                  <strong>{{ m.subject }}</strong> · {{ label('direction', m.direction) }} ·
-                  {{ label('channel', m.channel) }}
-                </p>
-                <p>
-                  {{ t('government.sender') }}: {{ m.sender || t('government.notRecorded') }} ·
-                  {{ t('government.recipients') }}:
-                  {{ m.recipients.join(', ') || t('government.notRecorded') }}
-                </p>
-                <p v-if="m.superseded">{{ t('government.superseded') }}</p>
-                <p v-if="m.reply_to_event_id">
-                  {{ t('government.replyTo') }}: {{ messageById.get(m.reply_to_event_id)?.subject }}
-                </p>
-                <p>{{ m.summary }}</p>
-                <details>
-                  <summary>{{ t('government.fullText') }}</summary>
-                  <pre class="correspondence-text">{{ m.body_text }}</pre>
-                </details>
-                <a
-                  v-if="messageLink(m.source_url)"
-                  :href="messageLink(m.source_url)"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  >{{ t('government.openSource') }}</a
-                >
-                <ul>
-                  <li v-for="a in m.attachments" :key="a.filename">
-                    <a :href="a.content_url" target="_blank" rel="noopener">{{ a.filename }}</a>
-                  </li>
-                </ul>
-                <p v-if="m.missing_attachments.length" role="status">
-                  {{ t('government.missingAttachments') }}: {{ m.missing_attachments.join(', ') }}
-                </p>
-                <button class="secondary-button" :disabled="saving" @click="actionForMessage(m)">
-                  {{ t('government.addAction') }}
-                </button>
-                <button
-                  class="secondary-button"
-                  :disabled="saving || m.superseded || !!pendingMessageId"
-                  @click="correctMessage(m)"
-                >
-                  {{ t('government.correctMessage') }}
-                </button>
-              </template>
+          </fieldset>
+          <p v-if="correspondence.supersedes_event_id">{{ t('government.correctMessage') }}</p>
+          <p v-if="pendingMessageId" role="status">{{ t('government.resumeAttachments') }}</p>
+          <button class="primary-button" :disabled="saving">
+            {{ t('government.saveCorrespondence') }}
+          </button>
+        </form>
+      </details>
+      <details>
+        <summary>{{ t('government.addAttachments') }}</summary>
+        <form :inert="saving" class="government-form-grid" @submit.prevent="attachExisting">
+          <label
+            >{{ t('government.sourceMessage')
+            }}<select v-model="attachmentTarget" required>
+              <option value="">{{ t('government.choose') }}</option>
+              <option
+                v-for="m in detail.correspondence || []"
+                :key="m.event_id"
+                :value="m.event_id"
+              >
+                {{ m.subject }}
+              </option>
+            </select></label
+          >
+          <label
+            >{{ t('government.attachments')
+            }}<input type="file" multiple required @change="selectFiles($event, 'extra')"
+          /></label>
+          <button :disabled="saving || !extraFiles.length">{{ t('government.save') }}</button>
+        </form>
+      </details>
+      <h3>{{ t('government.history') }}</h3>
+      <ol class="government-history">
+        <li v-for="row in detail.events" :key="row.event_id">
+          <strong>{{ label('eventKind', row.kind) }}</strong> ·
+          {{
+            dateText(
+              messageById.get(row.event_id)?.date_precision === 'day'
+                ? row.occurred_at.slice(0, 10)
+                : row.occurred_at,
+            )
+          }}
+          <template v-if="messageById.has(row.event_id)">
+            <template v-for="m in [messageById.get(row.event_id)!]" :key="m.event_id">
+              <p>
+                <strong>{{ m.subject }}</strong> · {{ label('direction', m.direction) }} ·
+                {{ label('channel', m.channel) }}
+              </p>
+              <p>
+                {{ t('government.sender') }}: {{ m.sender || t('government.notRecorded') }} ·
+                {{ t('government.recipients') }}:
+                {{ m.recipients.join(', ') || t('government.notRecorded') }}
+              </p>
+              <p v-if="m.superseded">{{ t('government.superseded') }}</p>
+              <p v-if="m.reply_to_event_id">
+                {{ t('government.replyTo') }}: {{ messageById.get(m.reply_to_event_id)?.subject }}
+              </p>
+              <p>{{ m.summary }}</p>
+              <details>
+                <summary>{{ t('government.fullText') }}</summary>
+                <pre class="correspondence-text">{{ m.body_text }}</pre>
+              </details>
+              <a
+                v-if="messageLink(m.source_url)"
+                :href="messageLink(m.source_url)"
+                target="_blank"
+                rel="noopener noreferrer"
+                >{{ t('government.openSource') }}</a
+              >
+              <ul>
+                <li v-for="a in m.attachments" :key="a.filename">
+                  <a :href="a.content_url" target="_blank" rel="noopener">{{ a.filename }}</a>
+                </li>
+              </ul>
+              <p v-if="m.missing_attachments.length" role="status">
+                {{ t('government.missingAttachments') }}: {{ m.missing_attachments.join(', ') }}
+              </p>
+              <button class="secondary-button" :disabled="saving" @click="actionForMessage(m)">
+                {{ t('government.addAction') }}
+              </button>
+              <button
+                class="secondary-button"
+                :disabled="saving || m.superseded || !!pendingMessageId"
+                @click="correctMessage(m)"
+              >
+                {{ t('government.correctMessage') }}
+              </button>
             </template>
-            <template v-else
-              ><p>{{ eventSummary(row) }}</p>
-              <p>{{ row.notes }}</p></template
-            >
-            <a
-              v-if="!messageById.has(row.event_id) && safeLink(row.evidence_reference)"
-              :href="safeLink(row.evidence_reference)"
-              target="_blank"
-              rel="noopener"
-              >{{ t('government.evidence') }}</a
-            >
-            <p v-else-if="!messageById.has(row.event_id)">{{ row.evidence_reference }}</p>
-            <small
-              >{{ t('government.recorded') }}: {{ dateText(row.recorded_at) }} ·
-              <span v-if="!messageById.has(row.event_id)">{{ row.event_id }}</span></small
-            >
-          </li>
-        </ol>
-        <details>
-          <summary>{{ t('government.addEvent') }}</summary>
-          <form class="government-form-grid" @submit.prevent="addEvent">
-            <label
-              >{{ t('government.eventKind')
-              }}<select v-model="event.kind">
-                <option v-for="kind in eventKinds" :key="kind" :value="kind">
-                  {{ label('eventKind', kind) }}
-                </option>
-              </select></label
-            ><label
-              >{{ t('government.occurred')
-              }}<input v-model="event.occurred_at" type="datetime-local" step="1" required /></label
-            ><label
-              >{{ t('government.evidence')
-              }}<input v-model="event.evidence_reference" required /></label
-            ><label>{{ t('government.notes') }}<textarea v-model="event.notes" /></label
-            ><label v-if="['decision', 'correction'].includes(event.kind)"
-              >{{ t('government.outcome')
-              }}<select v-model="event.outcome">
-                <option value="">{{ t('government.unchanged') }}</option>
-                <option v-for="outcome in outcomes" :key="outcome" :value="outcome">
-                  {{ label('outcome', outcome) }}
-                </option>
-              </select></label
-            ><label v-if="event.kind === 'correction'"
-              >{{ t('government.corrects')
-              }}<select v-model="event.supersedes_event_id" required>
-                <option value="">{{ t('government.choose') }}</option>
-                <option v-for="row in detail.events" :key="row.event_id" :value="row.event_id">
-                  {{ label('eventKind', row.kind) }} · {{ dateText(row.occurred_at) }}
-                </option>
-              </select></label
-            ><button class="primary-button" :disabled="saving">{{ t('government.save') }}</button>
-          </form>
-        </details>
-      </section>
-    </template>
+          </template>
+          <template v-else
+            ><p>{{ eventSummary(row) }}</p>
+            <p>{{ row.notes }}</p></template
+          >
+          <a
+            v-if="!messageById.has(row.event_id) && safeLink(row.evidence_reference)"
+            :href="safeLink(row.evidence_reference)"
+            target="_blank"
+            rel="noopener"
+            >{{ t('government.evidence') }}</a
+          >
+          <p v-else-if="!messageById.has(row.event_id)">{{ row.evidence_reference }}</p>
+          <small
+            >{{ t('government.recorded') }}: {{ dateText(row.recorded_at) }} ·
+            <span v-if="!messageById.has(row.event_id)">{{ row.event_id }}</span></small
+          >
+        </li>
+      </ol>
+      <details>
+        <summary>{{ t('government.addEvent') }}</summary>
+        <form :inert="saving" class="government-form-grid" @submit.prevent="addEvent">
+          <label
+            >{{ t('government.eventKind')
+            }}<select v-model="event.kind">
+              <option v-for="kind in eventKinds" :key="kind" :value="kind">
+                {{ label('eventKind', kind) }}
+              </option>
+            </select></label
+          ><label
+            >{{ t('government.occurred')
+            }}<input v-model="event.occurred_at" type="datetime-local" step="1" required /></label
+          ><label
+            >{{ t('government.evidence')
+            }}<input v-model="event.evidence_reference" required /></label
+          ><label>{{ t('government.notes') }}<textarea v-model="event.notes" /></label
+          ><label v-if="['decision', 'correction'].includes(event.kind)"
+            >{{ t('government.outcome')
+            }}<select v-model="event.outcome">
+              <option value="">{{ t('government.unchanged') }}</option>
+              <option v-for="outcome in outcomes" :key="outcome" :value="outcome">
+                {{ label('outcome', outcome) }}
+              </option>
+            </select></label
+          ><label v-if="event.kind === 'correction'"
+            >{{ t('government.corrects')
+            }}<select v-model="event.supersedes_event_id" required>
+              <option value="">{{ t('government.choose') }}</option>
+              <option v-for="row in detail.events" :key="row.event_id" :value="row.event_id">
+                {{ label('eventKind', row.kind) }} · {{ dateText(row.occurred_at) }}
+              </option>
+            </select></label
+          ><button class="primary-button" :disabled="saving">{{ t('government.save') }}</button>
+        </form>
+      </details>
+    </section>
   </div>
 </template>

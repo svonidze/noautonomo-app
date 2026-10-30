@@ -147,6 +147,9 @@ export function useShell() {
     return {
       contactGlobalPeriod: fromContact && contactGlobal ? contactGlobal : period.value,
       accountingHelp: null,
+      ...(route.value?.view === 'government-cases'
+        ? { governmentFilters: window.history.state?.governmentFilters }
+        : {}),
     };
   }
   function navigate(url: string, replace = false) {

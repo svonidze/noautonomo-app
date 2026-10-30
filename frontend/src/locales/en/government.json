@@ -145,5 +145,13 @@
   "government.eventKind.correspondence_attachment": "Message attachment",
   "government.datePrecision": "Date precision",
   "government.datePrecision.instant": "Date and time known",
-  "government.datePrecision.day": "Only the date is known"
+  "government.datePrecision.day": "Only the date is known",
+  "government.backToCases": "Back to cases",
+  "government.caseDetail": "Case",
+  "government.caseUnavailable": "Could not open the case.",
+  "government.invalidCase": "Invalid case link.",
+  "government.leaveUnsaved": "There are unsaved changes or pending attachments. Leave this page?",
+  "government.refreshCase": "Refresh case",
+  "government.saving": "Saving...",
+  "government.concurrentEdit": "This case changed elsewhere. Refresh it before saving your changes."
 }

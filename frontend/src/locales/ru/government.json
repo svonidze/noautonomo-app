@@ -145,5 +145,13 @@
   "government.eventKind.correspondence_attachment": "Вложение к сообщению",
   "government.datePrecision": "Точность даты",
   "government.datePrecision.instant": "Дата и время известны",
-  "government.datePrecision.day": "Известна только дата"
+  "government.datePrecision.day": "Известна только дата",
+  "government.backToCases": "К списку дел",
+  "government.caseDetail": "Дело",
+  "government.caseUnavailable": "Не удалось открыть дело.",
+  "government.invalidCase": "Некорректная ссылка на дело.",
+  "government.leaveUnsaved": "Есть несохраненные изменения или незагруженные вложения. Покинуть страницу?",
+  "government.refreshCase": "Обновить дело",
+  "government.saving": "Сохранение...",
+  "government.concurrentEdit": "Дело изменилось в другом месте. Обновите его, прежде чем сохранять свои изменения."
 }
