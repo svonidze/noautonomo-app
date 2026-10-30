@@ -18,6 +18,27 @@ registration. Notification placement, receipt and access expiry are independent
 optional source-backed timestamps. Uploading a PDF does not accept a notification
 on a government portal. It also does not record a payment in the books.
 
+## Finding a case and keeping unfinished work
+
+The overview lists cases and supports authority, work-state and text filters.
+Open a case to work in its separate detail page. Its address is
+`/government-cases?case=CASE_UUID`; reminder links use the same address. A direct
+link opens that case, including after reload. Returning through in-app navigation
+or browser history preserves the list filters for that history context.
+
+The detail page contains the case facts, timeline, correspondence, originals and
+actions. Unsaved forms warn before leaving. Saving another form does not discard
+an unrelated draft. Drafts and selected files are not durable storage: complete
+or retain them privately before closing the browser.
+
+If another writer changes the case, use the offered refresh to recover current
+versions while preserving pending work. Review conflicting case fields before
+saving again; stale drafts cannot silently overwrite newer facts. A successful
+message save can leave expected attachments outstanding. Reload the case and use
+**Add message attachments** to upload those originals. Already uploaded files
+remain linked; failed uploads and unrelated conflicts do not require recreating
+the message. Verify the timeline and missing-attachment list before retrying.
+
 ## Decisions and work
 
 A rejected appeal is a decision outcome, not a case closure. Keep the work state

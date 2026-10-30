@@ -60,6 +60,23 @@ asset continuation/disposal evidence, reconciliation and completeness acceptance
 Do not substitute generated source-row IDs for invoice receipt registration
 numbers. Preserve the original Xolo registers and their numbering evidence.
 
+## Choosing an export
+
+| Need | Output and limits |
+|---|---|
+| Review the accounting and missing fields | Native CSV/JSON and `tax-registers-review.xlsx`; these are not AEAT import files. |
+| Prepare separate cumulative IVA/IRPF files | `books aeat-separate-write`; follow the [separate XLSX procedure](TAX_ATTRIBUTION.md#separate-iva-and-irpf-xlsx). Requires the reviewed template, evidenced numbering and any reviewed operation-date decisions. |
+| Retain evidence and the exporter for replay | `filing-package archive` in a new directory; see [Complete retained archive](#complete-retained-archive). A separate isolated replay is still required. |
+
+The separate exporter writes values from January through the selected quarter,
+with the appropriate C/D sheets. Unsupported attributed expenses, missing
+numbering or stale evidence block generation. The unified template has a
+separate contract and cannot represent independently attributed IRPF/IVA views.
+Successful format checks do not establish that every source document is present,
+that a return is ready, or that the real-data file has been accepted by AEAT.
+The command does not upload records to AEAT. Existing filed snapshots and earlier
+retained exports remain unchanged.
+
 ## Receipt registration (schema 29)
 
 `receipt-register create-series --db PATH --payload series.json` records the
@@ -106,9 +123,9 @@ Both import files must cover January through the selected quarter and preserve
 the shared column positions, leaving only the other tax's exclusive fields blank.
 Common invoice base and VAT fields are not automatically blank in the IRPF file.
 The native review workbook's quarter-only IVA view and review sheet layout do not
-implement this import contract. Separate asset mapping, mandatory content and
-date/amount reconciliation require their own acceptance; merely renaming tabs is
-insufficient. See the [official specification](https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/IVA/Fact_registro/Libros_registro/Formato_Electronico_Comun_Libros_Registro_IVA_IRPF.pdf)
+implement this import contract. Use the separate exporter above for the implemented C/D projection. Asset
+mapping, mandatory content and date/amount reconciliation retain their own
+acceptance requirements; merely renaming review tabs is insufficient. See the [official specification](https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/IVA/Fact_registro/Libros_registro/Formato_Electronico_Comun_Libros_Registro_IVA_IRPF.pdf)
 and [AEAT import FAQ](https://sede.agenciatributaria.gob.es/Sede/iva/facturacion-registro/preguntas-frecuentes.html).
 
 For operational retention, archive original documents, a consistent database

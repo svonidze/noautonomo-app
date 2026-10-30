@@ -61,6 +61,12 @@ prove support for the new preferences. Missing, malformed or future-dated
 markers are unknown, not a green health signal. A past successful upload is not
 proof that the cloud is healthy now or that a restore has been tested.
 
+Full private-root archives remain the default. See the
+[scope and separate file-history procedure](../../ops/docs/DISASTER_RECOVERY.md#opt-in-database-archive-and-separate-file-history)
+for the operator prerequisites, versioned storage, per-run file index and recovery
+steps. Database scope is an explicit deployment configuration, not a preference
+switched by this form.
+
 The operator can opt into a small archive containing SQLite, application config
 and these preferences. Documents and other working files then require separately
 verified versioned copies. The observed local readiness and monthly SQLite

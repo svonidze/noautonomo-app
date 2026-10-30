@@ -11,13 +11,45 @@ plainly what this application does and does not do for that review.
 ## What this application covers
 
 Run `autonomo-tax calculate --form 100 --year <YEAR> --db <db>` against the
-posted rows for the year. It produces business-activity support figures only:
+posted rows and verified annual adjustments for the year. It produces
+business-activity support figures only:
 activity income, deductible expenses before the difficult-to-justify
 allowance, that allowance, and the resulting net business result, tagged with
 status `decision_support_requires_renta_web`. The calculation's own warning
 says so directly: "This output is decision support and must be compared with
 Renta WEB." If any transaction is flagged with an unsupported category for
 this calculation, it refuses to produce a figure at all rather than guess.
+
+## Annual preparation adjustments
+
+Use annual adjustments for reviewed income or expenses supported by an annual
+source record, archived original and explicit EUR valuation. They change annual
+business-activity preparation, including the dashboard's year-to-date figures,
+without reopening quarterly journals or modifying filed snapshots. The annual
+period must remain open. The dashboard panel displays the entries; record and
+withdraw them through the CLI or authenticated API.
+
+```sh
+autonomo-tax annual-adjustments list --year 2026
+autonomo-tax annual-adjustments preview --year 2026 --as-of 2026-10-30
+autonomo-tax annual-adjustments record --input PRIVATE_JSON --actor operator
+autonomo-tax annual-adjustments void ADJUSTMENT_UUID --reason 'Reviewed correction' --actor operator
+```
+
+Select your existing private accounting context as described in the
+[agent workflow](../AGENT_WORKFLOW.md#start-and-find-the-accounting-context).
+See the [payload and retry contract](../CLI_CAPABILITIES.md#annual-renta-adjustments)
+before recording an adjustment. A `verified` entry means its source evidence was
+reviewed; it does not approve the whole return. A `provisional` entry contributes
+only to preparation previews and blocks the final annual calculation. The
+preview remains decision support, never a filing-ready personal tax return.
+
+Compare the preview with the source and year-to-date figures. After an uncertain
+response, inspect the saved entries before retrying the identical request.
+Corrections are append-only: withdraw the mistaken entry with a reason and
+record a reviewed replacement. A changed source version, missing original or
+conflicting duplicate must be resolved rather than bypassed. Do not add assumed
+withholding credits.
 
 ## What this application does not cover
 
