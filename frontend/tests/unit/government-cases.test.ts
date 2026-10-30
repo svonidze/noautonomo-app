@@ -1,5 +1,9 @@
 import { nextTick } from 'vue';
-import { expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
+
+afterEach(() => {
+  window.history.replaceState({}, '', '/');
+});
 import GovernmentCasesView from '../../src/features/government-cases/GovernmentCasesView.vue';
 import type { GovernmentContext } from '../../src/features/government-cases/model.ts';
 import { mountView } from '../support/mount.ts';
@@ -45,6 +49,7 @@ const list = {
 };
 
 test('case page keeps a rejection actionable and submits reviewed action metadata', async () => {
+  window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
   const request = vi.fn(async (url: string, options?: RequestInit) => {
     if (url === '/api/government-cases') return list;
     if (options?.method === 'POST') return { ...detail, row_version: 3 };
@@ -58,11 +63,6 @@ test('case page keeps a rejection actionable and submits reviewed action metadat
   const root = document.createElement('div');
   document.body.append(root);
   const host = mountView(root, GovernmentCasesView, context);
-  await flush();
-  const select = [...root.querySelectorAll('button')].find((b) =>
-    b.textContent?.includes('TGSS · Synthetic appeal'),
-  )!;
-  select.click();
   await flush();
   expect(root.textContent).toContain('Отказано');
   expect(root.textContent).toContain('Срок требует проверки');
@@ -114,6 +114,7 @@ test('case loading failure has a retry and does not show an empty successful res
 });
 
 test('retrying interrupted originals resumes the existing message without a duplicate', async () => {
+  window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
   let messages = 0,
     uploads = 0;
   const eventId = '33333333-3333-4333-8333-333333333333';
@@ -147,10 +148,6 @@ test('retrying interrupted originals resumes the existing message without a dupl
     notify: vi.fn(),
   });
   await flush();
-  [...root.querySelectorAll('button')]
-    .find((b) => b.textContent?.includes('TGSS · Synthetic appeal'))!
-    .click();
-  await flush();
   const summary = [...root.querySelectorAll('summary')].find(
     (s) => s.textContent?.trim() === 'Добавить переписку',
   )!;
@@ -171,6 +168,61 @@ test('retrying interrupted originals resumes the existing message without a dupl
   expect(messages).toBe(1);
   expect(uploads).toBe(2);
   expect(form.textContent).not.toContain('Повторите загрузку оставшихся вложений');
+  host.dispose();
+  root.remove();
+});
+
+test('detail remains available when the parent case list fails and retry preserves edits', async () => {
+  window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
+  let failList = true;
+  const request = vi.fn(async (url: string) => {
+    if (url === '/api/government-cases') {
+      if (failList) throw new Error('Synthetic list outage');
+      return list;
+    }
+    return structuredClone(detail);
+  });
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, GovernmentCasesView, {
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    notify: vi.fn(),
+  });
+  await flush();
+  expect(root.textContent).toContain('Synthetic list outage');
+  expect(root.textContent).toContain('Отказано');
+  expect(root.textContent).not.toContain('Ближайшие действия по делам');
+  const title = root.querySelector('input[maxlength="200"]') as HTMLInputElement;
+  title.value = 'Synthetic unsaved edit';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(host.isDirty()).toBe(true);
+  failList = false;
+  root
+    .querySelector('[role=alert] button')!
+    .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await flush();
+  expect(title.value).toBe('Synthetic unsaved edit');
+  expect(root.textContent).not.toContain('Synthetic list outage');
+  host.dispose();
+  root.remove();
+});
+
+test('invalid or duplicate case parameters show an error and keep a way back', async () => {
+  window.history.replaceState({}, '', '/government-cases?case=bad&case=bad');
+  const request = vi.fn(async () => list);
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, GovernmentCasesView, {
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    notify: vi.fn(),
+  });
+  await flush();
+  expect(root.querySelector('[role=alert]')).not.toBeNull();
+  expect(root.querySelector('a[href="/government-cases"]')).not.toBeNull();
+  expect(root.textContent).not.toContain('Ближайшие действия по делам');
+  expect(request).toHaveBeenCalledTimes(1);
   host.dispose();
   root.remove();
 });

@@ -89,3 +89,52 @@ test('government correspondence preserves text, relates procedures and remains u
   });
   expect(errors).toEqual([]);
 });
+
+test('case links isolate detail and restore filtered list through history', async ({ page }) => {
+  await page.goto('/government-cases');
+  await expect(page.locator('#app')).toHaveAttribute('aria-busy', 'false');
+  const create = async (title: string, parent_case_id?: string) => {
+    const response = await page.request.post('/api/government-cases', {
+      headers: { Origin: 'http://127.0.0.1:8765' },
+      data: {
+        authority_code: 'TEST-MUNICIPALITY',
+        authority_name: 'Synthetic municipality',
+        title,
+        parent_case_id,
+        opened_at: '2032-01-01T10:00:00Z',
+        evidence_reference: 'Synthetic original',
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+    return response.json();
+  };
+  const parent = await create('Synthetic filtered parent');
+  const child = await create('Synthetic filtered child', parent.case_id);
+  await page.reload();
+  const search = page.getByLabel(ru['government.search']);
+  await search.fill('Synthetic filtered child');
+  await page.getByRole('link', { name: /Synthetic filtered child/ }).click();
+  await expect(page).toHaveURL(new RegExp(`case=${child.case_id}`));
+  await expect(page.getByRole('heading', { name: ru['government.reminders'] })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: ru['government.history'] })).toBeVisible();
+  const description = page.getByLabel(ru['government.description'], { exact: true });
+  await description.fill('Synthetic unsaved action');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('link', { name: ru['government.backToCases'] }).click();
+  await expect(page).toHaveURL(new RegExp(`case=${child.case_id}`));
+  await expect(description).toHaveValue('Synthetic unsaved action');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page
+    .getByRole('navigation', { name: ru['government.relatedCases'] })
+    .getByRole('link', { name: /Synthetic filtered parent/ })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`case=${parent.case_id}`));
+  await page.reload();
+  await page.getByRole('link', { name: ru['government.backToCases'] }).click();
+  await expect(search).toHaveValue('Synthetic filtered child');
+  expect(page.url()).not.toContain('Synthetic');
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`case=${parent.case_id}`));
+  await page.goForward();
+  await expect(search).toHaveValue('Synthetic filtered child');
+});

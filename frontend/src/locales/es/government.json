@@ -145,5 +145,10 @@
   "government.eventKind.correspondence_attachment": "Adjunto del mensaje",
   "government.datePrecision": "Precisión de la fecha",
   "government.datePrecision.instant": "Fecha y hora conocidas",
-  "government.datePrecision.day": "Solo se conoce la fecha"
+  "government.datePrecision.day": "Solo se conoce la fecha",
+  "government.backToCases": "Volver a los expedientes",
+  "government.caseDetail": "Expediente",
+  "government.caseUnavailable": "No se pudo abrir el expediente.",
+  "government.invalidCase": "El enlace al expediente no es válido.",
+  "government.leaveUnsaved": "Hay cambios sin guardar o archivos pendientes. ¿Salir de la página?"
 }
