@@ -61,6 +61,15 @@ test('government correspondence preserves text, relates procedures and remains u
   await expect(
     page.getByLabel(ru['government.sourceMessage'], { exact: true }).first(),
   ).toHaveValue(detail.correspondence[0].event_id);
+  const actionForm = page
+    .locator('form')
+    .filter({ has: page.getByLabel(ru['government.description'], { exact: true }) });
+  const saveAction = actionForm.getByRole('button', {
+    name: ru['government.addAction'],
+    exact: true,
+  });
+  await saveAction.click();
+  await expect(saveAction).toBeFocused();
   for (const [locale, messages] of [
     ['en', en],
     ['es', es],

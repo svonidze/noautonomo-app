@@ -152,5 +152,6 @@
   "government.invalidCase": "Invalid case link.",
   "government.leaveUnsaved": "There are unsaved changes or pending attachments. Leave this page?",
   "government.refreshCase": "Refresh case",
-  "government.saving": "Saving..."
+  "government.saving": "Saving...",
+  "government.concurrentEdit": "This case changed elsewhere. Refresh it before saving your changes."
 }

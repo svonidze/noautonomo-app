@@ -152,5 +152,6 @@
   "government.invalidCase": "Некорректная ссылка на дело.",
   "government.leaveUnsaved": "Есть несохраненные изменения или незагруженные вложения. Покинуть страницу?",
   "government.refreshCase": "Обновить дело",
-  "government.saving": "Сохранение..."
+  "government.saving": "Сохранение...",
+  "government.concurrentEdit": "Дело изменилось в другом месте. Обновите его, прежде чем сохранять свои изменения."
 }

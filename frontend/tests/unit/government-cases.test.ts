@@ -364,7 +364,8 @@ test('saving another form keeps unsaved case fields and the saved heading', asyn
   window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
   const request = vi.fn(async (url: string, options?: RequestInit) => {
     if (url === '/api/government-cases') return list;
-    if (options?.method === 'POST') return { ...structuredClone(detail), row_version: 3 };
+    if (options?.method === 'POST')
+      return { ...structuredClone(detail), work_state: 'waiting_authority', row_version: 3 };
     return structuredClone(detail);
   });
   const root = document.createElement('div');
@@ -386,7 +387,76 @@ test('saving another form keeps unsaved case fields and the saved heading', asyn
   expect(title.value).toBe('Synthetic unsaved title');
   expect(root.querySelector('h2')?.textContent).toContain(caseRow.title);
   expect(root.querySelector('h2')?.textContent).not.toContain('Synthetic unsaved title');
+  const state = title.closest('form')!.querySelectorAll('select')[0];
+  expect(state.value).toBe('waiting_authority');
   expect(host.isDirty()).toBe(true);
+  host.dispose();
+  root.remove();
+});
+
+test('overlapping remote changes block saving a stale local field', async () => {
+  window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
+  const request = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url === '/api/government-cases') return list;
+    if (options?.method === 'POST')
+      return { ...structuredClone(detail), title: 'Synthetic remote title', row_version: 3 };
+    return structuredClone(detail);
+  });
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, GovernmentCasesView, {
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    notify: vi.fn(),
+  });
+  await flush();
+  const title = root.querySelector('input[maxlength="200"]') as HTMLInputElement;
+  title.value = 'Synthetic local title';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  const actionForm = [...root.querySelectorAll('form')].find((form) =>
+    form.textContent?.includes('Новое действие'),
+  )!;
+  actionForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  expect(title.value).toBe('Synthetic local title');
+  expect(root.textContent).toContain('Дело изменилось в другом месте');
+  const before = request.mock.calls.filter(([, options]) => options?.method === 'POST').length;
+  title.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  expect(request.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(
+    before,
+  );
+  host.dispose();
+  root.remove();
+});
+
+test('editing another action does not silently replace an unsaved action draft', async () => {
+  window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
+  const request = vi.fn(async (url: string) =>
+    url === '/api/government-cases' ? list : structuredClone(detail),
+  );
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, GovernmentCasesView, {
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    notify: vi.fn(),
+  });
+  await flush();
+  const actionForm = [...root.querySelectorAll('form')].find((form) =>
+    form.textContent?.includes('Новое действие'),
+  )!;
+  const description = actionForm.querySelector('input[maxlength="1000"]') as HTMLInputElement;
+  description.value = 'Synthetic action draft';
+  description.dispatchEvent(new Event('input', { bubbles: true }));
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  [...root.querySelectorAll('button')]
+    .find((button) => button.textContent?.trim() === 'Изменить')!
+    .click();
+  await flush();
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(description.value).toBe('Synthetic action draft');
+  confirm.mockRestore();
   host.dispose();
   root.remove();
 });

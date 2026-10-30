@@ -152,5 +152,6 @@
   "government.invalidCase": "El enlace al expediente no es válido.",
   "government.leaveUnsaved": "Hay cambios sin guardar o archivos pendientes. ¿Salir de la página?",
   "government.refreshCase": "Actualizar expediente",
-  "government.saving": "Guardando..."
+  "government.saving": "Guardando...",
+  "government.concurrentEdit": "Este expediente ha cambiado en otro lugar. Actualícelo antes de guardar los cambios."
 }

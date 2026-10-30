@@ -48,6 +48,27 @@ const listError = ref('');
 const heading = ref<HTMLElement>();
 const stateForm = ref<HTMLFormElement>();
 const savedTitle = ref('');
+const caseFields = [
+  'title',
+  'subject',
+  'primary_reference',
+  'work_state',
+  'parent_case_id',
+] as const;
+type CaseFields = Pick<CaseDetail, (typeof caseFields)[number]>;
+const caseBaseline = shallowRef<CaseFields>();
+function caseValues(value: CaseDetail): CaseFields {
+  return {
+    title: value.title,
+    subject: value.subject,
+    primary_reference: value.primary_reference,
+    work_state: value.work_state,
+    parent_case_id: value.parent_case_id ?? null,
+  };
+}
+function mayReplace(form?: HTMLFormElement | null) {
+  return !form || !dirtyForms.has(form) || window.confirm(t('government.leaveUnsaved'));
+}
 const dirtyForms = new Set<HTMLFormElement>();
 const formVersions = new WeakMap<HTMLFormElement, number>();
 const dirty = ref(false);
@@ -244,6 +265,7 @@ async function select(id: string) {
     if (active && revision === selectionGeneration) {
       detail.value = result;
       savedTitle.value = result.title;
+      caseBaseline.value = caseValues(result);
       resetAction();
     }
   } catch (failure) {
@@ -253,7 +275,11 @@ async function select(id: string) {
 }
 
 async function write(path: string, payload: unknown, multipart = false) {
-  if (saving.value || props.context.services.readOnly) return;
+  if (saving.value || conflict.value || props.context.services.readOnly) return;
+  const focusBefore =
+    document.activeElement instanceof HTMLElement && document.activeElement.closest('form')
+      ? document.activeElement
+      : null;
   saving.value = true;
   const savedForm = submittedForm;
   const savedVersion = savedForm ? formVersions.get(savedForm) : undefined;
@@ -269,15 +295,25 @@ async function write(path: string, payload: unknown, multipart = false) {
     const changedDuringSave = !!savedForm && formVersions.get(savedForm) !== savedVersion;
     if (result.case_id && caseId === result.case_id) {
       savedTitle.value = result.title;
+      const latest = caseValues(result);
       if (
         stateForm.value &&
         dirtyForms.has(stateForm.value) &&
         (savedForm !== stateForm.value || changedDuringSave) &&
-        detail.value
+        detail.value &&
+        caseBaseline.value
       ) {
-        const { title, subject, primary_reference, work_state, parent_case_id } = detail.value;
-        detail.value = { ...result, title, subject, primary_reference, work_state, parent_case_id };
+        const draft = caseValues(detail.value);
+        const changed = caseFields.filter((key) => draft[key] !== caseBaseline.value![key]);
+        const overlapping = changed.some((key) => latest[key] !== caseBaseline.value![key]);
+        const patch = Object.fromEntries(changed.map((key) => [key, draft[key]]));
+        detail.value = { ...result, ...patch };
+        if (overlapping) {
+          conflict.value = true;
+          error.value = t('government.concurrentEdit');
+        }
       } else detail.value = result;
+      caseBaseline.value = latest;
     }
     if (savedForm && !changedDuringSave) dirtyForms.delete(savedForm);
     dirty.value = dirtyForms.size > 0;
@@ -291,7 +327,11 @@ async function write(path: string, payload: unknown, multipart = false) {
     }
   } finally {
     submittedForm = null;
-    if (active) saving.value = false;
+    if (active) {
+      saving.value = false;
+      await nextTick();
+      if (focusBefore?.isConnected && document.activeElement === document.body) focusBefore.focus();
+    }
   }
 }
 function reloadAfterConflict() {
@@ -347,6 +387,7 @@ function resetAction() {
   });
 }
 function editAction(row: CaseAction) {
+  if (!mayReplace(actionForm.value)) return;
   editId.value = row.action_id;
   actionVersion.value = row.row_version;
   Object.assign(action, row, { due_on: row.due_on || '', confirmed: Boolean(row.confirmed) });
@@ -517,7 +558,7 @@ async function addCorrespondence() {
   if (messageForm.value) messageForm.value.open = false;
 }
 function correctMessage(row: CorrespondenceMessage) {
-  if (pendingMessageId.value) return;
+  if (pendingMessageId.value || !mayReplace(messageForm.value?.querySelector('form'))) return;
   Object.assign(correspondence, row, {
     recipients: row.recipients.join('\n'),
     occurred_at:
@@ -547,6 +588,7 @@ function correctMessage(row: CorrespondenceMessage) {
   }
 }
 function actionForMessage(row: CorrespondenceMessage) {
+  if (!mayReplace(actionForm.value)) return;
   resetAction();
   if (actionForm.value) {
     dirtyForms.add(actionForm.value);
@@ -604,7 +646,7 @@ watch(
       >
         {{ t('government.refreshCase') }}
       </button>
-      <button class="secondary-button" :disabled="saving" @click="error = ''">
+      <button v-if="!conflict" class="secondary-button" :disabled="saving" @click="error = ''">
         {{ t('common.close') }}
       </button>
     </div>
