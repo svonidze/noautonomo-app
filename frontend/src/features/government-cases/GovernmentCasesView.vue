@@ -26,7 +26,8 @@ const detail = shallowRef<CaseDetail>();
 const error = ref(''),
   saving = ref(false),
   loading = ref(true),
-  conflict = ref(false);
+  conflict = ref(false),
+  draftConflict = ref(false);
 const savedFilters = window.history.state?.governmentFilters;
 const filters = reactive({
   authority: savedFilters?.authority || '',
@@ -309,8 +310,7 @@ async function write(path: string, payload: unknown, multipart = false) {
         const patch = Object.fromEntries(changed.map((key) => [key, draft[key]]));
         detail.value = { ...result, ...patch };
         if (overlapping) {
-          conflict.value = true;
-          error.value = t('government.concurrentEdit');
+          draftConflict.value = true;
         }
       } else detail.value = result;
       caseBaseline.value = latest;
@@ -391,6 +391,8 @@ function editAction(row: CaseAction) {
   editId.value = row.action_id;
   actionVersion.value = row.row_version;
   Object.assign(action, row, { due_on: row.due_on || '', confirmed: Boolean(row.confirmed) });
+  if (actionForm.value) dirtyForms.delete(actionForm.value);
+  dirty.value = dirtyForms.size > 0;
 }
 async function saveAction() {
   if (!detail.value) return;
@@ -414,6 +416,7 @@ async function saveAction() {
     resetAction();
 }
 async function saveState() {
+  if (draftConflict.value) return;
   if (detail.value)
     await write(`/api/government-cases/${detail.value.case_id}/state`, {
       expected_row_version: detail.value.row_version,
@@ -555,7 +558,14 @@ async function addCorrespondence() {
   pendingMessageId.value = '';
   messageFiles.value = [];
   Object.assign(correspondence, blankMessage());
-  if (messageForm.value) messageForm.value.open = false;
+  if (messageForm.value) {
+    const restore = messageForm.value.contains(document.activeElement);
+    messageForm.value.open = false;
+    if (restore) {
+      await nextTick();
+      messageForm.value?.querySelector('summary')?.focus();
+    }
+  }
 }
 function correctMessage(row: CorrespondenceMessage) {
   if (pendingMessageId.value || !mayReplace(messageForm.value?.querySelector('form'))) return;
@@ -622,7 +632,7 @@ watch(
     @submit.capture="submitted"
   >
     <h2 ref="heading" tabindex="-1">
-      {{ showingCase ? savedTitle || t('government.caseDetail') : t('government.cases') }}
+      {{ showingCase ? savedTitle || t('government.caseDetail') : t('nav.governmentCases') }}
     </h2>
     <span class="visually-hidden" aria-live="polite">{{ savedTitle }}</span>
     <a v-if="showingCase" href="/government-cases" @click="follow">{{
@@ -631,6 +641,12 @@ watch(
     <div v-if="detailError" class="panel" role="alert">
       {{ invalidCase ? t('government.invalidCase') : t('government.caseUnavailable') }}
       <button v-if="!invalidCase" @click="load">{{ t('common.reload') }}</button>
+    </div>
+    <div v-if="draftConflict" class="panel" role="alert">
+      <p>{{ t('government.concurrentEdit') }}</p>
+      <button class="secondary-button" :disabled="saving" @click="reloadAfterConflict">
+        {{ t('government.refreshCase') }}
+      </button>
     </div>
     <div v-if="listError" class="panel" role="alert">
       {{ listError }} <button @click="loadList">{{ t('common.reload') }}</button>
@@ -722,6 +738,7 @@ watch(
         </ul>
       </section>
       <section class="panel">
+        <h2>{{ t('government.cases') }}</h2>
         <p>
           <a href="/aeat-documents">{{ t('government.legacyAeat') }}</a>
         </p>
@@ -828,9 +845,9 @@ watch(
         </details>
       </section>
     </template>
-    <section v-if="detail && showingCase" class="panel" aria-live="polite">
+    <section v-if="detail && showingCase" class="panel">
       <p>{{ detail.authority_name || detail.authority_code }}</p>
-      <p>{{ detail.primary_reference }} · {{ detail.subject }}</p>
+      <p>{{ caseBaseline?.primary_reference }} · {{ caseBaseline?.subject }}</p>
       <p>
         {{ t('government.outcome') }}:
         {{
@@ -889,7 +906,9 @@ watch(
           </select></label
         >
         <label>{{ t('government.evidence') }}<input v-model="stateSource" required /></label
-        ><button :disabled="saving || !list">{{ t('government.saveState') }}</button>
+        ><button :disabled="saving || !list || draftConflict">
+          {{ t('government.saveState') }}
+        </button>
       </form>
       <h3>{{ t('government.actions') }}</h3>
       <p v-if="!detail.actions.length">{{ t('government.noActions') }}</p>

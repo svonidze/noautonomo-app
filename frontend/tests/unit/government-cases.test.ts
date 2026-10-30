@@ -460,3 +460,51 @@ test('editing another action does not silently replace an unsaved action draft',
   host.dispose();
   root.remove();
 });
+
+test('a case field conflict does not interrupt uploads for a saved message', async () => {
+  window.history.replaceState({}, '', `/government-cases?case=${caseRow.case_id}`);
+  const eventId = '33333333-3333-4333-8333-333333333333';
+  let uploads = 0;
+  const current = {
+    ...detail,
+    title: 'Synthetic remote title',
+    correspondence: [],
+    correspondence_event_id: eventId,
+    row_version: 3,
+  };
+  const request = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url === '/api/government-cases') return list;
+    if (options?.method === 'POST' && url.endsWith('/documents')) uploads++;
+    if (options?.method === 'POST') return current;
+    return structuredClone(detail);
+  });
+  const root = document.createElement('div');
+  document.body.append(root);
+  const host = mountView(root, GovernmentCasesView, {
+    services: { request, navigate: vi.fn() },
+    settled: vi.fn(),
+    notify: vi.fn(),
+  });
+  await flush();
+  const title = root.querySelector('input[maxlength="200"]') as HTMLInputElement;
+  title.value = 'Synthetic local title';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  const summary = [...root.querySelectorAll('summary')].find(
+    (s) => s.textContent?.trim() === 'Добавить переписку',
+  )!;
+  const form = summary.parentElement!.querySelector('form')!;
+  const input = form.querySelector('input[type=file]')!;
+  Object.defineProperty(input, 'files', {
+    configurable: true,
+    value: [new File(['original'], 'source.eml')],
+  });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await flush();
+  expect(uploads).toBe(1);
+  expect(root.textContent).toContain('Дело изменилось в другом месте');
+  expect(title.value).toBe('Synthetic local title');
+  expect(form.textContent).not.toContain('Повторите загрузку оставшихся вложений');
+  host.dispose();
+  root.remove();
+});
