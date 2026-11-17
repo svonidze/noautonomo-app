@@ -10,8 +10,10 @@ from datetime import date
 from http.client import HTTPConnection
 from pathlib import Path
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
+from autonomo_taxes.annual_adjustments import record_adjustment, void_adjustment
 from autonomo_taxes.cli import main
 from autonomo_taxes.ledger_db import LATEST_SCHEMA_VERSION, LedgerDB
 from autonomo_taxes.local_web import LocalAccountingApp, LocalAccountingServer, LocalWebError
@@ -101,6 +103,97 @@ def _base(db: LedgerDB, effective_from: str, regime: str = "base", base: int | N
 def _check(database: Path, **kwargs) -> dict:
     with LedgerDB.open(database, read_only=True) as db:
         return ledger_bracket_check(db, year=2026, as_of=AS_OF, **{"through": THROUGH, **kwargs})
+
+
+def _annual_income(db: LedgerDB, tmp_path: Path, key: str, day: str, minor: int,
+                   *, evidence_status: str = "verified", recognized_on: str | None = None) -> tuple[dict, dict]:
+    original = tmp_path / f"{key}.txt"
+    original.write_text(f"Synthetic annual earnings {key}: {minor} cents.")
+    doc = db.upsert_document(period_key=day[:4], document_type="payment_receipt",
+        issued_on=day, source_hash=hashlib.sha256(original.read_bytes()).hexdigest())
+    db.set_document_storage(doc["document_id"], source_path=str(original), mime_type="text/plain",
+        expected_row_version=doc["row_version"])
+    source = db.add_transaction(period_key=day[:4], transaction_date=day, booking_date=day,
+        entry_type="income", description="Synthetic annual earnings", amount_minor=minor,
+        amount_eur_minor=minor, document_id=doc["document_id"])
+    adjustment = record_adjustment(db, {
+        "request_id": str(uuid4()), "year": int(day[:4]),
+        "source_transaction_id": source["transaction_id"], "expected_row_version": source["row_version"],
+        "recognized_on": recognized_on or day, "kind": "income", "amount_eur_minor": minor,
+        "evidence_status": evidence_status, "evidence_ref": str(original),
+        "rationale": "Reviewed synthetic annual earnings",
+    }, actor="test")
+    return source, adjustment
+
+
+@pytest.mark.parametrize("source_status", ["received", "needs_review", "approved", "posted"])
+def test_verified_annual_income_counts_once_without_posting_or_quarterly_changes(tmp_path: Path, source_status: str, capsys) -> None:
+    database = _ledger(tmp_path)
+    with LedgerDB.open(database) as db:
+        _posted_half_year(db, 900000)
+        _base(db, "2026-01-01")
+        for key, day, minor in (("first", "2026-03-02", 7000), ("second", "2026-05-04", 5500)):
+            source, _ = _annual_income(db, tmp_path, key, day, minor)
+            db.connection.execute("UPDATE transactions SET lifecycle_status=? WHERE transaction_id=?",
+                (source_status, source["transaction_id"]))
+        db.connection.commit()
+        quarterly_before = load_tax_rows(db, 2026)
+        db.close_period("2026-Q2")
+        db.create_filing_snapshot("2026-Q2", form_code="130", status="filed",
+            payload={"values": {"01": "9000.00"}}, snapshot_hash="synthetic-reta-annual")
+    before = database.read_bytes()
+
+    result = _check(database)
+
+    assert result["status"] == "ok" and result["reasons"] == []
+    # 9,125 income - 1,000 expenses - 406.25 difficult expenses, then add back G45.
+    assert result["income"]["irpf_net_income_minor"] == 771875
+    assert result["income"]["contributions_added_back_minor"] == 60000
+    assert result["ledger"]["unposted_transaction_ids"] == []
+    assert _check(database) == result
+    assert main(["reta", "check", "--db", str(database), "--year", "2026", "--as-of", AS_OF.isoformat(),
+        "--through", THROUGH.isoformat()]) == 0
+    assert json.loads(capsys.readouterr().out) == result
+    with LedgerDB.open(database, read_only=True) as db:
+        assert load_tax_rows(db, 2026) == quarterly_before
+    assert database.read_bytes() == before
+
+
+@pytest.mark.parametrize("problem", ["provisional", "voided", "changed_source", "quarterly", "unrelated", "future_recognition", "future", "other_year"])
+def test_annual_adjustments_do_not_hide_unresolved_or_out_of_window_sources(tmp_path: Path, problem: str) -> None:
+    database = _ledger(tmp_path)
+    with LedgerDB.open(database) as db:
+        _posted_half_year(db, 900000)
+        _base(db, "2026-01-01")
+        day = "2025-03-02" if problem == "other_year" else "2026-07-02" if problem == "future" else "2026-03-02"
+        source, adjustment = _annual_income(db, tmp_path, "annual", day, 7000,
+            evidence_status="provisional" if problem == "provisional" else "verified",
+            recognized_on="2026-07-02" if problem == "future_recognition" else None)
+        if problem == "voided":
+            void_adjustment(db, adjustment["annual_adjustment_id"], reason="Synthetic withdrawal", actor="test")
+        elif problem == "changed_source":
+            db.connection.execute("UPDATE transactions SET amount_eur_minor=7001 WHERE transaction_id=?",
+                (source["transaction_id"],))
+        elif problem == "quarterly":
+            db.add_detailed_tax_treatment(transaction_id=source["transaction_id"], treatment_type="income",
+                tax_code="outside_scope", taxable_base_minor=7000, include_modelo130=True)
+        elif problem == "unrelated":
+            pending = _row(db, "unrelated", "2026-04-02", "income", 8000, status="needs_review")
+        db.connection.commit()
+
+    result = _check(database)
+
+    if problem in {"future", "other_year"}:
+        assert result["status"] == "ok"
+        assert result["income"]["irpf_net_income_minor"] == 760000
+    else:
+        assert result["status"] == "unknown"
+        assert result["estimated_additional_minor"] is None
+        expected = pending if problem == "unrelated" else source
+        assert result["ledger"]["unposted_transaction_ids"] == [expected["transaction_id"]]
+        if problem in {"provisional", "changed_source", "quarterly"}:
+            assert result["ledger"]["blocked_detail"]
+            assert "ledger_blocked" in result["reasons"]
 
 
 def test_migrates_schema_26_to_27_and_keeps_elections_append_only(tmp_path: Path) -> None:
@@ -553,6 +646,7 @@ def test_reta_check_route_returns_the_check_and_read_only_bases(tmp_path: Path) 
         typo = _base(db, "2026-01-01", base=59098)
         db.void_reta_base_election(election_id=typo["election_id"], source_reference="Synthetic typo")
         _base(db, "2026-01-01")
+        _annual_income(db, tmp_path, "annual-route", "2026-03-02", 12500)
     bases = [{
         "effective_from": "2026-01-01", "regime": "base", "monthly_base_minor": 95098,
         "worker_kind": "individual", "source_reference": "Synthetic TGSS resolution 2026-01-01",
@@ -567,6 +661,8 @@ def test_reta_check_route_returns_the_check_and_read_only_bases(tmp_path: Path) 
             "below_bracket", 92030, 0,
         )
         assert body["elections"] == bases
+        assert body["income"]["irpf_net_income_minor"] == 1816875
+        assert body["ledger"]["unposted_transaction_ids"] == []
         # Local mode answers a missing session with 400 session_forbidden.
         status, body = get("/api/reta-check?year=2026", cookie=None)
         assert (status, body["code"]) == (400, "session_forbidden")

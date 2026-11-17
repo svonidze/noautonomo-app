@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
+from .annual_adjustments import adjustment_rows
 from .ledger_db import LedgerDB
 from .money import cents
 from .reta import BaseElection, bracket_check, parse_reta_table
@@ -76,8 +77,6 @@ def ledger_bracket_check(
         )
         if row[0] not in authoritative
     ]
-    if unposted:
-        reasons.append("unposted_rows_in_window")
 
     known_periods = {row["period_key"] for row in db.list_periods()}
     missing_periods = []
@@ -113,6 +112,7 @@ def ledger_bracket_check(
 
     irpf_net = contributions = blocked = None
     try:
+        annual_rows = adjustment_rows(db, year, through=through)
         tax_rows = project_tax_rows(
             load_tax_rows(db, year, allow_authoritative_history=True, through=through),
             "irpf", start, through,
@@ -123,10 +123,14 @@ def ledger_bracket_check(
             year=year,
             difficult_expenses_rate=rule.rate,
             difficult_expenses_cap=rule.annual_cap_eur,
+            annual_adjustment_rows=annual_rows,
         )
     except CalculationBlocked as exc:
         blocked = str(exc)
     else:
+        # A verified annual adjustment recognizes its draft source without posting it.
+        annual_sources = {row.source_transaction_id for row in annual_rows}
+        unposted = [transaction_id for transaction_id in unposted if transaction_id not in annual_sources]
         irpf_net = _minor(support.values["business_net_income"])
         # Deducted contributions only; a non-deductible apremio surcharge is not in them.
         contributions = _minor(sum(
@@ -139,6 +143,9 @@ def ledger_bracket_check(
             ),
             ZERO,
         ))
+
+    if unposted:
+        reasons.append("unposted_rows_in_window")
 
     result = bracket_check(
         table,
