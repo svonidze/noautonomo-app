@@ -2,7 +2,8 @@
 
 The RETA bracket check compares the monthly contribution base you chose with
 the TGSS (Tesorería General de la Seguridad Social) against the income tramo
-that your posted income reaches so far this year. It runs the arithmetic of the
+that your posted income and verified annual business adjustments reach so far
+this year. It runs the arithmetic of the
 TGSS annual regularisation on 1 January to a month end, without projecting the
 rest of the year.
 
@@ -102,7 +103,12 @@ Income is the IRPF business net of the posted rows dated 1 January to
 `--through`, with the year's difficult-expense rule, plus the deductible part
 of rows with AEAT expense concept `G45` (social security contributions).
 Non-deductible surcharges are therefore not added back. Approved rows of a
-filed Xolo source book count as posted, as in the period dashboard. Other rows
+filed Xolo source book count as posted, as in the period dashboard. Verified
+annual business adjustments recognized through the selected month end also
+contribute once to IRPF net income. Their linked draft sources do not require
+quarterly posting and do not block this check. Provisional, withdrawn or stale
+adjustments do not bypass validation; unrelated drafts still block the result.
+Annual adjustments do not change quarterly journals or filed snapshots. Other rows
 dated in that window that are still in review, or approved but not posted, are
 never counted; they make the result `unknown`.
 
