@@ -71,6 +71,13 @@ your professional activity, is permitted. Selling the software or providing a
 paid service based on it requires separate written permission. The terms explain
 use at your own risk and preserve obligations imposed by mandatory law.
 
+### Contributing changes
+
+Offer your own changes in a pull request under the same [terms](TERMS.md).
+You keep copyright in your work. Submit only material you have the right
+to contribute. If a change includes third-party code, identify its source
+and license in the pull request and keep the original notices.
+
 ## Your records
 
 Invoices, accounting records and credentials belong in private storage outside
