@@ -4,14 +4,73 @@ Install the application on your own computer and create a fresh local ledger.
 For an existing server installation, follow [Operations](ops/docs/README.md).
 Return to the [project overview](README.md) for an introduction to the application.
 
-## Workspace folders
+## First run with example invoices (macOS/Linux)
 
-Keep the repositories as siblings under a local `noautonomo/` directory:
-`blog` (`svonidze/noautonomo-blog`), `landing` (`svonidze/noautonomo-landing`),
-`app` (`svonidze/noautonomo-app`), and `secrets` (`svonidze/noautonomo-secrets`).
-Run the application commands below from `app`. Each folder keeps its own Git
-history; the parent directory is not a repository. Private runtime data stays
-outside these source checkouts.
+Install the command-line toolkit on a computer with Git and Python 3.11 or
+newer. The public application repository contains the whole example. From a
+directory where you keep source code, run:
+
+```sh
+git clone https://github.com/svonidze/noautonomo-app.git
+cd noautonomo-app
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install ./backend
+autonomo-tax --help
+example_dir="$(mktemp -d)/ledger"
+AUTONOMO_EXAMPLE_DIR="$example_dir" python docs/examples/agent_workflow.py
+```
+
+This path was tested on macOS 26.6.2 with Python 3.13.18 in a fresh virtual
+environment. Installation downloads Python packages. The exercise then runs
+locally on invented text invoices and needs no API key, subscription, paid
+hosting, Node or OCR. If you choose a hosted AI assistant for your own
+workflow, its provider can receive the prompts, file contents and tool output
+you share with it. Its subscription or usage charges depend on the provider.
+External AI costs have not been measured for this guide.
+
+### Read the result
+
+Open `income.csv` and `expense.csv` under `$example_dir/books`. Amounts in
+columns ending in `_minor` are euro cents. The example checks the exported
+rows against these reviewed decisions:
+
+| Document | Income base | Deductible expense (IRPF) | Deductible input IVA |
+| --- | ---: | ---: | ---: |
+| SYN-INCOME, €100 service | €100 | — | — |
+| SYN-EXPENSE, €121 purchase | — | €100 | €21 |
+| SYN-EQUIPMENT, €121 purchase | — | €0 | €21 |
+| AMORT-…, equipment depreciation | — | €100 | €0 |
+
+The sale is an ordinary business-to-business service supplied to a US
+business at its US establishment. The fixture applies the general
+place-of-supply rule and charges €0 Spanish IVA. Both purchases assume full
+business use and full IVA deductibility, so each €121 invoice consists of a
+€100 base plus €21 IVA. The equipment is one new €100 unit, the only such
+purchase in the exercise. The example elects immediate depreciation, so its
+cost appears once as depreciation. The final output reports 10000 income-base
+cents, 20000 deductible-expense cents and 4200 deductible-IVA cents.
+See [VAT Act, articles 69, 90 and 92–97](https://www.boe.es/buscar/act.php?id=BOE-A-1992-28740),
+[AEAT guidance on depreciation of new low-value equipment](https://sede.agenciatributaria.gob.es/Sede/ayuda/manuales-videos-folletos/manuales-practicos/irpf-2025/c07-rendimientos-actividades-economicas-estimacion-directa/fase-1-determinacion-rendimiento-neto/amortizaciones-dotaciones-ejercicio-fiscalmente-deducibles/supuestos-libertad-amortizacion/libertad-amortizacion-supuestos-contemplados-articulo-12_3.html)
+and [IRPF book rules, articles 2–4 and 6](https://www.boe.es/buscar/act.php?id=BOE-A-2019-10487).
+
+To trace a row, copy its `transaction_id` into the command below. Compare its
+document number and tax treatment with the generated original (for example
+`$example_dir/SYN-EXPENSE.txt`) and the reviewed decision in the
+`request-*.json` files in the same directory.
+
+```sh
+autonomo-tax --config "$example_dir/config.json" transactions show TRANSACTION_ID
+```
+
+The public [demo](https://noautonomo.ai/demo/) lets you browse preloaded
+examples. This exercise creates its own example books. For a first result on
+your own data, start a separate private ledger as described below, enter your
+registration details and [review and post one actual invoice](docs/user/ACCOUNTING_WORKFLOW.md).
+Check the posted entry against your original and export the applicable quarter
+with `autonomo-tax books build --period YYYY-QN --out-dir NEW_PRIVATE_DIRECTORY`.
+Keep your documents, decisions and exports in your private storage. Share
+invented examples in community chats.
 
 ## Requirements and installation
 

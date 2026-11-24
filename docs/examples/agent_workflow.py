@@ -1,11 +1,13 @@
-"""Executable synthetic CLI walkthrough; always creates a new temporary ledger.
+"""Executable synthetic CLI walkthrough; always creates a new ledger.
 
 Run with an installed core: python docs/examples/agent_workflow.py
+Set AUTONOMO_EXAMPLE_DIR to a new directory to keep the sample books.
 No user configuration, network provider, UI or pre-existing ledger is used.
 The decisions below are fixture facts, never defaults for real invoices.
 """
 
 from contextlib import redirect_stdout, redirect_stderr
+import csv
 from datetime import date
 import io
 import json
@@ -83,12 +85,20 @@ def walkthrough(root):
             "source_hash": "synthetic-activity",
         },
     )
-    today = date.today().isoformat()
-    period = f"{date.today().year}-Q{(date.today().month - 1)//3 + 1}"
+    run_date = date.today()
+    today = run_date.isoformat()
+    period = f"{run_date.year}-Q{(run_date.month - 1)//3 + 1}"
 
     def intake(number, kind, amount):
         source = root / f"{number}.txt"
-        source.write_text(f"SYNTHETIC ONLY\n{number}\n{today}\nEUR {amount}\n")
+        details = {
+            "SYN-INCOME": "To Synthetic Customer, US business establishment\nProgramming service\nBase EUR 100.00, Spanish IVA EUR 0.00",
+            "SYN-EXPENSE": "From Synthetic Supplier, Spain\nOffice supplies for business use\nBase EUR 100.00, IVA 21% EUR 21.00",
+            "SYN-EQUIPMENT": "From Synthetic Supplier, Spain\nOne new equipment unit for business use\nBase EUR 100.00, IVA 21% EUR 21.00",
+        }
+        source.write_text(
+            f"SYNTHETIC ONLY\n{number}\n{today}\n{details[number]}\nTotal EUR {amount}\n"
+        )
         result = command(
             "intake",
             "local",
@@ -190,11 +200,13 @@ def walkthrough(root):
         root / "verified-original.txt",
     )
 
+    expected_expenses = {}
     for equipment in (False, True):
         record = intake(
             "SYN-EQUIPMENT" if equipment else "SYN-EXPENSE", "expense_invoice", "121.00"
         )
         identifier = record["transaction_id"]
+        expected_expenses[identifier] = (0 if equipment else 10000, 2100)
         output = root / f"{identifier}-draft.json"
         command("expense", "draft", identifier, "--out", output)
         draft = json.loads(output.read_text())
@@ -245,18 +257,48 @@ def walkthrough(root):
         command("expense", "follow-up", identifier)
         if equipment:
             schedule = command("assets", "schedule", posted["asset_id"])
-            assert any(row["recognition_transaction_id"] for row in schedule["rows"])
+            (depreciation_id,) = [
+                row["recognition_transaction_id"] for row in schedule["rows"]
+                if row["recognition_transaction_id"]
+            ]
+            expected_expenses[depreciation_id] = (10000, 0)
     for name in ("summary", "taxes", "analytics"):
         command("period", name, "--period", period)
+    books = root / "books"
+    command("books", "build", "--period", period, "--out-dir", books)
+    with (books / "income.csv").open(newline="", encoding="utf-8") as handle:
+        (sale,) = csv.DictReader(handle)
+    assert sale["transaction_id"] == income["transaction_id"]
+    assert sale["document_id"] == income["document_id"]
+    income_base = int(sale["recomputed_taxable_base_minor"])
+    assert (income_base, int(sale["recomputed_vat_minor"])) == (10000, 0)
+
+    with (books / "expense.csv").open(newline="", encoding="utf-8") as handle:
+        expenses = list(csv.DictReader(handle))
+    assert len(expenses) == 3
+    deductions = {
+        row["transaction_id"]: (
+            int(row["recomputed_deductible_irpf_minor"]),
+            int(row["recomputed_deductible_vat_minor"]),
+        )
+        for row in expenses
+    }
+    assert deductions == expected_expenses, deductions
     return {
         "income": "posted",
         "expense": "posted",
         "equipment": "posted",
         "depreciation": "recognized",
         "repeated_request": "same transaction",
+        "income_base_cents": income_base,
+        "deductible_expense_cents": sum(irpf for irpf, vat in deductions.values()),
+        "deductible_vat_cents": sum(vat for irpf, vat in deductions.values()),
     }
 
 
 if __name__ == "__main__":
-    with tempfile.TemporaryDirectory(prefix="autonomo-synthetic-guide-") as directory:
-        print(json.dumps(walkthrough(Path(directory) / "private")))
+    if retained := os.environ.get("AUTONOMO_EXAMPLE_DIR"):
+        print(json.dumps(walkthrough(Path(retained)), indent=2))
+    else:
+        with tempfile.TemporaryDirectory(prefix="autonomo-synthetic-guide-") as directory:
+            print(json.dumps(walkthrough(Path(directory) / "private"), indent=2))
