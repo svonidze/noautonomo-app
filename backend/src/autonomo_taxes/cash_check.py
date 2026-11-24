@@ -17,6 +17,19 @@ PAYABLE_KEYS = {
 NO_PAYMENT_FORMS = {"349"}
 
 
+def calculation_blocker(form: str, calculation: Mapping[str, Any] | None) -> str | None:
+    if calculation is None:
+        return "calculation missing"
+    if calculation.get("blocked"):
+        return calculation.get("reason") or "calculation blocked"
+    key = PAYABLE_KEYS.get(form)
+    if key is not None:
+        value = (calculation.get("values") or {}).get(key)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return f"missing payable result ({key})"
+    return None
+
+
 def build_cash_check(
     calculations: Mapping[str, Mapping[str, Any]],
     *,
@@ -44,13 +57,15 @@ def build_cash_check(
             )
             continue
         calculation = calculations.get(form)
-        if calculation is None or calculation.get("blocked"):
+        reason = calculation_blocker(form, calculation)
+        if reason is not None:
             calculation_blocked.append(form)
             forms.append(
                 {
                     "form": form,
                     "payable_eur": None,
                     "status": "calculation_blocked",
+                    "reason": reason,
                 }
             )
             continue
@@ -61,8 +76,7 @@ def build_cash_check(
                 {"form": form, "payable_eur": None, "status": "unsupported_payable_mapping"}
             )
             continue
-        values = calculation.get("values") or {}
-        payable = cents(max(Decimal(str(values.get(key, "0"))), ZERO))
+        payable = cents(max(Decimal(str(calculation["values"][key])), ZERO))
         required = cents(required + payable)
         forms.append(
             {

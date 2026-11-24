@@ -180,6 +180,10 @@ def test_period_preparation_writes_calculations_cash_and_calendar(tmp_path) -> N
             id="303-preserves-missing-result-review",
         ),
         pytest.param(
+            "303", {"values": {"result": "137.25"}}, "review required",
+            id="303-needs-payable-casilla-for-filing",
+        ),
+        pytest.param(
             "111", {"values": {"base": "999.00", "recipient_count": "1", "withholding": "137.25"}},
             "review required", id="111-preserves-withholding-only-output",
         ),
@@ -230,6 +234,73 @@ def test_unknown_obligation_blocks_preparation() -> None:
 
     assert report["status"] == "blocked"
     assert report["unknown_forms"] == ["216"]
+
+
+@pytest.mark.parametrize(
+    "form,key",
+    [("130", "19"), ("303", "71"), ("111", "withholding"),
+     ("115", "withholding"), ("216", "withholding")],
+)
+@pytest.mark.parametrize(
+    "calculation,reason",
+    [
+        (None, "calculation missing"),
+        ({"blocked": True, "reason": "under review"}, "under review"),
+        ({"values": {}}, "missing payable result"),
+        ({"values": {"result": "0.00"}}, "missing payable result"),
+        ({"values": {"key": None}}, "missing payable result"),
+        ({"values": {"key": ""}}, "missing payable result"),
+        ({"values": {"key": Decimal("0.00")}}, None),
+        ({"values": {"key": "0.00"}}, None),
+    ],
+)
+def test_due_payment_form_requires_a_confirmed_result(form, key, calculation, reason):
+    if calculation and "key" in calculation.get("values", {}):
+        calculation = {"values": {key: calculation["values"]["key"]}}
+    report = build_period_preparation(
+        period={"period_key": "2030-Q1", "ends_on": "2030-03-31"},
+        as_of=date(2030, 4, 1),
+        dashboard={},
+        calculations={} if calculation is None else {form: calculation},
+        obligations=[_obligation(form)],
+        available_eur=Decimal("42.00"),
+        cash_buffer_eur=None,
+    )
+
+    ready = reason is None
+    assert report["filing_ready"] is ready
+    assert report["preparation_ready"] is ready
+    assert report["manual_filing"][0]["blocked"] is (not ready)
+    cash = report["cash_check"]
+    assert cash["tax_payment_ready"] is ready
+    assert cash["recommended_buffer_ready"] is ready
+    if ready:
+        assert report["calculation_blockers"] == []
+        assert cash["forms"][0]["payable_eur"] == Decimal("0.00")
+    else:
+        expected = f"{reason} ({key})" if reason == "missing payable result" else reason
+        assert report["calculation_blockers"] == [{"form": form, "reason": expected}]
+        assert cash["status"] == "calculation_blocked"
+        assert cash["forms"][0]["payable_eur"] is None
+        assert cash["forms"][0]["reason"] == expected
+
+
+@pytest.mark.parametrize(
+    "calculations,ready",
+    [({}, False), ({"349": {"blocked": True}}, False), ({"349": {"values": {}}}, True)],
+)
+def test_information_return_requires_a_calculation_but_no_payment(calculations, ready):
+    report = build_period_preparation(
+        period={"period_key": "2030-Q1", "ends_on": "2030-03-31"},
+        as_of=date(2030, 4, 1),
+        dashboard={},
+        calculations=calculations,
+        obligations=[_obligation("349")],
+        available_eur=None,
+        cash_buffer_eur=None,
+    )
+    assert report["filing_ready"] is ready
+    assert report["cash_check"]["status"] == "not_required"
 
 
 def test_future_approved_forecast_does_not_block_open_period_preparation() -> None:
