@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from .cash_check import build_cash_check
+from .cash_check import build_cash_check, calculation_blocker
 from .periodic_actions import build_periodic_actions, periodic_action_schedule_events
 from .tax_calendar import build_period_ics
 
@@ -62,11 +62,12 @@ def build_period_preparation(
         for row in dashboard.get("expected_items", [])
         if row.get("kind") == "approved_forecast_pending"
     ]
-    calculation_blockers = [
-        {"form": form, "reason": calculation.get("reason", "calculation blocked")}
-        for form, calculation in calculations.items()
-        if calculation.get("blocked")
-    ]
+    blocked_forms = {form for form, calc in calculations.items() if calc.get("blocked")}
+    blocked_reasons = {}
+    for form in sorted(due_forms | blocked_forms):
+        reason = calculation_blocker(form, calculations.get(form))
+        if reason is not None:
+            blocked_reasons[form] = reason
     cash = build_cash_check(
         calculations,
         due_forms=due_forms,
@@ -89,7 +90,7 @@ def build_period_preparation(
             }
         )
 
-    preparation_ready = not data_blockers and not unknown_forms and not calculation_blockers
+    preparation_ready = not data_blockers and not unknown_forms and not blocked_reasons
     filing_ready = bool(
         period_ended
         and preparation_ready
@@ -110,6 +111,7 @@ def build_period_preparation(
         period_key=period_key,
         due_forms=due_forms,
         cash_check=cash,
+        blocked_reasons=blocked_reasons,
     )
     periodic_actions = build_periodic_actions(
         period=period,
@@ -136,7 +138,9 @@ def build_period_preparation(
         "data_blockers": data_blockers,
         "workflow_items": workflow_items,
         "expected_items": expected_items,
-        "calculation_blockers": calculation_blockers,
+        "calculation_blockers": [
+            {"form": form, "reason": reason} for form, reason in blocked_reasons.items()
+        ],
         "filing_blockers": filing_blockers,
         "manual_filing": manual_filing,
         "periodic_actions": periodic_actions,
@@ -156,6 +160,7 @@ def _manual_filing_checklist(
     period_key: str,
     due_forms: set[str],
     cash_check: Mapping[str, Any],
+    blocked_reasons: Mapping[str, str],
 ) -> list[dict[str, Any]]:
     cash_by_form = {
         str(row["form"]): row for row in cash_check.get("forms", [])
@@ -166,7 +171,7 @@ def _manual_filing_checklist(
         item: dict[str, Any] = {
             "form": form,
             "calculation_file": f"calculations/modelo{form}.json",
-            "blocked": bool(calculation.get("blocked")),
+            "blocked": form in blocked_reasons,
             "casillas": [],
             "declared_entries": [],
             "cash_action": dict(cash_by_form.get(form) or {}),
@@ -179,7 +184,7 @@ def _manual_filing_checklist(
                 f"--calculation calculations/modelo{form}.json"
             )
         if item["blocked"]:
-            item["reason"] = calculation.get("reason", "calculation blocked")
+            item["reason"] = blocked_reasons[form]
             checklist.append(item)
             continue
         values = calculation.get("values") or {}
@@ -321,7 +326,7 @@ def _markdown(report: Mapping[str, Any]) -> str:
         calculation = report["calculations"].get(form, {})
         values = calculation.get("values") or {}
         result = (
-            None if calculation.get("blocked")
+            None if calculation_blocker(form, calculation)
             else values.get("19" if form == "130" else "result")
         )
         lines.append(f"- Modelo {form}: result {result if result is not None else 'review required'} EUR.")
